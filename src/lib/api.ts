@@ -1,7 +1,15 @@
 import { PaymentLink, Transaction, Notification, MerchantProfile } from '../types';
 
 // The requested API base URL
-export const DEFAULT_API_BASE = 'https://zappay-beta.vercel.app';
+export const DEFAULT_API_BASE = 'https://hamro-pay.onrender.com';
+
+// Clear stale API base URL saved in localStorage so it picks up the new URL on next load
+if (typeof window !== 'undefined' && window.localStorage) {
+  const savedBaseUrl = localStorage.getItem('hamro_api_base_url');
+  if (savedBaseUrl && savedBaseUrl !== 'https://hamro-pay.onrender.com') {
+    localStorage.removeItem('hamro_api_base_url');
+  }
+}
 
 // Helper to get or set active API configuration
 export interface ApiConfig {
