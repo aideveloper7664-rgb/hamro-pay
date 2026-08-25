@@ -1,0 +1,403 @@
+{
+  "users": [
+    {
+      "id": "u1",
+      "name": "Aarav Sharma",
+      "email": "merchant@hamropay.demo",
+      "password": "hamropay-demo",
+      "token": "demo-bearer-token-aarav",
+      "plan": "Blaze Free",
+      "feePercent": 1.5,
+      "linkLimit": 100,
+      "availableBalance": 12840.5,
+      "totalCollected": 21195,
+      "pendingPayout": 0,
+      "phone": "+977 98765 43210",
+      "emailReceipts": true,
+      "withdrawalAlerts": true,
+      "referralsCount": 3,
+      "referralEarnings": 480
+    },
+    {
+      "id": "u-1787668443326",
+      "name": "Developer Test",
+      "email": "test@test.com",
+      "password": "$2b$10$QvJBFd/SaGxF2SsHtUFy5eMMGcHXQthRGfJL/VxLgBFrX0powyquy",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ1LTE3ODc2Njg0NDMzMjYiLCJpYXQiOjE3ODc2Njg0NDksImV4cCI6MTc4ODI3MzI0OX0.G-v_3j46HaUmiV2xk6Wm3x4EV9jAx05X7fI_Z8xcUWM",
+      "plan": "Blaze Free",
+      "feePercent": 1.5,
+      "linkLimit": 100,
+      "availableBalance": 5000,
+      "totalCollected": 5000,
+      "pendingPayout": 0,
+      "phone": "",
+      "emailReceipts": true,
+      "withdrawalAlerts": true,
+      "referralsCount": 0,
+      "referralEarnings": 0
+    },
+    {
+      "id": "u-1787668714943",
+      "name": "Hamro Merchant",
+      "email": "merchant@test.com",
+      "password": "$2b$10$2Jra5IuwRD3B081LnwKIY.e5ASIZBfLLhvIUmA/tAe7rPYVm2lr0G",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ1LTE3ODc2Njg3MTQ5NDMiLCJpYXQiOjE3ODc2Njg3MjIsImV4cCI6MTc4ODI3MzUyMn0.CLS-XQSETXdLZqcn1zSm4rSIs6IVwe5pq5gKamqo9MY",
+      "plan": "Blaze Free",
+      "feePercent": 1.5,
+      "linkLimit": 100,
+      "availableBalance": 5000,
+      "totalCollected": 5000,
+      "pendingPayout": 0,
+      "phone": "",
+      "emailReceipts": true,
+      "withdrawalAlerts": true,
+      "referralsCount": 0,
+      "referralEarnings": 0
+    }
+  ],
+  "paymentLinks": [
+    {
+      "id": 1,
+      "title": "Graphic Design Package",
+      "amount": 2499,
+      "orders": 18,
+      "active": true,
+      "date": "Updated today",
+      "note": "Branding identity files included.",
+      "userId": "u1"
+    },
+    {
+      "id": 2,
+      "title": "Website Discovery Session",
+      "amount": 999,
+      "orders": 9,
+      "active": true,
+      "date": "Updated yesterday",
+      "note": "1-hour video consultation",
+      "userId": "u1"
+    },
+    {
+      "id": 3,
+      "title": "Monthly Retainer — August",
+      "amount": 12000,
+      "orders": 3,
+      "active": true,
+      "date": "Updated 2 days ago",
+      "note": "Standard SLA development hours",
+      "userId": "u1"
+    },
+    {
+      "id": 4,
+      "title": "Branding Consultation",
+      "amount": 1499,
+      "orders": 7,
+      "active": false,
+      "date": "Updated 4 days ago",
+      "note": "Consultation note summary",
+      "userId": "u1"
+    },
+    {
+      "id": 5,
+      "title": "Social Media Template Pack",
+      "amount": 599,
+      "orders": 5,
+      "active": true,
+      "date": "Updated 6 days ago",
+      "note": "Canva ready layouts",
+      "userId": "u1"
+    },
+    {
+      "id": 6,
+      "title": "UX Review",
+      "amount": 3999,
+      "orders": 2,
+      "active": true,
+      "date": "Updated 1 week ago",
+      "note": "Comprehensive screen teardown",
+      "userId": "u1"
+    },
+    {
+      "id": 7,
+      "title": "Launch Workshop",
+      "amount": 2999,
+      "orders": 1,
+      "active": false,
+      "date": "Updated 1 week ago",
+      "note": "Pre-launch checklists",
+      "userId": "u1"
+    },
+    {
+      "id": "link-0-1787668443463",
+      "title": "Graphic Design Package",
+      "amount": 2499,
+      "orders": 18,
+      "active": true,
+      "date": "Updated today",
+      "note": "Branding identity files included.",
+      "userId": "u-1787668443326"
+    },
+    {
+      "id": "link-1-1787668443463",
+      "title": "Website Discovery Session",
+      "amount": 999,
+      "orders": 9,
+      "active": true,
+      "date": "Updated yesterday",
+      "note": "1-hour video consultation",
+      "userId": "u-1787668443326"
+    },
+    {
+      "id": "link-2-1787668443463",
+      "title": "Monthly Retainer — August",
+      "amount": 12000,
+      "orders": 3,
+      "active": true,
+      "date": "Updated 2 days ago",
+      "note": "Standard SLA development hours",
+      "userId": "u-1787668443326"
+    },
+    {
+      "id": "link-3-1787668443463",
+      "title": "Branding Consultation",
+      "amount": 1499,
+      "orders": 7,
+      "active": false,
+      "date": "Updated 4 days ago",
+      "note": "Consultation note summary",
+      "userId": "u-1787668443326"
+    },
+    {
+      "id": "link-4-1787668443463",
+      "title": "Social Media Template Pack",
+      "amount": 599,
+      "orders": 5,
+      "active": true,
+      "date": "Updated 6 days ago",
+      "note": "Canva ready layouts",
+      "userId": "u-1787668443326"
+    },
+    {
+      "id": "link-5-1787668443463",
+      "title": "UX Review",
+      "amount": 3999,
+      "orders": 2,
+      "active": true,
+      "date": "Updated 1 week ago",
+      "note": "Comprehensive screen teardown",
+      "userId": "u-1787668443326"
+    },
+    {
+      "id": "link-6-1787668443463",
+      "title": "Launch Workshop",
+      "amount": 2999,
+      "orders": 1,
+      "active": false,
+      "date": "Updated 1 week ago",
+      "note": "Pre-launch checklists",
+      "userId": "u-1787668443326"
+    },
+    {
+      "id": "link-0-1787668715062",
+      "title": "Graphic Design Package",
+      "amount": 2499,
+      "orders": 18,
+      "active": true,
+      "date": "Updated today",
+      "note": "Branding identity files included.",
+      "userId": "u-1787668714943"
+    },
+    {
+      "id": "link-1-1787668715062",
+      "title": "Website Discovery Session",
+      "amount": 999,
+      "orders": 9,
+      "active": true,
+      "date": "Updated yesterday",
+      "note": "1-hour video consultation",
+      "userId": "u-1787668714943"
+    },
+    {
+      "id": "link-2-1787668715062",
+      "title": "Monthly Retainer — August",
+      "amount": 12000,
+      "orders": 3,
+      "active": true,
+      "date": "Updated 2 days ago",
+      "note": "Standard SLA development hours",
+      "userId": "u-1787668714943"
+    },
+    {
+      "id": "link-3-1787668715062",
+      "title": "Branding Consultation",
+      "amount": 1499,
+      "orders": 7,
+      "active": false,
+      "date": "Updated 4 days ago",
+      "note": "Consultation note summary",
+      "userId": "u-1787668714943"
+    },
+    {
+      "id": "link-4-1787668715062",
+      "title": "Social Media Template Pack",
+      "amount": 599,
+      "orders": 5,
+      "active": true,
+      "date": "Updated 6 days ago",
+      "note": "Canva ready layouts",
+      "userId": "u-1787668714943"
+    },
+    {
+      "id": "link-5-1787668715062",
+      "title": "UX Review",
+      "amount": 3999,
+      "orders": 2,
+      "active": true,
+      "date": "Updated 1 week ago",
+      "note": "Comprehensive screen teardown",
+      "userId": "u-1787668714943"
+    },
+    {
+      "id": "link-6-1787668715062",
+      "title": "Launch Workshop",
+      "amount": 2999,
+      "orders": 1,
+      "active": false,
+      "date": "Updated 1 week ago",
+      "note": "Pre-launch checklists",
+      "userId": "u-1787668714943"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "t1",
+      "type": "received",
+      "ref": "HP-81JX90",
+      "name": "Kavya Mehta",
+      "amount": 2499,
+      "status": "Success",
+      "date": "Today, 10:42 AM",
+      "userId": "u1"
+    },
+    {
+      "id": "t2",
+      "type": "received",
+      "ref": "HP-0QW17F",
+      "name": "Naman Studio",
+      "amount": 999,
+      "status": "Success",
+      "date": "Yesterday, 6:18 PM",
+      "userId": "u1"
+    },
+    {
+      "id": "t3",
+      "type": "withdrawal",
+      "ref": "WD-479203",
+      "name": "UPI · aarav@okhdfc",
+      "amount": 5000,
+      "status": "Completed",
+      "date": "18 Aug, 1:23 PM",
+      "userId": "u1"
+    },
+    {
+      "id": "t4",
+      "type": "received",
+      "ref": "HP-75PA32",
+      "name": "Pari Shah",
+      "amount": 12000,
+      "status": "Success",
+      "date": "17 Aug, 4:56 PM",
+      "userId": "u1"
+    },
+    {
+      "id": "t5",
+      "type": "received",
+      "ref": "HP-22KM70",
+      "name": "Aditya Jain",
+      "amount": 1499,
+      "status": "Pending",
+      "date": "17 Aug, 2:05 PM",
+      "userId": "u1"
+    },
+    {
+      "id": "t6",
+      "type": "received",
+      "ref": "HP-64TR11",
+      "name": "Riya Kapoor",
+      "amount": 599,
+      "status": "Failed",
+      "date": "16 Aug, 11:10 AM",
+      "userId": "u1"
+    },
+    {
+      "id": "tx-init-1787668443463",
+      "type": "received",
+      "ref": "HP-INIT88",
+      "name": "Welcome Sandbox Bonus",
+      "amount": 5000,
+      "status": "Success",
+      "date": "Just now",
+      "userId": "u-1787668443326"
+    },
+    {
+      "id": "tx-init-1787668715062",
+      "type": "received",
+      "ref": "HP-INIT88",
+      "name": "Welcome Sandbox Bonus",
+      "amount": 5000,
+      "status": "Success",
+      "date": "Just now",
+      "userId": "u-1787668714943"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "n1",
+      "title": "Payment received",
+      "text": "Rs. 2,499 was received through Graphic Design Package.",
+      "time": "Today, 10:42 AM",
+      "unread": true,
+      "userId": "u1"
+    },
+    {
+      "id": "n2",
+      "title": "Wallet withdrawal completed",
+      "text": "Your Rs. 5,000 withdrawal to aarav@okhdfc has been completed.",
+      "time": "18 Aug, 1:23 PM",
+      "unread": true,
+      "userId": "u1"
+    },
+    {
+      "id": "n3",
+      "title": "Your weekly payment snapshot is ready",
+      "text": "You collected Rs. 8,935 across 12 successful payments this week.",
+      "time": "18 Aug, 9:00 AM",
+      "unread": true,
+      "userId": "u1"
+    },
+    {
+      "id": "n4",
+      "title": "New payment theme available",
+      "text": "Explore the updated checkout palette in your merchant settings.",
+      "time": "16 Aug, 4:11 PM",
+      "unread": false,
+      "userId": "u1"
+    },
+    {
+      "id": "notif-init-1787668443463",
+      "title": "Welcome to Hamro Pay",
+      "text": "Your merchant sandbox dashboard is fully synchronized online.",
+      "time": "Just now",
+      "unread": true,
+      "userId": "u-1787668443326"
+    },
+    {
+      "id": "notif-init-1787668715062",
+      "title": "Welcome to Hamro Pay",
+      "text": "Your merchant sandbox dashboard is fully synchronized online.",
+      "time": "Just now",
+      "unread": true,
+      "userId": "u-1787668714943"
+    }
+  ],
+  "supportTickets": []
+}

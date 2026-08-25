@@ -1,0 +1,6 @@
+{
+  "name": "Hamro Pay",
+  "description": "A premium, secure merchant dashboard and digital wallet platform for Hamro Pay, providing live payment links, transaction tracking, and wallet management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
