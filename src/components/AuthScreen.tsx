@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Wallet, Mail, Lock, ShieldCheck, ArrowRight, Zap, CheckCircle, User, Loader2 } from 'lucide-react';
-import { ApiService } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 interface AuthScreenProps {
   onLoginSuccess: (token: string, user: any) => void;
@@ -8,6 +8,7 @@ interface AuthScreenProps {
 }
 
 export default function AuthScreen({ onLoginSuccess, showToast }: AuthScreenProps) {
+  const { loginWithEmail, registerWithEmail, loginWithGoogle } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('merchant@hamropay.demo');
@@ -25,24 +26,16 @@ export default function AuthScreen({ onLoginSuccess, showToast }: AuthScreenProp
     setIsLoading(true);
     try {
       if (isSignUp) {
-        const response = await ApiService.signup(name.trim(), email.trim(), password);
-        if (response.success && response.token && response.user) {
-          showToast(`Merchant workspace registered successfully!`, 'success');
-          onLoginSuccess(response.token, response.user);
-        } else {
-          showToast(response.error || 'Failed to complete registration.', 'error');
-        }
+        const user = await registerWithEmail(name.trim(), email.trim(), password);
+        showToast(`Merchant workspace registered successfully!`, 'success');
+        onLoginSuccess('firebase_sync_token', user);
       } else {
-        const response = await ApiService.login(email.trim(), password);
-        if (response.success && response.token && response.user) {
-          showToast(`Welcome back, ${response.user.name || 'Merchant'}!`, 'success');
-          onLoginSuccess(response.token, response.user);
-        } else {
-          showToast(response.error || 'Authentication failed. Verify credentials.', 'error');
-        }
+        const user = await loginWithEmail(email.trim(), password);
+        showToast(`Welcome back, ${user.name || 'Merchant'}!`, 'success');
+        onLoginSuccess('firebase_sync_token', user);
       }
     } catch (err: any) {
-      showToast(err.message || 'An unexpected connection error occurred.', 'error');
+      showToast(err.message || 'Authentication failed. Verify credentials.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -232,6 +225,33 @@ export default function AuthScreen({ onLoginSuccess, showToast }: AuthScreenProp
                   <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                 </>
               )}
+            </button>
+
+            {/* Google Sign In Button */}
+            <button
+              type="button"
+              onClick={async () => {
+                setIsLoading(true);
+                try {
+                  const user = await loginWithGoogle();
+                  showToast(`Welcome back, ${user.name || 'Merchant'}!`, 'success');
+                  onLoginSuccess('firebase_sync_token', user);
+                } catch (err: any) {
+                  // Error is already logged or notified by AuthContext
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-slate-700 font-bold text-sm tracking-wide shadow-sm active:scale-[0.98] transition-all focus:outline-none focus:ring-4 focus:ring-slate-100 disabled:opacity-50"
+            >
+              <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#EA4335"
+                  d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.578-7.859-8s3.529-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l3.227-3.107C18.281 1.094 15.566 0 12.24 0 5.58 0 0 5.37 0 12s5.58 12 12.24 12c6.96 0 11.57-4.89 11.57-11.79 0-.795-.085-1.4-.195-1.925H12.24z"
+                />
+              </svg>
+              Continue with Google
             </button>
           </form>
 

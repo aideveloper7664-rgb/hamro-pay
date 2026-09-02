@@ -1,12 +1,13 @@
 import { PaymentLink, Transaction, Notification, MerchantProfile } from '../types';
+import { auth } from '../config/firebase';
 
 // The requested API base URL
-export const DEFAULT_API_BASE = 'https://hamro-pay.onrender.com';
+export const DEFAULT_API_BASE = (import.meta as any).env.VITE_API_URL || 'https://hamro-pay-backend-url-n561.vercel.app';
 
 // Clear stale API base URL saved in localStorage so it picks up the new URL on next load
 if (typeof window !== 'undefined' && window.localStorage) {
   const savedBaseUrl = localStorage.getItem('hamro_api_base_url');
-  if (savedBaseUrl && savedBaseUrl !== 'https://hamro-pay.onrender.com') {
+  if (savedBaseUrl && savedBaseUrl !== DEFAULT_API_BASE) {
     localStorage.removeItem('hamro_api_base_url');
   }
 }
@@ -41,7 +42,7 @@ export function saveApiConfig(config: ApiConfig) {
 }
 
 /**
- * Universal safe fetcher that tries to connect to the real Vercel API.
+ * Universal safe fetcher that tries to connect to the real API.
  * If the API is offline, fails CORS, or is unavailable, it gracefully handles it
  * and falls back to simulated responses while maintaining local data integrity.
  */
@@ -56,7 +57,8 @@ async function apiRequest<T>(
     return { data: null, error: 'API Connection is manually disabled', isSimulated: true };
   }
 
-  const url = `${config.baseUrl}${path}`;
+  const baseUrl = (import.meta as any).env.VITE_API_URL || 'https://hamro-pay-backend-url-n561.vercel.app';
+  const url = `${baseUrl}${path}`;
   
   try {
     const headers: Record<string, string> = {
@@ -64,7 +66,16 @@ async function apiRequest<T>(
       'Accept': 'application/json',
     };
 
-    if (config.token) {
+    // Auto-refresh token if authenticated with Firebase Auth
+    const firebaseUser = auth.currentUser;
+    if (firebaseUser) {
+      try {
+        const fbToken = await firebaseUser.getIdToken(true);
+        headers['Authorization'] = `Bearer ${fbToken}`;
+      } catch (tokenErr) {
+        console.error("Firebase Auth token fetch failed:", tokenErr);
+      }
+    } else if (config.token) {
       headers['Authorization'] = `Bearer ${config.token}`;
     }
 
@@ -78,8 +89,9 @@ async function apiRequest<T>(
       throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
     }
 
-    const data = await response.json();
-    return { data, error: null, isSimulated: false };
+    const json = await response.json();
+    const resData = json.data !== undefined ? json.data : json;
+    return { data: resData as T, error: null, isSimulated: false };
   } catch (err: any) {
     console.warn(`[API] Connection to ${url} failed: ${err.message}. Falling back to sandbox emulator.`);
     return { 

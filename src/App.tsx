@@ -24,6 +24,7 @@ import ConnectView from './components/ConnectView';
 import Modal from './components/Modal';
 import Toast, { ToastItem } from './components/Toast';
 import { Link as LinkIcon, Wallet, CheckCircle, Info, Cloud, Wifi, HelpCircle, Key } from 'lucide-react';
+import { PayPage } from './pages/pay/PayPage';
 
 export default function App() {
   // --- Persistent State Synchronization (localStorage) ---
@@ -751,6 +752,19 @@ export default function App() {
       showToast('Merchant profile details saved locally.', 'success');
     }
   };
+
+  // Check if current route is Pay View (public payment checkout link: /pay/:linkId)
+  const isPayView = typeof window !== 'undefined' && window.location.pathname.includes('/pay/');
+  if (isPayView) {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans">
+        <PayPage onBackToDashboard={() => {
+          window.history.pushState({}, '', '/');
+          window.location.reload();
+        }} />
+      </div>
+    );
+  }
 
   // If session is restoring and token exists, show loading screen
   if (isSessionChecking && apiToken) {
