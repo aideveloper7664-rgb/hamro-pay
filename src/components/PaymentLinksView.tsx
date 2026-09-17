@@ -35,8 +35,10 @@ export default function PaymentLinksView({
     return matchesSearch && matchesStatus;
   });
 
+  const API_URL = (import.meta as any).env.VITE_API_URL || 'https://hamropay-backends.onrender.com';
+
   const handleCopyLink = (id: string | number) => {
-    const url = `https://hamropay.demo/checkout/${id}`;
+    const url = `${API_URL}/pay/${id}`;
     navigator.clipboard?.writeText(url).then(() => {
       showToast('Payment link copied to clipboard.', 'success');
     }).catch(() => {
@@ -155,6 +157,12 @@ export default function PaymentLinksView({
                     <p className="text-xs text-slate-500 font-medium mt-1">
                       Rs. {link.amount.toLocaleString('en-NP')} · {link.orders} successful payments · {link.date}
                     </p>
+                    <div className="mt-1.5 flex items-center gap-1 text-[11px] font-mono text-slate-400">
+                      <span className="text-slate-400 font-semibold">URL:</span>
+                      <span className="text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded-md truncate max-w-[280px]">
+                        {API_URL}/pay/{link.id}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Mail, Smartphone, ShieldCheck, Edit, HelpCircle } from 'lucide-react';
+import { User, Mail, Smartphone, ShieldCheck, Edit, HelpCircle, Key, Copy, Eye, EyeOff } from 'lucide-react';
 import { MerchantProfile } from '../types';
 
 interface ProfileViewProps {
@@ -13,14 +13,38 @@ export default function ProfileView({
   onProfileSave,
   showToast
 }: ProfileViewProps) {
-  const [name, setName] = useState(profile.name);
-  const [email, setEmail] = useState(profile.email);
+  const getStoredMerchant = () => {
+    try {
+      return JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+    } catch {
+      return {};
+    }
+  };
+
+  const stored = getStoredMerchant();
+  const [name, setName] = useState(stored.name || profile.name);
+  const [email, setEmail] = useState(stored.email || profile.email);
   const [phone, setPhone] = useState(profile.phone);
   const [emailReceipts, setEmailReceipts] = useState(profile.emailReceipts);
   const [withdrawalAlerts, setWithdrawalAlerts] = useState(profile.withdrawalAlerts);
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  const apiKey = stored.api_key || '';
 
   const getInitials = (n: string) => {
     return n.split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase() || 'HP';
+  };
+
+  const handleCopyApiKey = () => {
+    if (!apiKey) {
+      showToast('No API key found in merchant credentials.', 'error');
+      return;
+    }
+    navigator.clipboard?.writeText(apiKey).then(() => {
+      showToast('API key copied to clipboard.', 'success');
+    }).catch(() => {
+      showToast('Failed to copy API key.', 'error');
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -152,6 +176,45 @@ export default function ProfileView({
                   className="w-full text-sm pl-11 pr-4 py-3 rounded-xl border border-slate-200 text-slate-800 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 focus:outline-none transition-all font-semibold"
                 />
               </div>
+            </div>
+
+            {/* Merchant API Key */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 tracking-wide uppercase">
+                Merchant API Key
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                    <Key className="w-4.5 h-4.5" />
+                  </span>
+                  <input
+                    type="text"
+                    readOnly
+                    value={showApiKey ? (apiKey || 'Not generated') : `${apiKey ? apiKey.slice(0, 8) : ''}••••••••••••••••••••••••`}
+                    className="w-full text-xs font-mono pl-11 pr-10 py-3 rounded-xl border border-slate-200 text-slate-700 bg-slate-50 font-bold focus:outline-none select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition"
+                    title={showApiKey ? 'Hide key' : 'Show key'}
+                  >
+                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyApiKey}
+                  className="px-3.5 py-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copy</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">
+                Include in the <code className="text-rose-600 font-mono font-semibold">x-api-key</code> header for all merchant API requests.
+              </p>
             </div>
 
             {/* Save Profile Button */}

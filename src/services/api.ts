@@ -12,12 +12,19 @@ export const apiCall = async (
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
   body?: object
 ) => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-api-key': getApiKey(),
+  };
+
+  const token = localStorage.getItem('hamropay_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': getApiKey(),
-    },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json();

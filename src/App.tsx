@@ -21,6 +21,7 @@ import ProfileView from './components/ProfileView';
 import ReferralView from './components/ReferralView';
 import SupportView from './components/SupportView';
 import ConnectView from './components/ConnectView';
+import DeveloperPortalView from './components/DeveloperPortalView';
 import Modal from './components/Modal';
 import Toast, { ToastItem } from './components/Toast';
 import { Link as LinkIcon, Wallet, CheckCircle, Info, Cloud, Wifi, HelpCircle, Key } from 'lucide-react';
@@ -565,7 +566,7 @@ export default function App() {
         setCurrentPlan(res.plan as any);
         setFeePercent(res.feePercent ?? 1.5);
         setLinkLimit(res.linkLimit ?? 100);
-        showToast(`Subscription plan upgraded to ${res.plan} on zappay-beta.`, 'success');
+        showToast(`Subscription plan upgraded to ${res.plan} on HamroPay.`, 'success');
       } else {
         setCurrentPlan(planToSet);
         if (planToSet === 'Blaze Free') {
@@ -709,9 +710,13 @@ export default function App() {
           />
         );
       
+      case 'developer':
+        return (
+          <DeveloperPortalView showToast={showToast} />
+        );
+
       // Accordionconnected placeholders
       case 'fampay':
-      case 'developer':
       case 'store':
         return (
           <ConnectView 
@@ -1034,7 +1039,7 @@ export default function App() {
             <button 
               onClick={() => {
                 setModalApiUrlInput(DEFAULT_API_BASE);
-                showToast('Reset endpoint URL to zappay-beta production.', 'info');
+                showToast('Reset endpoint URL to HamroPay production.', 'info');
               }}
               className="px-3.5 py-2 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 outline-none mr-auto cursor-pointer"
             >
@@ -1060,13 +1065,13 @@ export default function App() {
             <div className="space-y-0.5">
               <span className="block text-xs font-bold text-slate-800">Enable Remote Cloud Sync</span>
               <span className="block text-[10px] text-slate-400 font-semibold leading-tight">
-                Route collections, ledger, and payouts to remote Vercel API.
+                Route collections, ledger, and payouts to remote backend API.
               </span>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input 
                 type="checkbox" 
-                checked={modalApiEnabledInput}
+                checked={modalApiEnabledInput} 
                 onChange={(e) => setModalApiEnabledInput(e.target.checked)}
                 className="sr-only peer" 
               />
@@ -1076,13 +1081,13 @@ export default function App() {
 
           <div className="space-y-1.5">
             <label htmlFor="apiUrlInput" className="block text-xs font-bold text-slate-700 uppercase">
-              Vercel Backend URL
+              HamroPay Backend URL
             </label>
             <div className="relative">
               <input
                 id="apiUrlInput"
                 type="url"
-                placeholder="https://zappay-beta.vercel.app"
+                placeholder="https://hamropay-backends.onrender.com"
                 value={modalApiUrlInput}
                 onChange={(e) => setModalApiUrlInput(e.target.value)}
                 disabled={!modalApiEnabledInput}

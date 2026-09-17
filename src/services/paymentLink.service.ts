@@ -7,3 +7,7 @@ export const createLink = async (data: { title: string; amount: number; note?: s
 export const getLinks = async () => {
   return apiCall('/api/payment-link/list', 'GET');
 };
+
+export const deleteLink = async (id: string | number) => {
+  return apiCall(`/api/payment-link/${id}`, 'DELETE');
+};
