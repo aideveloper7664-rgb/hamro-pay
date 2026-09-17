@@ -785,7 +785,7 @@ export default function App() {
     );
   }
 
-  // If not signed in, show rebranding sign-in screen
+  // If not signed in, show clean native auth screen
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-slate-50 font-sans">
