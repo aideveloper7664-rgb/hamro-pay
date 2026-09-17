@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Wallet, Mail, Lock, ShieldCheck, ArrowRight, Zap, CheckCircle, User, Loader2 } from 'lucide-react';
+import { Wallet, Mail, Lock, ShieldCheck, ArrowRight, CheckCircle, User, Loader2, Globe, Key } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import TextLoop from './TextLoop';
 
 interface AuthScreenProps {
   onLoginSuccess: (token: string, user: any) => void;
@@ -8,11 +9,12 @@ interface AuthScreenProps {
 }
 
 export default function AuthScreen({ onLoginSuccess, showToast }: AuthScreenProps) {
-  const { loginWithEmail, registerWithEmail, loginWithGoogle } = useAuth();
+  const { login, register } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('merchant@hamropay.demo');
-  const [password, setPassword] = useState('hamropay-demo');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -26,23 +28,24 @@ export default function AuthScreen({ onLoginSuccess, showToast }: AuthScreenProp
     setIsLoading(true);
     try {
       if (isSignUp) {
-        const user = await registerWithEmail(name.trim(), email.trim(), password);
-        showToast(`Merchant workspace registered successfully!`, 'success');
-        onLoginSuccess('firebase_sync_token', user);
+        const merchant = await register(name.trim(), email.trim(), password, webhookUrl.trim() || undefined);
+        const token = localStorage.getItem('hamropay_token') || '';
+        showToast('Merchant workspace registered successfully!', 'success');
+        onLoginSuccess(token, merchant);
       } else {
-        const user = await loginWithEmail(email.trim(), password);
-        showToast(`Welcome back, ${user.name || 'Merchant'}!`, 'success');
-        onLoginSuccess('firebase_sync_token', user);
+        const res = await login(email.trim(), password);
+        showToast(`Welcome back, ${res.merchant?.name || 'Merchant'}!`, 'success');
+        onLoginSuccess(res.token, res.merchant);
       }
     } catch (err: any) {
-      showToast(err.message || 'Authentication failed. Verify credentials.', 'error');
+      showToast(err.message || 'Authentication failed. Check your credentials.', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleForgotPassword = () => {
-    showToast('A recovery link has been sent to your registered email.', 'success');
+    showToast('Password reset link sent to your email if registered.', 'info');
   };
 
   return (
@@ -59,85 +62,80 @@ export default function AuthScreen({ onLoginSuccess, showToast }: AuthScreenProp
           <div className="w-10 h-10 rounded-xl bg-white text-rose-600 flex items-center justify-center shadow-lg shadow-rose-950/20">
             <Wallet className="w-6 h-6 stroke-[2.5]" />
           </div>
-          <span className="text-xl font-extrabold tracking-tight">Hamro Pay</span>
+          <span className="text-2xl font-black tracking-tight">Hamro Pay</span>
         </div>
 
-        {/* Hero Headings */}
-        <div className="relative z-10 my-auto max-w-lg">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs font-semibold uppercase tracking-wider text-rose-100 mb-6">
-            <Zap className="w-3.5 h-3.5 fill-rose-300 text-rose-300" /> Nepal's Premium Digital Wallet
+        {/* Center Copy */}
+        <div className="relative z-10 my-auto max-w-lg space-y-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs font-bold tracking-wide">
+            <ShieldCheck className="w-4 h-4 text-emerald-300" />
+            Direct FamPay UPI Gateway
           </div>
-          <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.1] mb-4">
-            Unified digital collections for your business.
+          <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.15]">
+            Empower your digital merchant settlements.
           </h1>
-          <p className="text-base text-rose-100/80 font-normal leading-relaxed">
-            Create branded checkout links, follow payouts, and manage your merchant reserves from a clean, secure, high-trust local wallet platform.
+          <p className="text-rose-100 text-base font-normal leading-relaxed opacity-90">
+            Create payment orders, collect UPI settlements, reconcile UTRs with automatic Gmail verification, and withdraw funds straight to your bank account.
           </p>
-
-          {/* Quick Feature Grid */}
-          <div className="grid grid-cols-3 gap-4 mt-12">
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-              <Wallet className="w-5 h-5 text-rose-300 mb-2" />
-              <div className="font-bold text-sm text-white mb-0.5">Quick Payouts</div>
-              <div className="text-xs text-rose-200/70">Instant local transfers.</div>
-            </div>
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-              <Zap className="w-5 h-5 text-rose-300 mb-2" />
-              <div className="font-bold text-sm text-white mb-0.5">Custom Links</div>
-              <div className="text-xs text-rose-200/70"> Branded checkouts.</div>
-            </div>
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-              <ShieldCheck className="w-5 h-5 text-rose-300 mb-2" />
-              <div className="font-bold text-sm text-white mb-0.5">Bank Trust</div>
-              <div className="text-xs text-rose-200/70">ISO-grade security.</div>
-            </div>
-          </div>
         </div>
 
-        {/* Footer info */}
-        <div className="relative z-10 text-xs text-rose-200/60 font-medium">
-          Hamro Pay Merchant Workspace · Proudly Nepali
+        {/* Running Bottom Loop */}
+        <div className="relative z-10 pt-8 border-t border-white/10">
+          <TextLoop
+            text="Instant JWT Auth ✦ Instant FamPay Settlement ✦ Automated UTR Verification ✦ High-Speed Orders ✦ RESTful API Keys"
+            shape="line"
+            speed={35}
+            direction="forward"
+            separator="✦"
+            fontSize={12}
+            fontWeight={600}
+            color="#ffffff"
+            ribbon={false}
+            height={24}
+          />
         </div>
       </aside>
 
-      {/* Auth Main Form Area */}
-      <main className="flex items-center justify-center p-8 bg-slate-50">
-        <div className="w-full max-w-[420px] bg-white rounded-3xl border border-slate-100 shadow-xl p-8 animate-[fadeInUp_0.4s_cubic-bezier(0.16,1,0.3,1)_both]">
-          {/* Brand Logo for Mobile */}
-          <div className="flex md:hidden items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-md">
-              <Wallet className="w-6 h-6 stroke-[2.5]" />
+      {/* Main Authentication Form */}
+      <main className="flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-16">
+        <div className="max-w-md w-full mx-auto space-y-6">
+          {/* Header Mobile Brand */}
+          <div className="md:hidden flex items-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-600/20">
+              <Wallet className="w-5 h-5 stroke-[2.5]" />
             </div>
-            <span className="text-xl font-extrabold tracking-tight text-slate-900">Hamro Pay</span>
+            <span className="text-xl font-black tracking-tight text-slate-900">Hamro Pay</span>
           </div>
 
-          <div className="mb-8">
-            <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight mb-1.5">
-              {isSignUp ? 'Create Merchant Account' : 'Welcome back'}
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+              {isSignUp ? 'Create Merchant Account' : 'Sign in to Merchant Portal'}
             </h2>
-            <p className="text-sm text-slate-500 font-normal">
-              {isSignUp ? 'Register your brand to start collecting payments.' : 'Sign in to your merchant dashboard.'}
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              {isSignUp 
+                ? 'Register your merchant business and receive your unique API key instantly.' 
+                : 'Enter your account email and password to access your dashboard.'}
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Name Field (Only on Sign Up) */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Name Field (Sign Up Only) */}
             {isSignUp && (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label htmlFor="signUpName" className="block text-xs font-bold text-slate-700 tracking-wide uppercase">
-                  Merchant / Company Name
+                  Merchant / Business Name
                 </label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                    <User className="w-4.5 h-4.5" />
+                    <User className="w-4 h-4" />
                   </span>
                   <input
                     id="signUpName"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full text-sm pl-11 pr-4 py-3 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 focus:outline-none transition-all font-medium"
-                    placeholder="e.g. Aarav Creations"
+                    className="w-full text-sm pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 focus:outline-none transition-all font-medium"
+                    placeholder="e.g. Kathmandu Retailers"
                     required={isSignUp}
                   />
                 </div>
@@ -145,46 +143,68 @@ export default function AuthScreen({ onLoginSuccess, showToast }: AuthScreenProp
             )}
 
             {/* Email Field */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label htmlFor="authEmail" className="block text-xs font-bold text-slate-700 tracking-wide uppercase">
                 Email Address
               </label>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                  <Mail className="w-4.5 h-4.5" />
+                  <Mail className="w-4 h-4" />
                 </span>
                 <input
                   id="authEmail"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full text-sm pl-11 pr-4 py-3 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 focus:outline-none transition-all font-medium"
-                  placeholder="name@company.com"
+                  className="w-full text-sm pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 focus:outline-none transition-all font-medium"
+                  placeholder="merchant@example.com"
                   required
                 />
               </div>
             </div>
 
             {/* Password Field */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label htmlFor="authPassword" className="block text-xs font-bold text-slate-700 tracking-wide uppercase">
                 Password
               </label>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                  <Lock className="w-4.5 h-4.5" />
+                  <Lock className="w-4 h-4" />
                 </span>
                 <input
                   id="authPassword"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full text-sm pl-11 pr-4 py-3 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 focus:outline-none transition-all font-medium"
+                  className="w-full text-sm pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 focus:outline-none transition-all font-medium"
                   placeholder="••••••••"
                   required
                 />
               </div>
             </div>
+
+            {/* Webhook URL (Sign Up Only) */}
+            {isSignUp && (
+              <div className="space-y-1.5">
+                <label htmlFor="webhookUrl" className="block text-xs font-bold text-slate-700 tracking-wide uppercase">
+                  Webhook URL (Optional)
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                    <Globe className="w-4 h-4" />
+                  </span>
+                  <input
+                    id="webhookUrl"
+                    type="url"
+                    value={webhookUrl}
+                    onChange={(e) => setWebhookUrl(e.target.value)}
+                    className="w-full text-sm pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 focus:outline-none transition-all font-medium"
+                    placeholder="https://myshop.com/webhook/hamropay"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Options */}
             {!isSignUp && (
@@ -217,85 +237,42 @@ export default function AuthScreen({ onLoginSuccess, showToast }: AuthScreenProp
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                  Please wait...
+                  <span>Connecting to Backend...</span>
                 </>
               ) : (
                 <>
-                  {isSignUp ? 'Create Merchant Account' : 'Sign in to Hamro Pay'}
+                  <span>{isSignUp ? 'Register & Get API Key' : 'Sign in to Merchant Portal'}</span>
                   <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                 </>
               )}
             </button>
-
-            {/* Google Sign In Button */}
-            <button
-              type="button"
-              onClick={async () => {
-                setIsLoading(true);
-                try {
-                  const user = await loginWithGoogle();
-                  showToast(`Welcome back, ${user.name || 'Merchant'}!`, 'success');
-                  onLoginSuccess('firebase_sync_token', user);
-                } catch (err: any) {
-                  // Error is already logged or notified by AuthContext
-                } finally {
-                  setIsLoading(false);
-                }
-              }}
-              disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-slate-700 font-bold text-sm tracking-wide shadow-sm active:scale-[0.98] transition-all focus:outline-none focus:ring-4 focus:ring-slate-100 disabled:opacity-50"
-            >
-              <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="#EA4335"
-                  d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.578-7.859-8s3.529-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l3.227-3.107C18.281 1.094 15.566 0 12.24 0 5.58 0 0 5.37 0 12s5.58 12 12.24 12c6.96 0 11.57-4.89 11.57-11.79 0-.795-.085-1.4-.195-1.925H12.24z"
-                />
-              </svg>
-              Continue with Google
-            </button>
           </form>
 
           {/* Toggle View Link */}
-          <div className="text-center mt-5 text-xs font-semibold text-slate-500">
-            {isSignUp ? 'Already have an account?' : 'New to Hamro Pay?'}
+          <div className="text-center mt-4 text-xs font-semibold text-slate-500">
+            {isSignUp ? 'Already have a merchant account?' : "Don't have an account yet?"}
             <button
               type="button"
               onClick={() => {
                 setIsSignUp(!isSignUp);
-                if (isSignUp) {
-                  setEmail('merchant@hamropay.demo');
-                  setPassword('hamropay-demo');
-                } else {
-                  setName('');
-                  setEmail('');
-                  setPassword('');
-                }
+                setName('');
+                setEmail('');
+                setPassword('');
+                setWebhookUrl('');
               }}
-              className="text-rose-600 hover:text-rose-700 ml-1.5 focus:outline-none underline"
+              className="text-rose-600 hover:text-rose-700 ml-1.5 focus:outline-none underline font-bold"
             >
               {isSignUp ? 'Sign in instead' : 'Register brand'}
             </button>
           </div>
 
-          {/* Divider */}
-          <div className="relative flex py-5 items-center">
-            <div className="flex-grow border-t border-slate-100" />
-            <span className="flex-shrink mx-4 text-xs font-bold text-slate-400 uppercase tracking-widest">or</span>
-            <div className="flex-grow border-t border-slate-100" />
-          </div>
-
-          {/* Demo Note */}
-          <div className="flex gap-3 bg-rose-50/50 border border-rose-100 rounded-2xl p-4 text-xs text-rose-900/80 leading-relaxed font-medium">
-            <CheckCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+          {/* Backend Info Card */}
+          <div className="flex gap-3 bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-xs text-slate-600 leading-relaxed font-medium">
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
             <div>
-              <b className="text-rose-950 font-bold block mb-0.5">Staging Sandbox Connected</b>
-              You can log in instantly with the credentials filled above, or register a new custom merchant brand. Records are fully synchronized end-to-end.
+              <b className="text-slate-800 font-bold block mb-0.5">Custom Backend Connected</b>
+              Authentication and wallet services run on <span className="font-mono text-rose-600 font-bold">hamropay-backends.onrender.com</span> via secure JWT.
             </div>
-          </div>
-
-          {/* Terms Footer */}
-          <div className="text-[10px] text-center text-slate-400 font-semibold leading-relaxed mt-6">
-            By signing in, you acknowledge and agree to the Hamro Pay digital merchant services agreements.
           </div>
         </div>
       </main>

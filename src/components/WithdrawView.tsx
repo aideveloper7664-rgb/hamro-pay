@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowUp, Wallet, Shield, Check, Info } from 'lucide-react';
+import { requestWithdrawal } from '../services/wallet.service';
 
 interface WithdrawViewProps {
   balance: number;
@@ -14,8 +15,9 @@ export default function WithdrawView({
 }: WithdrawViewProps) {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [upiId, setUpiId] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = Number(withdrawAmount);
     const trimmedUpi = upiId.trim();
@@ -35,9 +37,18 @@ export default function WithdrawView({
       return;
     }
 
-    onWithdrawSubmit(amount, trimmedUpi);
-    setWithdrawAmount('');
-    setUpiId('');
+    setLoading(true);
+    try {
+      await requestWithdrawal(amount, trimmedUpi);
+      showToast('Withdrawal request submitted successfully!', 'success');
+      onWithdrawSubmit(amount, trimmedUpi);
+      setWithdrawAmount('');
+      setUpiId('');
+    } catch (err: any) {
+      showToast(err.message || 'Withdrawal failed. Please verify your details.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

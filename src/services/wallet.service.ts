@@ -1,9 +1,8 @@
 import { apiCall } from './api';
 
-export const getBalance = async () => {
-  return apiCall('/api/wallet/balance', 'GET');
-};
-
-export const convertToCredit = async (amount: number) => {
-  return apiCall('/api/wallet/convert-to-credit', 'POST', { amount });
-};
+export const getWalletBalance = async () => apiCall('/wallet/balance');
+export const getBalance = getWalletBalance;
+export const getTransactions = async () => apiCall('/wallet/transactions');
+export const requestWithdrawal = async (amount: number, upi_id: string) =>
+  apiCall('/wallet/withdraw', 'POST', { amount, upi_id });
+export const getWithdrawals = async () => apiCall('/wallet/withdrawals');

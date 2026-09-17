@@ -279,8 +279,8 @@ export default function App() {
         const profRes = await ApiService.getUserProfile();
         if (profRes.success && !profRes.isSimulated) {
           setProfile({
-            name: profRes.profile.name,
-            email: profRes.profile.email,
+            name: profRes.profile.name || 'Merchant User',
+            email: profRes.profile.email || 'merchant@hamropay.demo',
             phone: profRes.profile.phone || '',
             emailReceipts: profRes.profile.emailReceipts ?? true,
             withdrawalAlerts: profRes.profile.withdrawalAlerts ?? true
@@ -343,8 +343,8 @@ export default function App() {
     });
 
     setProfile({
-      name: user.name,
-      email: user.email,
+      name: user.name || 'Merchant User',
+      email: user.email || 'merchant@hamropay.demo',
       phone: user.phone || '',
       emailReceipts: user.emailReceipts ?? true,
       withdrawalAlerts: user.withdrawalAlerts ?? true

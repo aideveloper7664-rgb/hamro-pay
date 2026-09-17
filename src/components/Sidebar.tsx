@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   Grid, Link as LinkIcon, Wallet, Clock, ArrowUp, Bell, 
-  CreditCard, Code, ShoppingBag, Zap, Gift, Headphones, 
+  CreditCard, Code, ShoppingBag, 
   User, LogOut, ChevronDown, Sparkles 
 } from 'lucide-react';
 import { PlanType } from '../types';
@@ -13,7 +13,7 @@ interface SidebarProps {
   profileName: string;
   profileEmail: string;
   unreadNotifications: number;
-  currentPlan: PlanType;
+  currentPlan?: PlanType;
   onSignOut: () => void;
   isOpen: boolean;
   onClose: () => void;
@@ -26,7 +26,6 @@ export default function Sidebar({
   profileName,
   profileEmail,
   unreadNotifications,
-  currentPlan,
   onSignOut,
   isOpen,
   onClose
@@ -45,8 +44,11 @@ export default function Sidebar({
     }));
   };
 
-  const getInitials = (name: string) => {
-    return name.split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase() || 'HP';
+  const getInitials = (name: any) => {
+    if (!name || typeof name !== 'string') return 'HP';
+    const cleanName = name.trim();
+    if (!cleanName) return 'HP';
+    return cleanName.split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join('').toUpperCase() || 'HP';
   };
 
   const menuItems = [
@@ -148,7 +150,7 @@ export default function Sidebar({
             );
           })}
 
-          {/* Notifications */}
+          {/* Notifications (UI kept, no API call) */}
           <button
             onClick={() => handleNavClick('notifications')}
             className={`
@@ -185,7 +187,7 @@ export default function Sidebar({
                 <span>Cashier Connect</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[9px] bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 px-1 py-0.5 rounded-md font-extrabold">NEW</span>
+                <span className="text-[9px] bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 px-1 py-0.5 rounded-md font-extrabold">UPI</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openSubmenus.cashier ? 'rotate-180' : ''}`} />
               </div>
             </button>
@@ -218,7 +220,7 @@ export default function Sidebar({
                 <span>Developer Portal</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[9px] bg-teal-500/10 border border-teal-500/20 text-teal-400 px-1 py-0.5 rounded-md font-extrabold">NEW</span>
+                <span className="text-[9px] bg-teal-500/10 border border-teal-500/20 text-teal-400 px-1 py-0.5 rounded-md font-extrabold">API</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openSubmenus.developer ? 'rotate-180' : ''}`} />
               </div>
             </button>
@@ -251,7 +253,6 @@ export default function Sidebar({
                 <span>Store Portal</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[9px] bg-purple-500/10 border border-purple-500/20 text-purple-400 px-1 py-0.5 rounded-md font-extrabold">NEW</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openSubmenus.store ? 'rotate-180' : ''}`} />
               </div>
             </button>
@@ -272,60 +273,6 @@ export default function Sidebar({
           </div>
 
           <div className="h-px bg-slate-800 my-4 mx-2" />
-
-          {/* Upgrade Plan Item */}
-          <button
-            onClick={() => handleNavClick('pricing')}
-            className={`
-              w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-extrabold tracking-wide transition-all border
-              ${currentView === 'pricing'
-                ? 'bg-rose-600 border-rose-500 text-white shadow-md'
-                : 'bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/20 text-rose-200'
-              }
-            `}
-          >
-            <div className="w-6 h-6 rounded-lg bg-rose-500 text-white flex items-center justify-center shrink-0">
-              <Zap className="w-3.5 h-3.5 fill-current" />
-            </div>
-            <span className="flex-1 text-left">Upgrade Plan</span>
-            <span className="bg-rose-600/30 text-rose-200 text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-rose-500/20">
-              NEW
-            </span>
-          </button>
-
-          {/* Refer & Earn */}
-          <button
-            onClick={() => handleNavClick('referral')}
-            className={`
-              w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold tracking-wide transition-all
-              ${currentView === 'referral' 
-                ? 'bg-rose-600 text-white shadow-md' 
-                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
-              }
-            `}
-          >
-            <div className={`w-6 h-6 rounded-lg ${currentView === 'referral' ? 'bg-white/10' : 'bg-cyan-500'} text-white flex items-center justify-center shrink-0`}>
-              <Gift className="w-3.5 h-3.5" />
-            </div>
-            <span className="flex-1 text-left">Refer &amp; Earn</span>
-          </button>
-
-          {/* Support */}
-          <button
-            onClick={() => handleNavClick('support')}
-            className={`
-              w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold tracking-wide transition-all
-              ${currentView === 'support' 
-                ? 'bg-rose-600 text-white shadow-md' 
-                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
-              }
-            `}
-          >
-            <div className={`w-6 h-6 rounded-lg ${currentView === 'support' ? 'bg-white/10' : 'bg-sky-500'} text-white flex items-center justify-center shrink-0`}>
-              <Headphones className="w-3.5 h-3.5" />
-            </div>
-            <span className="flex-1 text-left">Support Desk</span>
-          </button>
 
           {/* Profile */}
           <button

@@ -1,13 +1,10 @@
-import { apiCall, publicApiCall } from './api';
+import { apiCall } from './api';
 
-export const createOrder = async (linkId: string, customerMobile?: string) => {
-  return publicApiCall('/api/payment/create-order', 'POST', { linkId, customerMobile });
-};
+export const createOrder = async (amount: number, customer_name?: string, customer_email?: string) =>
+  apiCall('/order/create', 'POST', { amount, customer_name, customer_email });
 
-export const getHistory = async () => {
-  return apiCall('/api/payment/history', 'GET');
-};
+export const verifyPayment = async (order_id: string, utr: string) =>
+  apiCall('/order/verify', 'POST', { order_id, utr });
 
-export const getOrderStatus = async (orderId: string) => {
-  return publicApiCall(`/api/developer/order-status?orderId=${orderId}`, 'GET');
-};
+export const getOrderStatus = async (order_id: string) =>
+  apiCall(`/order/status/${order_id}`);
