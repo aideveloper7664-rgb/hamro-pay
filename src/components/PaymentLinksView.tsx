@@ -10,6 +10,9 @@ interface PaymentLinksViewProps {
   onDeleteLink?: (id: string | number) => void;
   onCreateNewLink: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onOpenSidebar?: () => void;
+  onViewChange?: (view: string) => void;
+  unreadNotifications?: number;
 }
 
 export default function PaymentLinksView({
@@ -18,7 +21,10 @@ export default function PaymentLinksView({
   onEditLink,
   onDeleteLink,
   onCreateNewLink,
-  showToast
+  showToast,
+  onOpenSidebar,
+  onViewChange,
+  unreadNotifications = 0
 }: PaymentLinksViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Expired' | 'Disabled'>('All');
@@ -75,7 +81,41 @@ export default function PaymentLinksView({
   };
 
   return (
-    <main className="w-full max-w-[1400px] mx-auto py-6 px-4 sm:px-6 animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both] text-[#fff2f4]">
+    <div className="min-h-screen text-[#fff2f4] flex flex-col">
+      {/* Top Nav */}
+      <header className="topbar">
+        <div className="topbar-left">
+          <button 
+            className="icon-btn" 
+            aria-label="Menu"
+            onClick={onOpenSidebar}
+            title="Toggle Navigation Menu"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18M3 12h18M3 18h18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div className="topbar-center">My Links</div>
+
+        <div className="topbar-right">
+          <button 
+            className="icon-btn" 
+            aria-label="Notifications"
+            onClick={() => onViewChange?.('notifications')}
+            title="View Notifications"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/>
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+            </svg>
+            <span className="badge-dot"></span>
+          </button>
+        </div>
+      </header>
+
+      <main className="container animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
 
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -322,6 +362,7 @@ export default function PaymentLinksView({
         )}
       </div>
 
-    </main>
+      </main>
+    </div>
   );
 }

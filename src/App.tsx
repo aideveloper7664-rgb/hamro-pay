@@ -682,6 +682,9 @@ export default function App() {
             onDeleteLink={handleDeleteLink}
             onCreateNewLink={handleOpenCreateLink}
             showToast={showToast}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            onViewChange={setCurrentView}
+            unreadNotifications={unreadNotificationsCount}
           />
         );
       case 'wallet':

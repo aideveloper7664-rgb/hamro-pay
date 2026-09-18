@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Link as LinkIcon, DollarSign, Settings, ChevronDown } from 'lucide-react';
 
 interface CreatePaymentLinkModalProps {
@@ -43,6 +43,29 @@ export default function CreatePaymentLinkModal({
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      setAmount(initialData ? String(initialData.amount) : '');
+      setTitle(initialData ? initialData.title : '');
+      setNote(initialData ? initialData.note || '' : '');
+      setRedirectUrl(initialData ? initialData.redirectUrl || '' : '');
+      setExpiry(initialData ? initialData.expiry || '7d' : '7d');
+      setUsageLimit(initialData?.usageLimit ? String(initialData.usageLimit) : '');
+      setIsAdvancedOpen(false);
+      setIsSubmitting(false);
+    }
+  }, [isOpen, initialData]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleQuickAmount = (val: number) => {
@@ -71,9 +94,15 @@ export default function CreatePaymentLinkModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#040102]/75 backdrop-blur-md animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#040102]/75 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={onClose}
+    >
       {/* Modal Box */}
-      <div className="relative w-full max-w-[560px] max-h-[calc(100vh-48px)] flex flex-col rounded-[22px] bg-gradient-to-br from-[rgba(24,6,10,0.97)] to-[rgba(12,2,6,0.99)] border border-[rgba(255,45,85,0.18)] shadow-[0_40px_90px_rgba(0,0,0,0.75),0_0_70px_rgba(255,30,75,0.16)] text-[#fff2f4] overflow-hidden">
+      <div 
+        className="relative w-full max-w-[560px] max-h-[calc(100vh-48px)] flex flex-col rounded-[22px] bg-gradient-to-br from-[rgba(24,6,10,0.97)] to-[rgba(12,2,6,0.99)] border border-[rgba(255,45,85,0.18)] shadow-[0_40px_90px_rgba(0,0,0,0.75),0_0_70px_rgba(255,30,75,0.16)] text-[#fff2f4] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Header */}
         <div className="relative flex items-center gap-3.5 px-6 py-5 bg-gradient-to-br from-[rgba(60,10,20,0.95)] to-[rgba(28,5,12,0.98)] border-b border-[rgba(255,45,85,0.22)]">
