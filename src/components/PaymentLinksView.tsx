@@ -115,7 +115,7 @@ export default function PaymentLinksView({
         </div>
       </header>
 
-      <main className="container animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
+      <div className="page-content animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
 
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -362,7 +362,7 @@ export default function PaymentLinksView({
         )}
       </div>
 
-      </main>
+      </div>
     </div>
   );
 }

@@ -871,7 +871,7 @@ export default function App() {
 
       {/* Main viewport area */}
       <div className="main-area">
-        {currentView !== 'dashboard' && currentView !== 'developer' && (
+        {currentView !== 'dashboard' && currentView !== 'developer' && currentView !== 'links' && (
           <Header
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}
