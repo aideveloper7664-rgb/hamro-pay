@@ -15,9 +15,9 @@ export default function DeveloperPortalView({
   const getStoredApiKey = () => {
     try {
       const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-      return merchant.api_key || 'zp_live_8f3c9a2b7e4d1f8a3c9b2e7d4f1a8c3b9e2d7f4a';
+      return merchant.api_key || 'hp_live_8f3c9a2b7e4d1f8a3c9b2e7d4f1a8c3b9e2d7f4a';
     } catch {
-      return 'zp_live_8f3c9a2b7e4d1f8a3c9b2e7d4f1a8c3b9e2d7f4a';
+      return 'hp_live_8f3c9a2b7e4d1f8a3c9b2e7d4f1a8c3b9e2d7f4a';
     }
   };
 
@@ -68,14 +68,14 @@ export default function DeveloperPortalView({
     setRegenerating(true);
     try {
       const newData = await regenerateKey();
-      const newKey = newData?.api_key || ('zp_live_' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''));
+      const newKey = newData?.api_key || ('hp_live_' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''));
       setRealKey(newKey);
       const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
       merchant.api_key = newKey;
       localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
       showToast('API Key regenerated successfully!', 'success');
     } catch {
-      const newKey = 'zp_live_' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+      const newKey = 'hp_live_' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
       setRealKey(newKey);
       showToast('API Key regenerated locally!', 'success');
     } finally {
@@ -133,7 +133,7 @@ export default function DeveloperPortalView({
             </svg>
           </button>
         </div>
-        <div className="topbar-center">Zap API</div>
+        <div className="topbar-center">Hamro API</div>
         <div className="topbar-right">
           <button 
             className="icon-btn" 
@@ -161,8 +161,8 @@ export default function DeveloperPortalView({
               </svg>
             </div>
             <div className="page-info">
-              <h1>Developer Portal — Zap API</h1>
-              <p>Accept ZapPay payments directly on your own website or app.</p>
+              <h1>Developer Portal — Hamro API</h1>
+              <p>Accept HamroPay payments directly on your own website or app.</p>
             </div>
           </div>
         </div>
@@ -225,8 +225,8 @@ export default function DeveloperPortalView({
                 </svg>
               </div>
               <div className="panel-title-text">
-                <h2>Your ZapAPI Key</h2>
-                <p>Identifies your ZapPay account when your website, app, or server calls ZapPay</p>
+                <h2>Your Hamro API Key</h2>
+                <p>Identifies your HamroPay account when your website, app, or server calls HamroPay</p>
               </div>
             </div>
           </div>
@@ -325,7 +325,7 @@ export default function DeveloperPortalView({
 
           <div className="quick-intro">
             Full step-by-step guides for HTML/JS, PHP, and Java are in{' '}
-            <a href="#" onClick={(e) => { e.preventDefault(); onViewChange?.('developer'); }}>API Integration</a>, right below Zap API in the sidebar. Short version:
+            <a href="#" onClick={(e) => { e.preventDefault(); onViewChange?.('developer'); }}>API Integration</a>, right below Hamro API in the sidebar. Short version:
           </div>
 
           <div className="step">
@@ -337,7 +337,7 @@ export default function DeveloperPortalView({
                 <span className="path">/api/developer/create-order</span>
               </div>
               <div className="step-desc">
-                Body: <code>{`{ zap_api, amount, title }`}</code>
+                Body: <code>{`{ hamro_api, amount, title }`}</code>
               </div>
             </div>
           </div>
@@ -421,7 +421,7 @@ export default function DeveloperPortalView({
           </div>
 
           <div className="wh-desc">
-            Optional. Get an instant POST to your own server whenever an order you created via ZapAPI goes{' '}
+            Optional. Get an instant POST to your own server whenever an order you created via Hamro API goes{' '}
             <span className="pend">pending</span>, <span className="ok">success</span>, or <span className="fail">failed</span> —
             so you don't have to poll <code>order-status</code>.
           </div>
@@ -434,7 +434,7 @@ export default function DeveloperPortalView({
                 value={whInput} 
                 onChange={(e) => setWhInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
-                placeholder="https://yourserver.com/zappay/webhook" 
+                placeholder="https://yourserver.com/hamropay/webhook" 
               />
             </div>
             <button className="btn-primary" onClick={handleAddWebhook}>
@@ -496,7 +496,7 @@ export default function DeveloperPortalView({
           </div>
 
           <div className="routing-desc">
-            Choose how payments created via ZapAPI and your Payment Links are processed for your customers. This applies to every existing link too — not just new ones.
+            Choose how payments created via Hamro API and your Payment Links are processed for your customers. This applies to every existing link too — not just new ones.
           </div>
 
           <div className="warn-banner">
@@ -551,7 +551,7 @@ export default function DeveloperPortalView({
           </div>
 
           <div className="gateway-desc">
-            Applies to your whole account — both your ZapAPI and every payment link. Switch to Test Mode to try your integration end-to-end with zero real money involved: customers get ZapPay's own simulator (<code>test.html</code>) instead of a real UPI checkout, and you get the same success/failed/cancelled notifications you'd get for real, without a rupee moving.
+            Applies to your whole account — both your Hamro API and every payment link. Switch to Test Mode to try your integration end-to-end with zero real money involved: customers get HamroPay's own simulator (<code>test.html</code>) instead of a real UPI checkout, and you get the same success/failed/cancelled notifications you'd get for real, without a rupee moving.
           </div>
 
           <div 
