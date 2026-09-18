@@ -649,6 +649,8 @@ export default function App() {
             pendingWithdrawals={pendingWithdrawals}
             feePercent={feePercent}
             linkLimit={linkLimit}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            unreadNotifications={unreadNotificationsCount}
           />
         );
       case 'links':
@@ -751,6 +753,8 @@ export default function App() {
             pendingWithdrawals={pendingWithdrawals}
             feePercent={feePercent}
             linkLimit={linkLimit}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            unreadNotifications={unreadNotificationsCount}
           />
         );
     }
@@ -822,7 +826,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased flex">
+    <div className={`min-h-screen ${currentView === 'dashboard' ? 'bg-[#070102]' : 'bg-slate-50'} text-slate-800 font-sans antialiased flex`}>
       {/* Sidebar Rail */}
       <Sidebar
         currentView={currentView}
@@ -838,25 +842,27 @@ export default function App() {
       />
 
       {/* Main viewport area */}
-      <div className="flex-1 ml-0 md:ml-64 flex flex-col min-h-screen">
-        <Header
-          onOpenSidebar={() => setIsSidebarOpen(true)}
-          onViewChange={setCurrentView}
-          unreadNotifications={unreadNotificationsCount}
-          balance={balance}
-          apiBaseUrl={apiBaseUrl}
-          apiEnabled={apiEnabled}
-          isSimulated={isApiSimulated}
-          onOpenApiSettings={() => {
-            setModalApiUrlInput(apiBaseUrl);
-            setModalApiEnabledInput(apiEnabled);
-            setModalApiTokenInput(apiToken);
-            setActiveModal('api_settings');
-          }}
-        />
+      <div className={`flex-1 ml-0 md:ml-64 flex flex-col min-h-screen ${currentView === 'dashboard' ? 'bg-[#070102]' : ''}`}>
+        {currentView !== 'dashboard' && (
+          <Header
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            onViewChange={setCurrentView}
+            unreadNotifications={unreadNotificationsCount}
+            balance={balance}
+            apiBaseUrl={apiBaseUrl}
+            apiEnabled={apiEnabled}
+            isSimulated={isApiSimulated}
+            onOpenApiSettings={() => {
+              setModalApiUrlInput(apiBaseUrl);
+              setModalApiEnabledInput(apiEnabled);
+              setModalApiTokenInput(apiToken);
+              setActiveModal('api_settings');
+            }}
+          />
+        )}
 
         {/* Dynamic content viewport */}
-        <main className="flex-grow p-6 md:p-8 max-w-7xl mx-auto w-full">
+        <main className={currentView === 'dashboard' ? 'flex-grow w-full' : 'flex-grow p-6 md:p-8 max-w-7xl mx-auto w-full'}>
           {renderActiveView()}
         </main>
       </div>
