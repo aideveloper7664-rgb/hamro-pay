@@ -7,6 +7,7 @@ export interface PaymentLink {
   active: boolean;
   date: string;
   note?: string;
+  payment_url?: string;
 }
 
 export interface Transaction {

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import gsap from 'gsap';
+import Lanyard3D from './Lanyard3D';
+import RollingCounter from './RollingCounter';
 
 interface LandingPageProps {
   onOpenAuth: (mode?: 'login' | 'signup') => void;
@@ -128,159 +130,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
     };
   }, []);
 
-  // --- 2. Rolling Counter for Stats Section ---
-  useEffect(() => {
-    function normalizeNearInteger(num: number) {
-      const nearest = Math.round(num);
-      return Math.abs(num - nearest) < 1e-9 ? nearest : num;
-    }
-    function getValueRoundedToPlace(value: number, place: number) {
-      return Math.floor(normalizeNearInteger(value / place));
-    }
-
-    function buildDigit(place: number | string, height: number) {
-      const isDecimal = place === '.';
-      const digitEl = document.createElement('span');
-      digitEl.className = 'counter-digit';
-      digitEl.style.height = height + 'px';
-
-      if (isDecimal) {
-        digitEl.style.width = 'fit-content';
-        digitEl.style.overflow = 'visible';
-        digitEl.textContent = '.';
-        return { element: digitEl, numbers: null, isDecimal: true };
-      }
-
-      const numbers: HTMLElement[] = [];
-      for (let n = 0; n < 10; n++) {
-        const numEl = document.createElement('span');
-        numEl.className = 'counter-number';
-        numEl.textContent = String(n);
-        numEl.style.transform = `translateY(${n * height}px)`;
-        digitEl.appendChild(numEl);
-        numbers.push(numEl);
-      }
-      return { element: digitEl, numbers, isDecimal: false };
-    }
-
-    function updateDigit(ref: any, place: number, height: number, currentValue: number) {
-      if (ref.isDecimal || !ref.numbers) return;
-      const digitValue = getValueRoundedToPlace(currentValue, place);
-      const placeValue = ((digitValue % 10) + 10) % 10;
-      ref.numbers.forEach((numEl: HTMLElement, n: number) => {
-        let offset = (10 + n - placeValue) % 10;
-        let y = offset * height;
-        if (offset > 5) y -= 10 * height;
-        numEl.style.transform = `translateY(${y}px)`;
-      });
-    }
-
-    const counterHosts = document.querySelectorAll('.stat-counter');
-    const cleanups: (() => void)[] = [];
-
-    counterHosts.forEach((hostEl) => {
-      const host = hostEl as HTMLElement;
-      host.innerHTML = '';
-      const value = parseFloat(host.getAttribute('data-value') || '0');
-      const placesRaw = host.getAttribute('data-places');
-      let places: any[];
-      try {
-        places = placesRaw ? JSON.parse(placesRaw) : [10, 1];
-      } catch {
-        places = [10, 1];
-      }
-
-      const fontSize = 34;
-      const padding = 10;
-      const height = fontSize + padding;
-
-      const container = document.createElement('span');
-      container.className = 'counter-container';
-
-      const counter = document.createElement('span');
-      counter.className = 'counter-counter';
-      counter.style.fontSize = fontSize + 'px';
-      counter.style.height = height + 'px';
-      counter.style.gap = '2px';
-      counter.style.fontWeight = '900';
-      counter.style.color = '#fff';
-
-      const refs: any[] = [];
-      places.forEach((place) => {
-        const ref = buildDigit(place, height);
-        counter.appendChild(ref.element);
-        refs.push(ref);
-      });
-      container.appendChild(counter);
-
-      const gradContainer = document.createElement('span');
-      gradContainer.className = 'gradient-container';
-      const topGrad = document.createElement('span');
-      topGrad.className = 'top-gradient';
-      topGrad.style.height = '8px';
-      topGrad.style.background = 'linear-gradient(to bottom, rgba(11,2,4,0.95), rgba(11,2,4,0))';
-      const botGrad = document.createElement('span');
-      botGrad.className = 'bottom-gradient';
-      botGrad.style.height = '8px';
-      botGrad.style.background = 'linear-gradient(to top, rgba(11,2,4,0.95), rgba(11,2,4,0))';
-      gradContainer.appendChild(topGrad);
-      gradContainer.appendChild(botGrad);
-      container.appendChild(gradContainer);
-
-      host.appendChild(container);
-
-      const state = { value: 0 };
-      function apply() {
-        refs.forEach((ref, i) => {
-          updateDigit(ref, places[i], height, state.value);
-        });
-      }
-      apply();
-
-      let triggered = false;
-      const io = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting && !triggered) {
-              triggered = true;
-              io.disconnect();
-              gsap.to(state, {
-                value,
-                duration: 2.2,
-                ease: 'power3.out',
-                onUpdate: apply
-              });
-            }
-          });
-        },
-        { threshold: 0.25 }
-      );
-      io.observe(host);
-
-      if (host.getBoundingClientRect().top < window.innerHeight) {
-        setTimeout(() => {
-          if (!triggered) {
-            triggered = true;
-            io.disconnect();
-            gsap.to(state, {
-              value,
-              duration: 2.2,
-              ease: 'power3.out',
-              onUpdate: apply
-            });
-          }
-        }, 300);
-      }
-
-      cleanups.push(() => io.disconnect());
-    });
-
-    return () => {
-      cleanups.forEach((c) => c());
-    };
-  }, []);
-
-  // --- 3. BubbleMenu Navigation ---
+  // --- 2. BubbleMenu Navigation ---
   useEffect(() => {
     if (!bubbleMenuRef.current) return;
     const root = bubbleMenuRef.current;
@@ -601,10 +451,11 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
         /* Hero Art & Interactive Elements */
         .hero-art {
           position: relative;
-          min-height: 490px;
+          min-height: 700px;
           display: flex;
           align-items: center;
           justify-content: center;
+          overflow: visible;
         }
 
         .dash {
@@ -616,11 +467,13 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
           padding: 22px;
           box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(255, 30, 75, 0.12);
           backdrop-filter: blur(14px);
+          position: relative;
+          z-index: 1;
         }
         .dash-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
         .mini-brand { font-weight: 900; font-size: 15px; display: flex; align-items: center; gap: 7px; }
         .mini-brand b { color: var(--red-primary); }
-        .status-pill {
+        .status {
           font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 999px;
           background: rgba(43,242,154,0.12); color: #2bf29a; border: 1px solid rgba(43,242,154,0.3);
         }
@@ -647,183 +500,27 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
         .tx-left b { font-size: 11px; }
         .success { color: #2bf29a; font-size: 10px; font-weight: 800; }
 
-        /* REALISTIC VISA CARD */
-        .float-card {
+        /* ============ LANYARD 3D ============ */
+        .lanyard-wrapper {
           position: absolute;
-          left: -20px;
-          bottom: 35px;
-          width: 250px;
-          height: 158px;
-          padding: 14px 16px;
-          border-radius: 14px;
-          background:
-            radial-gradient(circle at 85% 15%, rgba(255, 80, 110, 0.18), transparent 55%),
-            radial-gradient(circle at 15% 95%, rgba(255, 30, 75, 0.22), transparent 55%),
-            linear-gradient(135deg, #66051a 0%, #3a0815 38%, #18030a 100%);
-          border: 1px solid rgba(255, 90, 120, 0.35);
-          box-shadow:
-            0 22px 48px rgba(0, 0, 0, 0.72),
-            0 0 40px rgba(255, 30, 75, 0.22),
-            inset 0 1px 0 rgba(255, 255, 255, 0.07),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.5);
-          overflow: hidden;
-          z-index: 2;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          color: #fff;
-          font-family: Inter, system-ui, sans-serif;
-          transform-style: preserve-3d;
-          transition: transform .4s ease;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 1100px;
+          height: 1100px;
+          pointer-events: auto;
+          z-index: 10;
+          cursor: grab;
+          user-select: none;
         }
-        .float-card:hover {
-          transform: translateY(-3px);
+        .lanyard-wrapper canvas {
+          display: block;
+          width: 100% !important;
+          height: 100% !important;
+          pointer-events: auto;
         }
-
-        .float-card::before {
-          content: "";
-          position: absolute;
-          top: -60%;
-          left: -80%;
-          width: 220%;
-          height: 220%;
-          background: linear-gradient(
-            115deg,
-            transparent 38%,
-            rgba(255,255,255,0.05) 44%,
-            rgba(255,255,255,0.14) 50%,
-            rgba(255,255,255,0.05) 56%,
-            transparent 62%
-          );
-          transform: rotate(12deg);
-          pointer-events: none;
-          animation: cardShine 7s ease-in-out infinite;
-          z-index: 3;
-        }
-        @keyframes cardShine {
-          0%, 100% { transform: translate(-15%, -15%) rotate(12deg); }
-          50%      { transform: translate(15%, 15%) rotate(12deg); }
-        }
-
-        .float-card::after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background-image: repeating-linear-gradient(
-            115deg,
-            rgba(255,255,255,0.018) 0px,
-            rgba(255,255,255,0.018) 1px,
-            transparent 1px,
-            transparent 8px
-          );
-          pointer-events: none;
-          border-radius: inherit;
-          z-index: 1;
-        }
-
-        .card-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          position: relative;
-          z-index: 4;
-        }
-        .card-brand-name {
-          font-size: 12px;
-          font-weight: 800;
-          color: #ffe6ea;
-          letter-spacing: 0.4px;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.4);
-        }
-        .card-brand-name b { color: #ff4d6d; }
-
-        .card-contactless {
-          width: 22px;
-          height: 22px;
-          color: rgba(255, 235, 240, 0.75);
-          filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4));
-        }
-        .card-contactless svg { width: 100%; height: 100%; display: block; }
-
-        .card-chip {
-          position: absolute;
-          top: 42px;
-          left: 16px;
-          width: 40px;
-          height: 30px;
-          z-index: 4;
-          filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));
-        }
-        .card-chip svg { width: 100%; height: 100%; display: block; }
-
-        .card-hologram {
-          position: absolute;
-          top: 44px;
-          right: 16px;
-          width: 32px;
-          height: 22px;
-          border-radius: 50% / 60%;
-          background: linear-gradient(
-            135deg,
-            rgba(255,255,255,0.55) 0%,
-            rgba(255,180,210,0.45) 22%,
-            rgba(200,220,255,0.55) 42%,
-            rgba(255,235,180,0.45) 62%,
-            rgba(255,180,220,0.5) 82%,
-            rgba(255,255,255,0.55) 100%
-          );
-          box-shadow: inset 0 0 8px rgba(255,255,255,0.35), 0 1px 3px rgba(0,0,0,0.4);
-          opacity: 0.75;
-          z-index: 4;
-        }
-
-        .card-num {
-          display: flex;
-          gap: 10px;
-          margin-top: auto;
-          margin-bottom: 8px;
-          font-family: 'SF Mono', 'Courier New', ui-monospace, monospace;
-          font-size: 13.5px;
-          font-weight: 700;
-          color: #fff5f7;
-          letter-spacing: 1.5px;
-          text-shadow: 0 1px 0 rgba(0,0,0,0.6), 0 0 8px rgba(255, 200, 210, 0.15);
-          position: relative;
-          z-index: 4;
-        }
-
-        .card-footer {
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          gap: 10px;
-          position: relative;
-          z-index: 4;
-        }
-        .card-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-        .card-field-label {
-          font-size: 7px; color: rgba(255, 200, 210, 0.55); letter-spacing: 1.3px; font-weight: 700; text-transform: uppercase;
-        }
-        .card-field-value {
-          font-size: 10px; color: #fff2f4; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap;
-          text-shadow: 0 1px 1px rgba(0,0,0,0.4);
-        }
-
-        .card-visa {
-          font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-          font-style: italic;
-          font-weight: 900;
-          font-size: 24px;
-          line-height: 0.9;
-          letter-spacing: -1.2px;
-          background: linear-gradient(180deg, #ffffff 0%, #ffe4ea 35%, #ffffff 55%, #ffd0da 100%);
-          -webkit-background-clip: text;
-          background-clip: text;
-          -webkit-text-fill-color: transparent;
-          color: transparent;
-          filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
-          transform: skewX(-4deg);
-          padding-right: 2px;
+        .lanyard-wrapper.grabbing {
+          cursor: grabbing;
         }
 
         .success-card {
@@ -832,7 +529,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
           border: 1px solid rgba(43, 242, 154, 0.45);
           box-shadow: 0 15px 35px rgba(0,0,0,0.6);
           display: flex; align-items: center; gap: 12px;
-          z-index: 3;
+          z-index: 6;
         }
         .check {
           width: 34px; height: 34px; border-radius: 50%; background: rgba(43,242,154,0.15);
@@ -846,7 +543,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
           background: rgba(22, 6, 9, 0.96);
           border: 1px solid rgba(255, 50, 90, 0.35);
           text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.6);
-          z-index: 2;
+          z-index: 5;
         }
         .qr-card b { font-size: 10px; font-weight: 700; color: #fff; }
         .qr {
@@ -1061,7 +758,11 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
 
         @media (max-width: 1024px) {
           .hero-grid { grid-template-columns: 1fr; gap: 36px; }
-          .hero-art { min-height: 440px; margin-top: 10px; }
+          .hero-art { min-height: 820px; margin-top: 10px; }
+          .lanyard-wrapper {
+            width: 900px;
+            height: 900px;
+          }
           .features { grid-template-columns: repeat(2, 1fr); }
           .trustbar { grid-template-columns: repeat(2, 1fr); gap: 12px; }
           .trust { border-right: 0; }
@@ -1084,16 +785,13 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
           .actions { display: flex; flex-direction: column; gap: 10px; width: 100%; }
           .actions .btn { width: 100%; justify-content: center; }
 
-          /* Mobile Hero Art: pristine stacked structure, no overlaps */
+          /* Mobile Hero Art with Lanyard */
           .hero-art {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 16px;
-            min-height: auto;
-            margin-top: 20px;
+            min-height: 720px;
+            margin-top: 10px;
             width: 100%;
             position: relative;
+            overflow: visible;
           }
           .dash {
             width: 100%;
@@ -1105,55 +803,20 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
           .dash-grid { grid-template-columns: 1fr; gap: 12px; }
           .balance { font-size: 24px; }
 
-          .hero-subcards {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            width: 100%;
+          .lanyard-wrapper {
+            width: 750px;
+            height: 750px;
+            transform: translate(-50%, -50%);
           }
 
-          /* Unaltered VISA card shape on mobile */
-          .float-card {
-            position: relative;
-            left: auto;
-            right: auto;
-            top: auto;
-            bottom: auto;
-            width: 270px;
-            height: 170px;
-            max-width: 100%;
-            margin: 0 auto;
-            flex-shrink: 0;
-            padding: 13px 15px;
-            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 25px rgba(255, 30, 75, 0.2);
-          }
-          .float-card .card-chip { width: 38px; height: 28px; top: 40px; left: 15px; }
-          .float-card .card-hologram { width: 30px; height: 20px; top: 42px; right: 15px; }
-          .float-card .card-num {
-            font-size: 13px;
-            gap: 8px;
-            letter-spacing: 1.5px;
-            margin-top: auto;
-            margin-bottom: 6px;
-          }
-          .float-card .card-field-label { font-size: 7px; letter-spacing: 1px; }
-          .float-card .card-field-value { font-size: 9.5px; }
-          .float-card .card-visa { font-size: 22px; }
-
-          /* Success card below VISA card */
           .success-card {
-            position: relative;
-            left: auto;
-            right: auto;
-            top: auto;
-            bottom: auto;
-            width: 270px;
-            max-width: 100%;
-            margin: 0 auto;
-            flex-shrink: 0;
-            padding: 11px 14px;
-            box-sizing: border-box;
+            position: absolute;
+            right: 10px;
+            bottom: -20px;
+            width: 240px;
+            max-width: 90%;
+            padding: 12px 14px;
+            z-index: 6;
           }
           .qr-card { display: none; }
 
@@ -1224,6 +887,19 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
           .features { grid-template-columns: 1fr; }
           .trustbar { grid-template-columns: 1fr; }
           .stat-value { font-size: 22px; }
+          .lanyard-wrapper {
+            width: 620px;
+            height: 620px;
+            transform: translate(-50%, -50%);
+          }
+          .hero-art {
+            min-height: 640px;
+          }
+          .success-card {
+            bottom: -30px;
+            right: 50%;
+            transform: translateX(50%);
+          }
         }
       `}</style>
 
@@ -1332,7 +1008,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
               </div>
             </div>
 
-            {/* Interactive Visual Dashboard */}
+            {/* Interactive Visual Dashboard with 3D Lanyard */}
             <div className="hero-art">
               <div className="dash">
                 <div className="dash-top">
@@ -1344,7 +1020,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
                     />
                     Hamro<b>Pay</b> Dashboard
                   </div>
-                  <div className="status-pill">● Active</div>
+                  <div className="status">● Active</div>
                 </div>
 
                 <div className="dash-grid">
@@ -1401,86 +1077,20 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
                 </div>
               </div>
 
-              {/* Auxiliary preview cards: on desktop absolute, on mobile naturally stacked */}
-              <div className="hero-subcards">
-                {/* REALISTIC 3D VISA CARD */}
-                <div className="float-card" aria-label="HamroPay corporate VISA card">
-                  <div className="card-header">
-                    <span className="card-brand-name">Hamro<b>Pay</b></span>
-                    <span className="card-contactless" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 3.5 C10 8.5, 10 15.5, 6 20.5" />
-                        <path d="M10.5 5.5 C13.5 9, 13.5 15, 10.5 18.5" />
-                        <path d="M15 7.5 C16.8 10, 16.8 14, 15 16.5" />
-                        <path d="M19 9.5 C19.8 11, 19.8 13, 19 14.5" />
-                      </svg>
-                    </span>
-                  </div>
+              {/* ============ LANYARD — free floating 3D ============ */}
+              <Lanyard3D />
+              {/* ============================================= */}
 
-                  <div className="card-chip" aria-hidden="true">
-                    <svg viewBox="0 0 44 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <defs>
-                        <linearGradient id="chipGold" x1="0" y1="0" x2="1" y2="1">
-                          <stop offset="0%" stopColor="#f7e29b" />
-                          <stop offset="30%" stopColor="#d9b452" />
-                          <stop offset="65%" stopColor="#b68b2b" />
-                          <stop offset="100%" stopColor="#8a6615" />
-                        </linearGradient>
-                        <linearGradient id="chipSheen" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#fff6d1" stopOpacity="0.7" />
-                          <stop offset="50%" stopColor="#ffffff" stopOpacity="0" />
-                          <stop offset="100%" stopColor="#4d3a0d" stopOpacity="0.35" />
-                        </linearGradient>
-                      </defs>
-                      <rect width="44" height="32" rx="5" fill="url(#chipGold)" />
-                      <g stroke="#7a5a1c" strokeWidth="0.6" opacity="0.85" fill="none">
-                        <line x1="0" y1="11" x2="44" y2="11" />
-                        <line x1="0" y1="21" x2="44" y2="21" />
-                        <line x1="15" y1="0" x2="15" y2="11" />
-                        <line x1="29" y1="0" x2="29" y2="11" />
-                        <line x1="15" y1="21" x2="15" y2="32" />
-                        <line x1="29" y1="21" x2="29" y2="32" />
-                      </g>
-                      <rect x="15" y="11" width="14" height="10" fill="#7a5a1c" opacity="0.32" rx="1" />
-                      <rect width="44" height="32" rx="5" fill="url(#chipSheen)" />
-                    </svg>
-                  </div>
-
-                  <div className="card-hologram" aria-hidden="true" />
-
-                  <div className="card-num">
-                    <span>••••</span>
-                    <span>••••</span>
-                    <span>••••</span>
-                    <span>8824</span>
-                  </div>
-
-                  <div className="card-footer">
-                    <div className="card-field">
-                      <div className="card-field-label">Card Holder</div>
-                      <div className="card-field-value">AARAV SHARMA</div>
-                    </div>
-                    <div className="card-field" style={{ flex: '0 0 auto' }}>
-                      <div className="card-field-label">Expires</div>
-                      <div className="card-field-value">09/28</div>
-                    </div>
-                    <div className="card-visa" aria-label="VISA">VISA</div>
-                  </div>
-                </div>
-
-                {/* Floating Success Card */}
-                <div className="success-card">
-                  <div className="check">✓</div>
-                  <div>
-                    <b>Payment Received!</b>
-                    <div className="label">Rs. 4,500.00 via Fonepay</div>
-                  </div>
+              <div className="success-card">
+                <div className="check">✓</div>
+                <div>
+                  <b>Payment Received!</b>
+                  <div className="label">Rs. 4,500.00 via Fonepay</div>
                 </div>
               </div>
 
-              {/* Floating QR Card */}
               <div className="qr-card">
-                <b>Scan & Pay</b>
+                <div style={{ fontSize: '10px', fontWeight: 700 }}>Scan & Pay</div>
                 <div className="qr" />
                 <div style={{ fontSize: '8px', color: 'var(--muted)' }}>Instant Dynamic QR</div>
               </div>
@@ -1560,11 +1170,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
             <div className="stats" id="stats">
               <div className="stat">
                 <div className="stat-value">
-                  <span
-                    className="stat-counter"
-                    data-value="50"
-                    data-places="[10,1]"
-                  />
+                  <RollingCounter value={50} places={[10, 1]} />
                   <span className="stat-post">K+</span>
                 </div>
                 <span>Active Merchants</span>
@@ -1572,22 +1178,14 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
               <div className="stat">
                 <div className="stat-value">
                   <span className="stat-pre">Rs.</span>
-                  <span
-                    className="stat-counter"
-                    data-value="10"
-                    data-places="[10,1]"
-                  />
+                  <RollingCounter value={10} places={[10, 1]} />
                   <span className="stat-post">B+</span>
                 </div>
                 <span>Processed Volume</span>
               </div>
               <div className="stat">
                 <div className="stat-value">
-                  <span
-                    className="stat-counter"
-                    data-value="99.98"
-                    data-places='[10,1,".",0.1,0.01]'
-                  />
+                  <RollingCounter value={99.98} places={[10, 1, '.', 0.1, 0.01]} />
                   <span className="stat-post">%</span>
                 </div>
                 <span>System Uptime</span>
@@ -1595,11 +1193,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
               <div className="stat">
                 <div className="stat-value">
                   <span className="stat-pre">&lt;</span>
-                  <span
-                    className="stat-counter"
-                    data-value="1"
-                    data-places="[1]"
-                  />
+                  <RollingCounter value={1} places={[1]} />
                   <span className="stat-post">sec</span>
                 </div>
                 <span>Processing Speed</span>
