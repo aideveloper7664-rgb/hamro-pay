@@ -287,7 +287,8 @@
   transition: opacity 0.3s ease, transform 0.3s ease;
   flex-shrink: 0 !important;
 }
-.hp-group.expanded .hp-sub-list {
+.hp-group.expanded .hp-sub-list,
+.hp-nav-group.expanded .hp-sub-list {
   opacity: 1;
   transform: translateY(0);
   transition: opacity 0.35s ease 0.05s, transform 0.35s ease 0.05s;
