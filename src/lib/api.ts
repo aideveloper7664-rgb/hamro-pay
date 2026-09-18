@@ -79,17 +79,54 @@ export const ApiService = {
   },
 
   async getLinks(localFallback: PaymentLink[]) {
-    return { links: localFallback, isSimulated: false };
+    try {
+      const data = await apiCall('/api/payment-link/list', 'GET');
+      if (Array.isArray(data)) {
+        const mapped: PaymentLink[] = data.map((item: any) => ({
+          id: item.link_id || item.id,
+          link_id: item.link_id,
+          title: item.title,
+          amount: Number(item.amount || 0),
+          active: item.status === 'active',
+          orders: item.total_orders || 0,
+          date: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent',
+          payment_url: item.payment_url || '',
+        }));
+        return { links: mapped, isSimulated: false };
+      }
+      return { links: localFallback, isSimulated: false };
+    } catch {
+      return { links: localFallback, isSimulated: false };
+    }
   },
 
   async createLink(link: Omit<PaymentLink, 'id' | 'orders' | 'date'>, localFallback: PaymentLink[]) {
-    const newLink: PaymentLink = {
-      ...link,
-      id: 'link-' + Date.now(),
-      orders: 0,
-      date: 'Created just now'
-    };
-    return { link: newLink, isSimulated: false };
+    try {
+      const data = await apiCall('/api/payment-link/create', 'POST', {
+        title: link.title,
+        amount: link.amount,
+        note: (link as any).note || ''
+      });
+      const newLink: PaymentLink = {
+        id: data.link_id || data.id,
+        link_id: data.link_id,
+        title: data.title || link.title,
+        amount: Number(data.amount || link.amount),
+        active: data.status === 'active',
+        orders: 0,
+        date: 'Created just now',
+        payment_url: data.payment_url || '',
+      };
+      return { link: newLink, isSimulated: false };
+    } catch (err: any) {
+      const newLink: PaymentLink = {
+        ...link,
+        id: 'link-' + Date.now(),
+        orders: 0,
+        date: 'Created just now'
+      };
+      return { link: newLink, isSimulated: false };
+    }
   },
 
   async updateLink(id: string | number, updates: Partial<PaymentLink>, localFallback?: PaymentLink[]) {
