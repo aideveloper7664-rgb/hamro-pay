@@ -230,7 +230,7 @@
 }
 
 /* Collapsible Smooth CSS Grid Transition */
-.hp-group {
+.hp-group, .hp-nav-group {
   margin-bottom: 2px;
   flex-shrink: 0 !important;
 }
@@ -266,7 +266,8 @@
   transition: grid-template-rows 0.38s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0 !important;
 }
-.hp-group.expanded .hp-sub-wrap {
+.hp-group.expanded .hp-sub-wrap,
+.hp-nav-group.expanded .hp-sub-wrap {
   grid-template-rows: 1fr;
 }
 .hp-sub-inner {
