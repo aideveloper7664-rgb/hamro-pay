@@ -1,5 +1,6 @@
 export interface PaymentLink {
   id: string | number;
+  link_id?: string;
   title: string;
   amount: number;
   orders: number;

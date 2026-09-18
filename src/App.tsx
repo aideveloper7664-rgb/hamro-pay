@@ -442,6 +442,10 @@ export default function App() {
     setActiveModal('create_link');
   };
 
+  const handleDeleteLink = (id: string | number) => {
+    setPaymentLinks(prev => prev.filter(l => l.id !== id && (l as any).link_id !== id));
+  };
+
   const handleSavePaymentLinkSubmit = async () => {
     const amountNum = parseFloat(modalLinkAmount);
     if (!modalLinkTitle.trim() || isNaN(amountNum) || amountNum <= 0) {
@@ -649,6 +653,7 @@ export default function App() {
             paymentLinks={paymentLinks}
             onToggleActive={handleToggleLinkActive}
             onEditLink={handleOpenEditLink}
+            onDeleteLink={handleDeleteLink}
             onCreateNewLink={handleOpenCreateLink}
             showToast={showToast}
           />

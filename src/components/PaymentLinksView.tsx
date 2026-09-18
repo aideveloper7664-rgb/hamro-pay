@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Plus, Search, Check, Copy, Edit, Ban, HelpCircle } from 'lucide-react';
+import { Link as LinkIcon, Plus, Search, Check, Copy, Edit, Ban, HelpCircle, Trash2, Loader2 } from 'lucide-react';
 import { PaymentLink } from '../types';
+import { deleteLink, getLinkPaymentUrl } from '../services/paymentLink.service';
 
 interface PaymentLinksViewProps {
   paymentLinks: PaymentLink[];
   onToggleActive: (id: string | number) => void;
   onEditLink: (id: string | number) => void;
+  onDeleteLink?: (id: string | number) => void;
   onCreateNewLink: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -14,11 +16,14 @@ export default function PaymentLinksView({
   paymentLinks,
   onToggleActive,
   onEditLink,
+  onDeleteLink,
   onCreateNewLink,
   showToast
 }: PaymentLinksViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null);
+  const [deletingId, setDeletingId] = useState<string | number | null>(null);
 
   // Stats calculations
   const totalLinks = paymentLinks.length;
@@ -35,15 +40,39 @@ export default function PaymentLinksView({
     return matchesSearch && matchesStatus;
   });
 
-  const API_URL = (import.meta as any).env.VITE_API_URL || 'https://hamropay-backends.onrender.com';
+  const getCheckoutUrl = (link: PaymentLink) => {
+    const linkIdentifier = String(link.link_id || link.id);
+    return getLinkPaymentUrl(linkIdentifier);
+  };
 
-  const handleCopyLink = (id: string | number) => {
-    const url = `${API_URL}/pay/${id}`;
+  const handleCopyLink = (link: PaymentLink) => {
+    const url = getCheckoutUrl(link);
     navigator.clipboard?.writeText(url).then(() => {
       showToast('Payment link copied to clipboard.', 'success');
     }).catch(() => {
       showToast('Could not copy link.', 'error');
     });
+  };
+
+  const handleDelete = async (link: PaymentLink) => {
+    setDeletingId(link.id);
+    const linkIdToDelete = String(link.link_id || link.id);
+    try {
+      try {
+        await deleteLink(linkIdToDelete);
+      } catch (err: any) {
+        console.warn('Backend deleteLink call error:', err);
+      }
+      if (onDeleteLink) {
+        onDeleteLink(link.id);
+      }
+      showToast('Payment link deleted successfully.', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to delete payment link.', 'error');
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
   };
 
   return (
@@ -160,7 +189,7 @@ export default function PaymentLinksView({
                     <div className="mt-1.5 flex items-center gap-1 text-[11px] font-mono text-slate-400">
                       <span className="text-slate-400 font-semibold">URL:</span>
                       <span className="text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded-md truncate max-w-[280px]">
-                        {API_URL}/pay/{link.id}
+                        {getCheckoutUrl(link)}
                       </span>
                     </div>
                   </div>
@@ -200,7 +229,7 @@ export default function PaymentLinksView({
 
                     {/* Copy Link Button */}
                     <button
-                      onClick={() => handleCopyLink(link.id)}
+                      onClick={() => handleCopyLink(link)}
                       className="p-2 bg-slate-50 border border-slate-100 hover:border-slate-200 text-slate-600 hover:text-rose-600 rounded-xl shadow-xs transition-all active:scale-95"
                       title="Copy Checkout Link"
                     >
@@ -215,6 +244,40 @@ export default function PaymentLinksView({
                     >
                       <Edit className="w-4 h-4" />
                     </button>
+
+                    {/* Delete Link Button / Inline Confirmation */}
+                    {confirmDeleteId === link.id ? (
+                      <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150">
+                        <button
+                          onClick={() => handleDelete(link)}
+                          disabled={deletingId === link.id}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-60"
+                          title="Confirm Deletion"
+                        >
+                          {deletingId === link.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                          <span>Delete</span>
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          disabled={deletingId === link.id}
+                          className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(link.id)}
+                        className="p-2 bg-slate-50 border border-slate-100 hover:border-rose-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl shadow-xs transition-all active:scale-95"
+                        title="Delete Payment Link"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>
