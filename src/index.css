@@ -26,11 +26,12 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 16px 14px;
+  padding: 14px 12px;
   background: linear-gradient(180deg, rgba(20, 5, 10, 0.98), rgba(10, 2, 5, 0.99));
   border-right: 1px solid var(--card-border);
   overflow-y: auto;
   overflow-x: hidden;
+  box-sizing: border-box;
 }
 .hp-sidebar::-webkit-scrollbar {
   width: 5px;
@@ -44,6 +45,15 @@
 }
 .hp-sidebar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 45, 85, 0.5);
+}
+
+.hp-sidebar-inner {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* User Card */
@@ -61,6 +71,9 @@
   position: relative;
   overflow: hidden;
   transition: all 0.25s ease;
+  flex-shrink: 0 !important;
+  min-height: 60px;
+  box-sizing: border-box;
 }
 .hp-user-card::before {
   content: "";
@@ -74,6 +87,8 @@
 .hp-user-avatar {
   width: 38px;
   height: 38px;
+  min-width: 38px;
+  min-height: 38px;
   border-radius: 50%;
   background: linear-gradient(135deg, #ff1e4b, #b8002c);
   display: grid;
@@ -82,7 +97,7 @@
   font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.3px;
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
   box-shadow:
     0 0 18px rgba(255, 30, 75, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.22);
@@ -114,16 +129,19 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 11px 14px;
+  padding: 10px 12px;
   border-radius: 12px;
   background: linear-gradient(135deg, rgba(28, 8, 14, 0.85), rgba(14, 3, 7, 0.95));
   border: 1px solid var(--card-border);
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   font-size: 13px;
   font-weight: 800;
   color: #fff;
   transition: all 0.25s ease;
   cursor: pointer;
+  flex-shrink: 0 !important;
+  min-height: 44px;
+  box-sizing: border-box;
 }
 .hp-balance-pill:hover {
   border-color: rgba(255, 60, 95, 0.45);
@@ -138,7 +156,7 @@
   display: grid;
   place-items: center;
   color: #ff4d6d;
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
 }
 .hp-balance-pill .hp-balance-amount {
   letter-spacing: -0.1px;
@@ -148,16 +166,19 @@
 .hp-nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 11px 12px;
+  gap: 10px;
+  padding: 9px 10px;
   border-radius: 12px;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 700;
   color: #e8d8dc;
   cursor: pointer;
   transition: background 0.25s ease, color 0.25s ease;
   position: relative;
   user-select: none;
+  flex-shrink: 0 !important;
+  min-height: 42px;
+  box-sizing: border-box;
 }
 .hp-nav-item:hover {
   background: rgba(255, 30, 75, 0.07);
@@ -172,10 +193,12 @@
 .hp-nav-icon {
   width: 32px;
   height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   border-radius: 9px;
   display: grid;
   place-items: center;
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
   color: #fff;
   transition: transform 0.3s ease;
 }
@@ -184,84 +207,123 @@
 }
 
 .hp-new-badge {
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 900;
-  letter-spacing: 0.6px;
-  padding: 3px 8px;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
   border-radius: 999px;
   background: linear-gradient(135deg, #ff1e4b, #b8002c);
   color: #fff;
   border: 1px solid rgba(255, 120, 140, 0.4);
-  box-shadow: 0 0 10px rgba(255, 30, 75, 0.5);
+  box-shadow: 0 0 8px rgba(255, 30, 75, 0.4);
   text-transform: uppercase;
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
+  line-height: 1.2;
 }
 
 .hp-chevron {
   width: 14px;
   height: 14px;
   color: var(--text-muted);
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
   transition: transform 0.3s ease;
 }
 
 /* Collapsible Smooth CSS Grid Transition */
+.hp-group {
+  margin-bottom: 2px;
+  flex-shrink: 0 !important;
+}
+
+.hp-group-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #e8d8dc;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  user-select: none;
+  position: relative;
+  flex-shrink: 0 !important;
+  min-height: 42px;
+  box-sizing: border-box;
+}
+.hp-group-header:hover {
+  background: rgba(255, 30, 75, 0.07);
+  color: #fff;
+}
+.hp-group-header.active {
+  color: #fff;
+}
+
 .hp-sub-wrap {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: grid-template-rows 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0 !important;
 }
-.hp-nav-group.expanded .hp-sub-wrap {
+.hp-group.expanded .hp-sub-wrap {
   grid-template-rows: 1fr;
 }
 .hp-sub-inner {
   overflow: hidden;
   min-height: 0;
+  flex-shrink: 0 !important;
 }
 .hp-sub-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-left: 44px;
+  padding-left: 41px;
   padding-top: 2px;
-  padding-bottom: 2px;
+  padding-bottom: 3px;
   opacity: 0;
   transform: translateY(-4px);
-  transition: opacity 0.32s ease, transform 0.32s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  flex-shrink: 0 !important;
 }
-.hp-nav-group.expanded .hp-sub-list {
+.hp-group.expanded .hp-sub-list {
   opacity: 1;
   transform: translateY(0);
-  transition: opacity 0.4s ease 0.08s, transform 0.4s ease 0.08s;
+  transition: opacity 0.35s ease 0.05s, transform 0.35s ease 0.05s;
 }
 
 /* Sub Item */
 .hp-sub-item {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 9px 12px;
+  gap: 9px;
+  padding: 8px 10px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #d4c2c7;
   cursor: pointer;
-  transition: background 0.28s ease, color 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease;
+  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
   position: relative;
   border: 1px solid transparent;
   user-select: none;
+  flex-shrink: 0 !important;
+  min-height: 38px;
+  box-sizing: border-box;
 }
 .hp-sub-item:hover {
   background: rgba(255, 30, 75, 0.06);
   color: #fff;
 }
 .hp-sub-item .hp-sub-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
   color: #fff;
 }
 .hp-sub-item.active {

@@ -72,70 +72,71 @@ export default function Sidebar({
           flex-shrink-0 select-none
         `}
       >
-        {/* Mobile close button header */}
-        <div className="flex md:hidden items-center justify-between pb-3 mb-2 border-b border-[rgba(255,45,85,0.18)]">
-          <div className="text-xs font-bold uppercase tracking-wider text-[rgba(255,242,244,0.7)]">
-            Navigation
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-            title="Close Sidebar"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* User Card */}
-        <div
-          className="hp-user-card cursor-pointer group"
-          onClick={() => handleNavClick('profile')}
-          title="View Account Profile"
-        >
-          <div className="hp-user-avatar group-hover:scale-105 transition-transform">
-            {avatarLetter}
-          </div>
-          <div className="hp-user-info">
-            <div className="hp-user-name group-hover:text-[#ff4d6d] transition-colors">
-              {displayName}
+        <div className="hp-sidebar-inner">
+          {/* Mobile close button header */}
+          <div className="flex md:hidden items-center justify-between pb-3 mb-2 border-b border-[rgba(255,45,85,0.18)] shrink-0">
+            <div className="text-xs font-bold uppercase tracking-wider text-[rgba(255,242,244,0.7)]">
+              Navigation
             </div>
-            <div className="hp-user-email">
-              {displayEmail}
-            </div>
-          </div>
-        </div>
-
-        {/* Balance Pill */}
-        <div
-          className="hp-balance-pill"
-          onClick={() => handleNavClick('wallet')}
-          title="Open Wallet"
-        >
-          <span className="hp-wallet-icon">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+            <button
+              onClick={onClose}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              title="Close Sidebar"
             >
-              <path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
-              <path d="M16 12h3v4h-3a2 2 0 0 1 0-4Z" />
-            </svg>
-          </span>
-          <span className="hp-balance-amount">
-            ₹ {balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
-        {/* Nav List */}
-        <div className="flex flex-col gap-[3px] flex-1">
-          {/* Dashboard */}
+          {/* User Card */}
           <div
-            className={`hp-nav-item ${currentView === 'dashboard' ? 'active' : ''}`}
-            onClick={() => handleNavClick('dashboard')}
+            className="hp-user-card cursor-pointer group shrink-0"
+            onClick={() => handleNavClick('profile')}
+            title="View Account Profile"
           >
+            <div className="hp-user-avatar group-hover:scale-105 transition-transform">
+              {avatarLetter}
+            </div>
+            <div className="hp-user-info">
+              <div className="hp-user-name group-hover:text-[#ff4d6d] transition-colors">
+                {displayName}
+              </div>
+              <div className="hp-user-email">
+                {displayEmail}
+              </div>
+            </div>
+          </div>
+
+          {/* Balance Pill */}
+          <div
+            className="hp-balance-pill shrink-0"
+            onClick={() => handleNavClick('wallet')}
+            title="Open Wallet"
+          >
+            <span className="hp-wallet-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+                <path d="M16 12h3v4h-3a2 2 0 0 1 0-4Z" />
+              </svg>
+            </span>
+            <span className="hp-balance-amount">
+              ₹ {balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          {/* Nav List */}
+          <div className="flex flex-col gap-1 shrink-0">
+            {/* Dashboard */}
+            <div
+              className={`hp-nav-item ${currentView === 'dashboard' ? 'active' : ''}`}
+              onClick={() => handleNavClick('dashboard')}
+            >
             <span
               className="hp-nav-icon"
               style={{
@@ -557,10 +558,11 @@ export default function Sidebar({
               </div>
             </div>
           </div>
+          </div>
         </div>
 
         {/* Footer actions: Account Settings & Sign Out */}
-        <div className="mt-auto pt-3 border-t border-[rgba(255,45,85,0.18)] flex flex-col gap-1">
+        <div className="mt-auto pt-3 border-t border-[rgba(255,45,85,0.18)] flex flex-col gap-1 shrink-0">
           <div
             className={`hp-nav-item py-2 ${currentView === 'profile' ? 'active' : ''}`}
             onClick={() => handleNavClick('profile')}
