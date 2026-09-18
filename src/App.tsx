@@ -746,7 +746,11 @@ export default function App() {
       
       case 'developer':
         return (
-          <DeveloperPortalView showToast={showToast} />
+          <DeveloperPortalView 
+            showToast={showToast}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            onViewChange={setCurrentView}
+          />
         );
 
       // Accordionconnected placeholders
