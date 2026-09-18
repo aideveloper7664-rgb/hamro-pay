@@ -150,7 +150,7 @@ export default function DeveloperPortalView({
         </div>
       </header>
 
-      <main className="container animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
+      <div className="page-content animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
 
         {/* Page Header */}
         <div className="page-header">
@@ -587,7 +587,7 @@ export default function DeveloperPortalView({
           </div>
         </div>
 
-      </main>
+      </div>
     </div>
   );
 }

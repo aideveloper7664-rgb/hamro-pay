@@ -66,7 +66,7 @@ export default function Sidebar({
       {/* Main Sidebar */}
       <aside
         className={`
-          hp-sidebar fixed md:sticky top-0 left-0 z-50
+          sidebar ${isOpen ? 'open' : ''} hp-sidebar fixed md:sticky top-0 left-0 z-50
           transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
           transition-transform duration-300 ease-in-out
           flex-shrink-0 select-none

@@ -854,7 +854,7 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen ${currentView === 'dashboard' ? 'bg-[#070102]' : 'bg-slate-50'} text-slate-800 font-sans antialiased flex`}>
+    <div className="app-shell">
       {/* Sidebar Rail */}
       <Sidebar
         currentView={currentView}
@@ -870,8 +870,8 @@ export default function App() {
       />
 
       {/* Main viewport area */}
-      <div className={`flex-1 min-w-0 flex flex-col min-h-screen ${currentView === 'dashboard' ? 'bg-[#070102]' : ''}`}>
-        {currentView !== 'dashboard' && (
+      <div className="main-area">
+        {currentView !== 'dashboard' && currentView !== 'developer' && (
           <Header
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}
@@ -890,9 +890,9 @@ export default function App() {
         )}
 
         {/* Dynamic content viewport */}
-        <main className={currentView === 'dashboard' ? 'flex-grow w-full' : 'flex-grow p-6 md:p-8 max-w-7xl mx-auto w-full'}>
+        <div className="flex-1">
           {renderActiveView()}
-        </main>
+        </div>
       </div>
 
       {/* Global Toasts Overlay */}
