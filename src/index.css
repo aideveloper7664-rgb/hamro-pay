@@ -190,7 +190,8 @@
   border: 1px solid rgba(255, 45, 85, 0.3);
 }
 
-.hp-nav-icon {
+.hp-nav-icon,
+.nav-icon {
   width: 32px;
   height: 32px;
   min-width: 32px;
@@ -202,7 +203,46 @@
   color: #fff;
   transition: transform 0.3s ease;
 }
-.hp-nav-item:hover .hp-nav-icon {
+.hp-nav-icon svg,
+.nav-icon svg {
+  width: 16px !important;
+  height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+  flex-shrink: 0 !important;
+}
+.hp-wallet-icon svg,
+.wallet-icon svg {
+  width: 14px !important;
+  height: 14px !important;
+  max-width: 14px !important;
+  max-height: 14px !important;
+  flex-shrink: 0 !important;
+}
+.hp-sub-icon svg,
+.sub-icon svg {
+  width: 14px !important;
+  height: 14px !important;
+  max-width: 14px !important;
+  max-height: 14px !important;
+  flex-shrink: 0 !important;
+}
+.hp-chevron,
+.chevron {
+  width: 14px !important;
+  height: 14px !important;
+  max-width: 14px !important;
+  max-height: 14px !important;
+  flex-shrink: 0 !important;
+}
+.hp-sidebar svg,
+.sidebar svg {
+  max-width: 20px;
+  max-height: 20px;
+  box-sizing: border-box;
+}
+.hp-nav-item:hover .hp-nav-icon,
+.hp-nav-item:hover .nav-icon {
   transform: scale(1.05);
 }
 
