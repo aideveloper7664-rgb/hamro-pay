@@ -10,6 +10,7 @@ import { ApiService, getApiConfig, saveApiConfig, DEFAULT_API_BASE } from './lib
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import AuthScreen from './components/AuthScreen';
+import LandingPage from './components/LandingPage';
 import DashboardView from './components/DashboardView';
 import PaymentLinksView from './components/PaymentLinksView';
 import WalletView from './components/WalletView';
@@ -32,6 +33,8 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     return localStorage.getItem('hamro_is_logged_in') === 'true';
   });
+
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | null>(null);
 
   const [currentView, setCurrentView] = useState<string>(() => {
     return localStorage.getItem('hamro_current_view') || 'dashboard';
@@ -384,6 +387,7 @@ export default function App() {
       return next;
     });
     setIsLoggedIn(false);
+    setAuthMode(null);
     showToast('You have been signed out of your merchant workspace.', 'info');
   };
 
@@ -790,14 +794,28 @@ export default function App() {
     );
   }
 
-  // If not signed in, show clean native auth screen
+  // If not signed in, show clone LandingPage or AuthScreen
   if (!isLoggedIn) {
+    if (authMode) {
+      return (
+        <div className="min-h-screen bg-slate-50 font-sans">
+          <AuthScreen 
+            onLoginSuccess={(token, user) => {
+              setAuthMode(null);
+              handleLoginSuccess(token, user);
+            }} 
+            showToast={showToast} 
+            onBackToLanding={() => setAuthMode(null)}
+            initialIsSignUp={authMode === 'signup'}
+          />
+          <Toast toasts={toasts} onRemove={removeToast} />
+        </div>
+      );
+    }
+
     return (
-      <div className="min-h-screen bg-slate-50 font-sans">
-        <AuthScreen 
-          onLoginSuccess={handleLoginSuccess} 
-          showToast={showToast} 
-        />
+      <div className="min-h-screen font-sans">
+        <LandingPage onOpenAuth={(mode) => setAuthMode(mode || 'signup')} />
         <Toast toasts={toasts} onRemove={removeToast} />
       </div>
     );

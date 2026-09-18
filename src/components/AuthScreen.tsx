@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { Wallet, Mail, Lock, ArrowRight, User, Loader2, Globe, Eye, EyeOff, ShieldCheck, Zap } from 'lucide-react';
+import { Wallet, Mail, Lock, ArrowRight, User, Loader2, Globe, Eye, EyeOff, ShieldCheck, Zap, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CurvedLoop from './CurvedLoop';
 
 interface AuthScreenProps {
   onLoginSuccess: (token: string, user: any) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onBackToLanding?: () => void;
+  initialIsSignUp?: boolean;
 }
 
-export default function AuthScreen({ onLoginSuccess, showToast }: AuthScreenProps) {
+export default function AuthScreen({ onLoginSuccess, showToast, onBackToLanding, initialIsSignUp = false }: AuthScreenProps) {
   const { login, register } = useAuth();
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(initialIsSignUp);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -116,6 +118,17 @@ export default function AuthScreen({ onLoginSuccess, showToast }: AuthScreenProp
       <main className="lg:col-span-6 xl:col-span-5 flex flex-col justify-center px-6 py-10 sm:px-12 xl:px-16 bg-white">
         <div className="max-w-sm w-full mx-auto space-y-6">
           
+          {onBackToLanding && (
+            <button
+              type="button"
+              onClick={onBackToLanding}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-rose-600 transition-colors cursor-pointer py-1"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Home</span>
+            </button>
+          )}
+
           {/* Mobile Header Brand */}
           <div className="lg:hidden flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-600/20">
