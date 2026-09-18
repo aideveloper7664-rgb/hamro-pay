@@ -368,7 +368,7 @@ export default function Sidebar({
                         <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
                       </svg>
                     </span>
-                    <span className="flex-1 min-w-0 truncate">Zap API</span>
+                    <span className="flex-1 min-w-0 truncate">Hamro API</span>
                   </div>
 
                   {/* API Integration */}
