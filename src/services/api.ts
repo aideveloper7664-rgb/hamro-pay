@@ -1,30 +1,26 @@
-const API_URL = (import.meta as any).env.VITE_API_URL || 'https://hamropay-backends.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://hamropay-backends.onrender.com';
 
-export const getApiKey = (): string => {
+const getMerchant = () => {
   try {
-    const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-    return merchant.api_key || '';
-  } catch { return ''; }
+    return JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+  } catch { return {}; }
 };
 
+const getApiKey = (): string => getMerchant().api_key || '';
+const getToken = (): string => localStorage.getItem('hamropay_token') || '';
+
+// For merchant API calls (uses x-api-key)
 export const apiCall = async (
   path: string,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
   body?: object
 ) => {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'x-api-key': getApiKey(),
-  };
-
-  const token = localStorage.getItem('hamropay_token');
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   const res = await fetch(`${API_URL}${path}`, {
     method,
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': getApiKey(),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json();
@@ -32,6 +28,7 @@ export const apiCall = async (
   return data.data;
 };
 
+// For public API calls (no auth)
 export const publicApiCall = async (
   path: string,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
@@ -46,3 +43,5 @@ export const publicApiCall = async (
   if (!data.success) throw new Error(data.message || 'API Error');
   return data.data;
 };
+
+export { API_URL, getApiKey, getToken };

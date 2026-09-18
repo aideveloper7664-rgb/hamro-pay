@@ -1,13 +1,14 @@
 import { apiCall } from './api';
 
-export const createLink = async (data: { title: string; amount: number; note?: string }) => {
-  return apiCall('/api/payment-link/create', 'POST', data);
-};
+const FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL || 'https://hamro-pay-kilj.vercel.app';
 
-export const getLinks = async () => {
-  return apiCall('/api/payment-link/list', 'GET');
-};
+export const createLink = async (data: { title: string; amount: number; note?: string }) =>
+  apiCall('/api/payment-link/create', 'POST', data);
 
-export const deleteLink = async (id: string | number) => {
-  return apiCall(`/api/payment-link/${id}`, 'DELETE');
-};
+export const getLinks = async () => apiCall('/api/payment-link/list');
+
+export const deleteLink = async (linkId: string) =>
+  apiCall(`/api/payment-link/${linkId}`, 'DELETE');
+
+export const getLinkPaymentUrl = (linkId: string) =>
+  `${FRONTEND_URL}/pay/${linkId}`;

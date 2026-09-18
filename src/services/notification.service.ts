@@ -1,2 +1,2 @@
-export const getNotifications = async () => [];
-export const markAllNotificationsRead = async () => {};
+export const getNotifications = async () => ([]);
+export const markAsRead = async (_id: string) => ({ success: true });

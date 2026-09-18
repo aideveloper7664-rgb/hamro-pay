@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Code, Key, Copy, Check, RefreshCw, Eye, EyeOff, 
   Terminal, ArrowRight, ShieldCheck, Globe, CheckCircle2 
 } from 'lucide-react';
-import { regenerateKey, setMode } from '../services/developer.service';
+import { getTokenInfo, regenerateKey, setMode } from '../services/developer.service';
 
 interface DeveloperPortalViewProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -28,6 +28,24 @@ export default function DeveloperPortalView({ showToast }: DeveloperPortalViewPr
 
   const [apiKey, setApiKey] = useState(getStoredApiKey);
 
+  // Sync token info from backend API on mount
+  useEffect(() => {
+    const fetchTokenInfo = async () => {
+      try {
+        const info = await getTokenInfo();
+        if (info?.api_key) {
+          setApiKey(info.api_key);
+          const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+          merchant.api_key = info.api_key;
+          localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
+        }
+      } catch {
+        // Fallback gracefully to locally stored merchant key
+      }
+    };
+    fetchTokenInfo();
+  }, []);
+
   const API_URL = (import.meta as any).env.VITE_API_URL || 'https://hamropay-backends.onrender.com';
 
   const handleCopyKey = () => {
@@ -50,14 +68,11 @@ export default function DeveloperPortalView({ showToast }: DeveloperPortalViewPr
     }
     setRegenerating(true);
     try {
-      const res = await regenerateKey();
-      const newKey = res?.api_key || res?.key || '';
-      if (newKey) {
-        setApiKey(newKey);
-      } else {
-        // Reload from local storage
-        setApiKey(getStoredApiKey());
-      }
+      const newData = await regenerateKey();
+      const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+      merchant.api_key = newData.api_key;
+      localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
+      setApiKey(newData.api_key);
       showToast('Hamro API Key regenerated successfully!', 'success');
     } catch (err: any) {
       showToast(err.message || 'Failed to regenerate API Key.', 'error');
@@ -84,21 +99,22 @@ export default function DeveloperPortalView({ showToast }: DeveloperPortalViewPr
 
   const orderCreateCurl = `curl -X POST "${API_URL}/order/create" \\
   -H "Content-Type: application/json" \\
-  -H "x-api-key: ${apiKey || 'YOUR_HAMRO_API_KEY'}" \\
+  -H "x-api-key: ${apiKey || 'YOUR_API_KEY'}" \\
   -d '{
-    "amount": 500,
-    "customer_name": "Aayush Sharma",
-    "customer_email": "aayush@example.com"
+    "amount": 100,
+    "customer_name": "John",
+    "customer_email": "john@email.com"
   }'`;
 
-  const orderStatusCurl = `curl -X GET "${API_URL}/order/status/ord_sample_id_123" \\
-  -H "x-api-key: ${apiKey || 'YOUR_HAMRO_API_KEY'}"`;
+  const orderStatusCurl = `curl -X GET "${API_URL}/order/status/ORD_xxx" \\
+  -H "x-api-key: ${apiKey || 'YOUR_API_KEY'}"`;
 
   const orderVerifyCurl = `curl -X POST "${API_URL}/order/verify" \\
   -H "Content-Type: application/json" \\
+  -H "x-api-key: ${apiKey || 'YOUR_API_KEY'}" \\
   -d '{
-    "order_id": "ord_sample_id_123",
-    "utr": "412345678901"
+    "order_id": "ORD_xxx",
+    "utr": "623851978381"
   }'`;
 
   return (
@@ -284,7 +300,7 @@ export default function DeveloperPortalView({ showToast }: DeveloperPortalViewPr
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                 <div className="font-bold text-slate-700 mb-1.5">Expected Response:</div>
                 <div className="font-mono text-[11px] text-slate-600">
-                  {`{ "success": true, "data": { "order_id": "ord_xxx", "amount": 500, "status": "pending" } }`}
+                  {`{ "order_id": "ORD_xxx", "amount": 100, "upi_id": "9769516928@fam", "payment_url": "https://hamro-pay-kilj.vercel.app/pay/ORD_xxx" }`}
                 </div>
               </div>
             </div>
@@ -317,12 +333,15 @@ export default function DeveloperPortalView({ showToast }: DeveloperPortalViewPr
             </div>
 
             <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs">
-              <div className="font-bold text-slate-700 mb-1.5">Poll order status:</div>
+              <div className="font-bold text-slate-700 mb-1.5">Headers:</div>
+              <div className="font-mono text-[11px] text-slate-600 mb-2">
+                {`{ "x-api-key": "${apiKey || 'YOUR_API_KEY'}" }`}
+              </div>
               <p className="text-slate-500 mb-2">
                 Query this endpoint to verify whether the customer completed UPI payment via FamPay and the UTR was verified.
               </p>
               <div className="font-mono text-[11px] text-slate-600">
-                {`{ "success": true, "data": { "order_id": "ord_sample_id_123", "status": "success", "amount": 500, "utr": "412345678901" } }`}
+                {`{ "success": true, "data": { "order_id": "ORD_xxx", "status": "success", "amount": 100, "utr": "623851978381" } }`}
               </div>
             </div>
           </div>
@@ -353,11 +372,20 @@ export default function DeveloperPortalView({ showToast }: DeveloperPortalViewPr
               <pre>{orderVerifyCurl}</pre>
             </div>
 
-            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs">
-              <div className="font-bold text-slate-700 mb-1.5">Direct UTR Verification:</div>
-              <p className="text-slate-500">
-                Submits the 12-digit UPI Transaction Reference (UTR) for immediate matching against our automated UPI ledger.
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-700 mb-1.5">Required Headers:</div>
+                <div className="font-mono text-[11px] text-slate-600 space-y-1">
+                  <div><strong className="text-teal-700">x-api-key:</strong> Your merchant secret API key</div>
+                  <div><strong className="text-teal-700">Content-Type:</strong> application/json</div>
+                </div>
+              </div>
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-700 mb-1.5">Direct UTR Verification:</div>
+                <p className="text-slate-500 leading-relaxed">
+                  Submits the 12-digit UPI Transaction Reference (UTR) for immediate automated verification.
+                </p>
+              </div>
             </div>
           </div>
         )}

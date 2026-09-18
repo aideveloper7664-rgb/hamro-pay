@@ -1,2 +1,2 @@
-export const getReferrals = async () => ({ referralCode: '', count: 0, earnings: 0 });
-export const submitSupport = async () => {};
+export const getReferrals = async () => ({ earnings: 0, referrals: [] });
+export const applyPromo = async (_code: string) => ({ success: true });

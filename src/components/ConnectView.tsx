@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { CreditCard, Code, ShoppingBag, ShieldCheck, Cpu, CheckCircle2, AlertTriangle, Link as LinkIcon, Lock, Database, ArrowRight, Activity, Terminal } from 'lucide-react';
+import { getStatus } from '../services/fampay.service';
 
 interface ConnectViewProps {
   viewId: 'fampay' | 'developer' | 'store' | string;
@@ -20,16 +22,29 @@ export default function ConnectView({
   const isFamPay = viewId === 'fampay';
   const isDeveloper = viewId === 'developer';
   const isStore = viewId === 'store';
+  const [fampayConnected, setFampayConnected] = useState(false);
+
+  useEffect(() => {
+    if (isFamPay) {
+      getStatus().then(res => {
+        setFampayConnected(Boolean(res?.connected));
+      }).catch(() => {
+        setFampayConnected(false);
+      });
+    }
+  }, [isFamPay]);
 
   const viewData = {
     fampay: {
       title: 'FamPay Connect',
-      desc: 'Connect an alternate regional payment experience to your Hamro Pay workspace.',
+      desc: 'Connect your FamPay UPI account for automated transaction tracking and settlements.',
       icon: CreditCard,
       color: 'bg-yellow-500',
-      heading: 'Connect your alternate payout methods',
-      paragraph: 'This standalone Nepal-themed sandbox keeps external regional payment providers offline. You can still explore the visual merchant panel and local payment link flows.',
-      buttonText: 'Explore Payment Channels'
+      heading: fampayConnected ? 'FamPay Account Connected' : 'No FamPay Account Connected',
+      paragraph: fampayConnected 
+        ? 'Your FamPay UPI account is actively linked for instant transaction processing.'
+        : 'Connect your merchant FamPay account to enable automated UPI collections and UTR reconciliation.',
+      buttonText: 'Add FamPay Account'
     },
     developer: {
       title: 'Developer Portal & API Status',
@@ -56,7 +71,7 @@ export default function ConnectView({
 
   const handleActionClick = () => {
     if (isFamPay) {
-      showToast('Regional payment syncs are deactivated in this standalone digital wallet demo.', 'info');
+      showToast('Coming Soon', 'info');
     } else if (isDeveloper) {
       showToast('Developer API token generated and synchronized.', 'success');
     } else {

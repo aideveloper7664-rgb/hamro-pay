@@ -104,9 +104,14 @@ export default function DashboardView({
       {/* Header */}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">
-            Namaste, {activeName.split(' ')[0]}
-          </h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">
+              Namaste, {activeName.split(' ')[0]}
+            </h1>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-100">
+              Free Plan, 2% commission
+            </span>
+          </div>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
             Your merchant workspace is connected to HamroPay Backend.
           </p>

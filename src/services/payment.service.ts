@@ -8,3 +8,6 @@ export const verifyPayment = async (order_id: string, utr: string) =>
 
 export const getOrderStatus = async (order_id: string) =>
   publicApiCall(`/order/status/${order_id}`);
+
+export const verifyLinkPayment = async (linkId: string, utr: string, amount?: number) =>
+  publicApiCall(`/api/payment-link/${linkId}/verify`, 'POST', { utr, amount });
