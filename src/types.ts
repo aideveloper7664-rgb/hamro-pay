@@ -8,6 +8,9 @@ export interface PaymentLink {
   date: string;
   note?: string;
   payment_url?: string;
+  redirectUrl?: string;
+  expiry?: string;
+  usageLimit?: number;
 }
 
 export interface Transaction {

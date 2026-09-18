@@ -125,6 +125,10 @@ export default function App() {
   const [modalLinkTitle, setModalLinkTitle] = useState('');
   const [modalLinkAmount, setModalLinkAmount] = useState('');
   const [modalLinkNote, setModalLinkNote] = useState('');
+  const [modalLinkRedirect, setModalLinkRedirect] = useState('');
+  const [modalLinkExpiry, setModalLinkExpiry] = useState<'7d' | '30d' | '90d' | 'never' | 'custom'>('7d');
+  const [modalLinkUsageLimit, setModalLinkUsageLimit] = useState('');
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [modalFundAmount, setModalFundAmount] = useState('');
   const [selectedPendingPlan, setSelectedPendingPlan] = useState<{ id: PlanType; price: number } | null>(null);
 
@@ -434,6 +438,10 @@ export default function App() {
       setModalLinkTitle(link.title);
       setModalLinkAmount(String(link.amount));
       setModalLinkNote(link.note || '');
+      setModalLinkRedirect((link as any).redirectUrl || '');
+      setModalLinkExpiry((link as any).expiry || '7d');
+      setModalLinkUsageLimit((link as any).usageLimit ? String((link as any).usageLimit) : '');
+      setIsAdvancedOpen(false);
       setActiveModal('create_link');
     }
   };
@@ -443,6 +451,10 @@ export default function App() {
     setModalLinkTitle('');
     setModalLinkAmount('');
     setModalLinkNote('');
+    setModalLinkRedirect('');
+    setModalLinkExpiry('7d');
+    setModalLinkUsageLimit('');
+    setIsAdvancedOpen(false);
     setActiveModal('create_link');
   };
 
@@ -462,7 +474,10 @@ export default function App() {
       const { isSimulated } = await ApiService.updateLink(editingLinkId, {
         title: modalLinkTitle.trim(),
         amount: amountNum,
-        note: modalLinkNote.trim()
+        note: modalLinkNote.trim(),
+        redirectUrl: modalLinkRedirect.trim(),
+        expiry: modalLinkExpiry,
+        usageLimit: modalLinkUsageLimit ? parseInt(modalLinkUsageLimit) : undefined
       });
 
       setPaymentLinks(prev => prev.map(l => {
@@ -472,6 +487,9 @@ export default function App() {
             title: modalLinkTitle.trim(),
             amount: amountNum,
             note: modalLinkNote.trim(),
+            redirectUrl: modalLinkRedirect.trim(),
+            expiry: modalLinkExpiry,
+            usageLimit: modalLinkUsageLimit ? parseInt(modalLinkUsageLimit) : undefined,
             date: 'Updated just now'
           };
         }
@@ -489,7 +507,10 @@ export default function App() {
         title: modalLinkTitle.trim(),
         amount: amountNum,
         active: true,
-        note: modalLinkNote.trim()
+        note: modalLinkNote.trim(),
+        redirectUrl: modalLinkRedirect.trim(),
+        expiry: modalLinkExpiry,
+        usageLimit: modalLinkUsageLimit ? parseInt(modalLinkUsageLimit) : undefined
       };
 
       const { link, isSimulated } = await ApiService.createLink(newLinkPayload, paymentLinks);
@@ -885,30 +906,78 @@ export default function App() {
         }
         footer={
           <>
-            <button 
-              onClick={() => setActiveModal(null)}
-              className="px-3.5 py-2 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 outline-none"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={handleSavePaymentLinkSubmit}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/10 active:scale-95 outline-none"
-            >
-              {editingLinkId ? 'Save Changes' : 'Generate Checkout Link'}
-            </button>
+            <div className="flex items-center justify-between w-full">
+              <div className="text-[11px] text-slate-400 font-medium">
+                Commission: <b className="text-slate-700">1.5%</b> · Links left: <b className="text-emerald-600">{linkLimit}</b>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setActiveModal(null)}
+                  className="px-3.5 py-2 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 outline-none"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleSavePaymentLinkSubmit}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/10 active:scale-95 outline-none flex items-center gap-1.5"
+                >
+                  <LinkIcon className="w-3.5 h-3.5" />
+                  {editingLinkId ? 'Save Changes' : 'Generate Checkout Link'}
+                </button>
+              </div>
+            </div>
           </>
         }
       >
         <div className="space-y-4">
           <div className="space-y-1.5">
+            <label htmlFor="linkAmount" className="block text-xs font-bold text-slate-700 uppercase">
+              Amount (Rs.) <span className="text-rose-600">*</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-2.5 text-xs font-black text-rose-600">Rs.</span>
+              <input
+                id="linkAmount"
+                type="number"
+                min="1"
+                placeholder="0.00"
+                value={modalLinkAmount}
+                onChange={(e) => setModalLinkAmount(e.target.value)}
+                className="w-full text-xs pl-11 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:outline-none transition-all font-bold"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Quick Amount Chips */}
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Quick Amount</div>
+            <div className="grid grid-cols-4 gap-2">
+              {[99, 199, 499, 999].map((amt) => (
+                <button
+                  key={amt}
+                  type="button"
+                  onClick={() => setModalLinkAmount(String(amt))}
+                  className={`py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                    modalLinkAmount === String(amt)
+                      ? 'bg-rose-50 border-rose-300 text-rose-700 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  Rs. {amt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
             <label htmlFor="linkTitle" className="block text-xs font-bold text-slate-700 uppercase">
-              What are you collecting for?
+              Title / Purpose <span className="text-rose-600">*</span>
             </label>
             <input
               id="linkTitle"
               type="text"
-              placeholder="e.g. Website development retainer"
+              placeholder="e.g. Website Development Retainer, E-book"
               value={modalLinkTitle}
               onChange={(e) => setModalLinkTitle(e.target.value)}
               className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:outline-none transition-all font-semibold"
@@ -917,33 +986,91 @@ export default function App() {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="linkAmount" className="block text-xs font-bold text-slate-700 uppercase">
-              Amount (Rs.)
-            </label>
-            <input
-              id="linkAmount"
-              type="number"
-              min="1"
-              placeholder="0"
-              value={modalLinkAmount}
-              onChange={(e) => setModalLinkAmount(e.target.value)}
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:outline-none transition-all font-semibold"
-              required
-            />
-          </div>
-
-          <div className="space-y-1.5">
             <label htmlFor="linkNote" className="block text-xs font-bold text-slate-700 uppercase">
-              Internal Note <span className="text-slate-400 lowercase font-medium">(optional)</span>
+              Description / Internal Note <span className="text-slate-400 lowercase font-medium">(optional)</span>
             </label>
             <textarea
               id="linkNote"
               rows={2}
-              placeholder="Add a reference note for this payment checkout channel..."
+              placeholder="Add payment instructions or product details..."
               value={modalLinkNote}
               onChange={(e) => setModalLinkNote(e.target.value)}
               className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:outline-none transition-all font-semibold resize-none"
             />
+          </div>
+
+          {/* Advanced Options Accordion */}
+          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+            <button
+              type="button"
+              onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
+              className="w-full flex items-center justify-between p-3.5 text-left font-bold text-xs text-slate-700 hover:bg-slate-100/60 transition-colors cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-[10px]">⚙</span>
+                Advanced Options (Redirect, Expiry, Limits)
+              </span>
+              <span className={`transform transition-transform text-slate-400 ${isAdvancedOpen ? 'rotate-180' : ''}`}>▼</span>
+            </button>
+
+            {isAdvancedOpen && (
+              <div className="p-3.5 pt-0 space-y-3 border-t border-slate-200 bg-white">
+                <div className="space-y-1 pt-2">
+                  <label htmlFor="redirectUrl" className="block text-[11px] font-bold text-slate-700 uppercase">
+                    Redirect URL <span className="text-slate-400 lowercase font-medium">(optional)</span>
+                  </label>
+                  <input
+                    id="redirectUrl"
+                    type="url"
+                    placeholder="https://yourwebsite.com/thank-you"
+                    value={modalLinkRedirect}
+                    onChange={(e) => setModalLinkRedirect(e.target.value)}
+                    className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 text-slate-800 bg-white focus:border-rose-500 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-400">Customer will be redirected here after a successful payment.</p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase">Link Expiry</label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { id: '7d', label: '7 Days' },
+                      { id: '30d', label: '30 Days' },
+                      { id: '90d', label: '90 Days' },
+                      { id: 'never', label: 'Never' }
+                    ].map(exp => (
+                      <button
+                        key={exp.id}
+                        type="button"
+                        onClick={() => setModalLinkExpiry(exp.id as any)}
+                        className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                          modalLinkExpiry === exp.id
+                            ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {exp.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label htmlFor="usageLimit" className="block text-[11px] font-bold text-slate-700 uppercase">
+                    Usage Limit (Max Payments) <span className="text-slate-400 lowercase font-medium">(optional)</span>
+                  </label>
+                  <input
+                    id="usageLimit"
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 50 (Leave blank for unlimited)"
+                    value={modalLinkUsageLimit}
+                    onChange={(e) => setModalLinkUsageLimit(e.target.value)}
+                    className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 text-slate-800 bg-white focus:border-rose-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </Modal>
