@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Plus, Search, Check, Copy, Edit, Ban, HelpCircle, Trash2, Loader2 } from 'lucide-react';
+import { Link as LinkIcon, Plus, Search, Copy, Edit, Trash2, Loader2, CheckCircle2, Clock } from 'lucide-react';
 import { PaymentLink } from '../types';
 import { deleteLink, getLinkPaymentUrl } from '../services/paymentLink.service';
 
@@ -21,7 +21,7 @@ export default function PaymentLinksView({
   showToast
 }: PaymentLinksViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Expired' | 'Disabled'>('All');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
 
@@ -29,14 +29,15 @@ export default function PaymentLinksView({
   const totalLinks = paymentLinks.length;
   const activeLinks = paymentLinks.filter(l => l.active).length;
   const totalCollected = paymentLinks.reduce((sum, l) => sum + l.amount * l.orders, 0);
+  const expiredLinks = paymentLinks.filter(l => (l as any).expiry && new Date((l as any).expiry).getTime() < Date.now()).length;
 
   // Filter links
   const filteredLinks = paymentLinks.filter(link => {
     const matchesSearch = link.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = 
-      statusFilter === 'all' || 
-      (statusFilter === 'active' && link.active) || 
-      (statusFilter === 'inactive' && !link.active);
+    let matchesStatus = true;
+    if (statusFilter === 'Active') matchesStatus = link.active;
+    if (statusFilter === 'Disabled') matchesStatus = !link.active;
+    if (statusFilter === 'Expired') matchesStatus = !!((link as any).expiry && new Date((link as any).expiry).getTime() < Date.now());
     return matchesSearch && matchesStatus;
   });
 
@@ -76,195 +77,197 @@ export default function PaymentLinksView({
   };
 
   return (
-    <div className="space-y-6 animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
-      {/* Header */}
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-            <span className="w-9 h-9 bg-rose-600 text-white rounded-xl flex items-center justify-center shrink-0">
-              <LinkIcon className="w-5 h-5 stroke-[2.5]" />
-            </span>
-            My Payment Links
-          </h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Branded UPI checkouts to share with your customers.
-          </p>
+    <div className="space-y-6 animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both] text-[#fff2f4]">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#b8002c] grid place-items-center text-white shrink-0 shadow-[0_0_22px_rgba(255,30,75,0.5)]">
+            <LinkIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black tracking-tight text-white">My Payment Links</h1>
+            <p className="text-xs text-[#b89fa5] font-medium mt-0.5">All payment links you've created.</p>
+          </div>
         </div>
         <button 
           onClick={onCreateNewLink}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/10 active:scale-95 transition-all focus:outline-none"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-extrabold shadow-[0_8px_24px_rgba(255,30,75,0.35)] hover:shadow-[0_12px_30px_rgba(255,30,75,0.55)] active:scale-95 transition-all cursor-pointer"
         >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          Create New Link
+          <Plus className="w-4 h-4" />
+          New Link
         </button>
-      </header>
+      </div>
 
-      {/* Grid Stats */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Links</div>
-          <div className="text-lg font-black text-slate-800 tracking-tight mt-1">{totalLinks}</div>
+        {/* Total Links */}
+        <div className="relative p-4 rounded-[18px] bg-gradient-to-br from-[rgba(28,7,12,0.82)] to-[rgba(14,3,7,0.95)] border border-[rgba(255,45,85,0.18)] shadow-lg overflow-hidden flex flex-col">
+          <div className="absolute top-0 left-0 w-full h-[3px] bg-[#5b8dff]" />
+          <div className="w-9 h-9 rounded-[10px] bg-[rgba(91,141,255,0.12)] border border-[rgba(91,141,255,0.28)] grid place-items-center text-[#5b8dff] mb-3">
+            <LinkIcon className="w-4 h-4" />
+          </div>
+          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#83686e]">Total Links</span>
+          <div className="text-2xl font-black tracking-tight text-white mt-1">{totalLinks}</div>
         </div>
-        <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Channels</div>
-          <div className="text-lg font-black text-emerald-600 tracking-tight mt-1">{activeLinks}</div>
+
+        {/* Active */}
+        <div className="relative p-4 rounded-[18px] bg-gradient-to-br from-[rgba(28,7,12,0.82)] to-[rgba(14,3,7,0.95)] border border-[rgba(255,45,85,0.18)] shadow-lg overflow-hidden flex flex-col">
+          <div className="absolute top-0 left-0 w-full h-[3px] bg-[#2bf29a]" />
+          <div className="w-9 h-9 rounded-[10px] bg-[rgba(43,242,154,0.12)] border border-[rgba(43,242,154,0.28)] grid place-items-center text-[#2bf29a] mb-3">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#83686e]">Active</span>
+          <div className="text-2xl font-black tracking-tight text-white mt-1">{activeLinks}</div>
         </div>
-        <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Collected Value</div>
-          <div className="text-lg font-black text-slate-800 tracking-tight mt-1">Rs. {totalCollected.toLocaleString('en-NP')}</div>
+
+        {/* Total Collected */}
+        <div className="relative p-4 rounded-[18px] bg-gradient-to-br from-[rgba(28,7,12,0.82)] to-[rgba(14,3,7,0.95)] border border-[rgba(255,45,85,0.18)] shadow-lg overflow-hidden flex flex-col">
+          <div className="absolute top-0 left-0 w-full h-[3px] bg-[#ffb834]" />
+          <div className="w-9 h-9 rounded-[10px] bg-[rgba(255,184,52,0.12)] border border-[rgba(255,184,52,0.28)] grid place-items-center text-[#ffb834] mb-3">
+            <span className="font-bold text-sm">₹</span>
+          </div>
+          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#83686e]">Total Collected</span>
+          <div className="text-2xl font-black tracking-tight text-white mt-1">₹{totalCollected.toLocaleString('en-IN')}</div>
         </div>
-        <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Avg Conversion</div>
-          <div className="text-lg font-black text-slate-800 tracking-tight mt-1">38.6%</div>
+
+        {/* Expired */}
+        <div className="relative p-4 rounded-[18px] bg-gradient-to-br from-[rgba(28,7,12,0.82)] to-[rgba(14,3,7,0.95)] border border-[rgba(255,45,85,0.18)] shadow-lg overflow-hidden flex flex-col">
+          <div className="absolute top-0 left-0 w-full h-[3px] bg-[#ff1e4b]" />
+          <div className="w-9 h-9 rounded-[10px] bg-[rgba(255,30,75,0.12)] border border-[rgba(255,30,75,0.28)] grid place-items-center text-[#ff4d6d] mb-3">
+            <Clock className="w-4 h-4" />
+          </div>
+          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#83686e]">Expired</span>
+          <div className="text-2xl font-black tracking-tight text-white mt-1">{expiredLinks}</div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center gap-3">
-        {/* Search */}
-        <div className="relative flex-1 w-full">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-            <Search className="w-4.5 h-4.5" />
-          </span>
-          <input
-            type="text"
-            placeholder="Search payment links..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full text-xs pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:border-rose-500 focus:outline-none transition-all placeholder:text-slate-400"
-          />
+      <div className="flex flex-col sm:flex-row items-center gap-3.5 p-3.5 rounded-[18px] bg-gradient-to-br from-[rgba(24,6,10,0.82)] to-[rgba(12,2,6,0.95)] border border-[rgba(255,45,85,0.18)]">
+        <div className="w-full sm:w-[160px]">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+            className="w-full px-3.5 py-2.5 rounded-xl bg-[rgba(20,5,10,0.85)] border border-[rgba(255,45,85,0.18)] text-white text-xs font-bold outline-none cursor-pointer focus:border-[rgba(255,60,95,0.6)]"
+          >
+            <option value="All" className="bg-[#120306] text-white">All Statuses</option>
+            <option value="Active" className="bg-[#120306] text-white">Active</option>
+            <option value="Expired" className="bg-[#120306] text-white">Expired</option>
+            <option value="Disabled" className="bg-[#120306] text-white">Disabled</option>
+          </select>
         </div>
 
-        {/* Filter Dropdown */}
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as any)}
-          className="w-full sm:w-auto text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold focus:border-rose-500 focus:outline-none transition-all cursor-pointer"
-        >
-          <option value="all">All Statuses</option>
-          <option value="active">Active Only</option>
-          <option value="inactive">Inactive Only</option>
-        </select>
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#b89fa5]" />
+          <input
+            type="text"
+            placeholder="Search title..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[rgba(20,5,10,0.85)] border border-[rgba(255,45,85,0.18)] text-white text-xs font-semibold placeholder:text-[rgba(184,159,165,0.5)] focus:border-[rgba(255,60,95,0.6)] focus:outline-none"
+          />
+        </div>
       </div>
 
       {/* Links List */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         {filteredLinks.length > 0 ? (
           filteredLinks.map(link => {
             const calculatedTotal = link.amount * link.orders;
             return (
-              <article 
-                key={link.id} 
-                className={`
-                  p-5 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white
-                  ${link.active 
-                    ? 'border-slate-100 hover:border-slate-200' 
-                    : 'border-slate-100 opacity-70 bg-slate-50/50'
-                  }
-                `}
+              <article
+                key={link.id}
+                className={`p-4 sm:p-5 rounded-[18px] bg-gradient-to-br from-[rgba(24,6,10,0.85)] to-[rgba(12,2,6,0.95)] border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                  link.active ? 'border-[rgba(255,45,85,0.18)] hover:border-[rgba(255,60,95,0.4)]' : 'border-white/5 opacity-70'
+                }`}
               >
-                {/* Left Metadata block */}
-                <div className="flex items-center gap-3.5">
-                  <div className={`
-                    w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border
-                    ${link.active 
-                      ? 'bg-rose-50 border-rose-100 text-rose-600' 
-                      : 'bg-slate-100 border-slate-200 text-slate-400'
-                    }
-                  `}>
+                {/* Left Info */}
+                <div className="flex items-start sm:items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-[rgba(255,30,75,0.12)] border border-[rgba(255,30,75,0.25)] flex items-center justify-center text-[#ff4d6d] shrink-0 mt-0.5 sm:mt-0">
                     <LinkIcon className="w-5 h-5" />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                      {link.title}
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2 flex-wrap">
+                      <span className="truncate">{link.title}</span>
                       {!link.active && (
-                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[8px] font-bold text-slate-500 uppercase tracking-wider">
+                        <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-extrabold text-[#b89fa5] uppercase tracking-wider">
                           Paused
                         </span>
                       )}
                     </h3>
-                    <p className="text-xs text-slate-500 font-medium mt-1">
-                      Rs. {link.amount.toLocaleString('en-NP')} · {link.orders} successful payments · {link.date}
+                    <p className="text-xs text-[#b89fa5] font-medium mt-0.5">
+                      ₹{link.amount.toLocaleString('en-IN')} · {link.orders} payments · {link.date}
                     </p>
-                    <div className="mt-1.5 flex items-center gap-1 text-[11px] font-mono text-slate-400">
-                      <span className="text-slate-400 font-semibold">URL:</span>
-                      <span className="text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded-md truncate max-w-[280px]">
+                    <div className="mt-1 flex items-center gap-1.5 text-[11px] font-mono text-[#b89fa5]">
+                      <span className="text-[#83686e]">URL:</span>
+                      <span className="text-[#ff94a7] bg-[rgba(255,30,75,0.08)] border border-[rgba(255,30,75,0.2)] px-2 py-0.5 rounded-md truncate max-w-[260px] sm:max-w-[340px]">
                         {getCheckoutUrl(link)}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Right stats and controls block */}
-                <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-0 pt-3 md:pt-0 border-slate-100">
-                  <div className="flex items-center gap-6 text-xs text-slate-500 font-semibold mr-2">
+                {/* Right Controls & Stats */}
+                <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-0 pt-3 md:pt-0 border-[rgba(255,45,85,0.1)]">
+                  <div className="flex items-center gap-6 text-xs">
                     <div className="text-left md:text-right">
-                      <b className="block text-sm font-black text-slate-800 leading-none">
-                        Rs. {calculatedTotal.toLocaleString('en-NP')}
+                      <b className="block text-sm font-black text-white leading-tight">
+                        ₹{calculatedTotal.toLocaleString('en-IN')}
                       </b>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mt-1">Collected</span>
+                      <span className="text-[10px] text-[#83686e] font-extrabold uppercase tracking-wider block mt-0.5">Collected</span>
                     </div>
                     <div className="text-left md:text-right">
-                      <b className="block text-sm font-black text-slate-800 leading-none">{link.orders}</b>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mt-1">Orders</span>
+                      <b className="block text-sm font-black text-white leading-tight">{link.orders}</b>
+                      <span className="text-[10px] text-[#83686e] font-extrabold uppercase tracking-wider block mt-0.5">Orders</span>
                     </div>
                   </div>
 
-                  {/* Actions Row */}
+                  {/* Action Buttons */}
                   <div className="flex items-center gap-2">
-                    {/* Active Toggle Switch */}
+                    {/* Toggle Active */}
                     <button
                       onClick={() => onToggleActive(link.id)}
-                      className={`
-                        w-10 h-6 rounded-full p-0.5 transition-all outline-none relative cursor-pointer
-                        ${link.active ? 'bg-rose-600' : 'bg-slate-200'}
-                      `}
+                      className={`w-10 h-6 rounded-full p-0.5 transition-all outline-none relative cursor-pointer ${
+                        link.active ? 'bg-[#ff1e4b]' : 'bg-white/15'
+                      }`}
                       aria-label="Toggle link active state"
                     >
-                      <div className={`
-                        w-5 h-5 rounded-full bg-white shadow-xs transition-all transform
-                        ${link.active ? 'translate-x-4' : 'translate-x-0'}
-                      `} />
+                      <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all transform ${
+                        link.active ? 'translate-x-4' : 'translate-x-0'
+                      }`} />
                     </button>
 
-                    {/* Copy Link Button */}
+                    {/* Copy */}
                     <button
                       onClick={() => handleCopyLink(link)}
-                      className="p-2 bg-slate-50 border border-slate-100 hover:border-slate-200 text-slate-600 hover:text-rose-600 rounded-xl shadow-xs transition-all active:scale-95"
+                      className="p-2 rounded-xl bg-white/5 border border-white/10 text-[#b89fa5] hover:text-white hover:bg-[rgba(255,30,75,0.15)] hover:border-[rgba(255,60,95,0.35)] transition-all cursor-pointer"
                       title="Copy Checkout Link"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
 
-                    {/* Edit Link Button */}
+                    {/* Edit */}
                     <button
                       onClick={() => onEditLink(link.id)}
-                      className="p-2 bg-slate-50 border border-slate-100 hover:border-slate-200 text-slate-600 hover:text-rose-600 rounded-xl shadow-xs transition-all active:scale-95"
-                      title="Edit Link Configuration"
+                      className="p-2 rounded-xl bg-white/5 border border-white/10 text-[#b89fa5] hover:text-white hover:bg-[rgba(255,30,75,0.15)] hover:border-[rgba(255,60,95,0.35)] transition-all cursor-pointer"
+                      title="Edit Link"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
 
-                    {/* Delete Link Button / Inline Confirmation */}
+                    {/* Delete */}
                     {confirmDeleteId === link.id ? (
-                      <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleDelete(link)}
                           disabled={deletingId === link.id}
-                          className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-60"
-                          title="Confirm Deletion"
+                          className="px-2.5 py-1.5 bg-[#ff1e4b] hover:bg-[#d8002f] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-75"
                         >
-                          {deletingId === link.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3.5 h-3.5" />
-                          )}
-                          <span>Delete</span>
+                          {deletingId === link.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          <span>Confirm</span>
                         </button>
                         <button
                           onClick={() => setConfirmDeleteId(null)}
-                          disabled={deletingId === link.id}
-                          className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all"
+                          className="px-2 py-1.5 bg-white/10 text-[#fff] rounded-xl text-xs font-bold hover:bg-white/20 transition-all cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -272,8 +275,8 @@ export default function PaymentLinksView({
                     ) : (
                       <button
                         onClick={() => setConfirmDeleteId(link.id)}
-                        className="p-2 bg-slate-50 border border-slate-100 hover:border-rose-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl shadow-xs transition-all active:scale-95"
-                        title="Delete Payment Link"
+                        className="p-2 rounded-xl bg-white/5 border border-white/10 text-[#b89fa5] hover:text-[#ff4d6d] hover:bg-[rgba(255,30,75,0.15)] hover:border-[rgba(255,60,95,0.35)] transition-all cursor-pointer"
+                        title="Delete Link"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -284,15 +287,21 @@ export default function PaymentLinksView({
             );
           })
         ) : (
-          <article className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-500">
-            <div className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mx-auto mb-4 border border-slate-100">
-              <Search className="w-6 h-6" />
+          <div className="rounded-[18px] bg-gradient-to-br from-[rgba(24,6,10,0.75)] to-[rgba(12,2,6,0.9)] border border-[rgba(255,45,85,0.18)] p-12 sm:p-16 flex flex-col items-center justify-center text-center gap-4">
+            <div className="w-20 h-20 rounded-2xl bg-[rgba(255,30,75,0.08)] border border-[rgba(255,30,75,0.2)] flex items-center justify-center text-[#ff4d6d]">
+              <LinkIcon className="w-10 h-10 stroke-[1.5]" />
             </div>
-            <b className="text-base font-bold text-slate-800 block mb-1">No payment channels match</b>
-            <p className="text-xs text-slate-400 font-medium">
-              Adjust your filter or create a new checkout channel to start collecting.
-            </p>
-          </article>
+            <div>
+              <h3 className="text-base font-black text-white">No payment links yet</h3>
+              <p className="text-xs text-[#b89fa5] max-w-sm mt-1">Create your first payment link to start receiving payments.</p>
+            </div>
+            <button
+              onClick={onCreateNewLink}
+              className="mt-2 px-5 py-2.5 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-extrabold shadow-[0_10px_26px_rgba(255,30,75,0.4)] hover:shadow-[0_14px_32px_rgba(255,30,75,0.6)] active:scale-95 transition-all cursor-pointer"
+            >
+              Create Link
+            </button>
+          </div>
         )}
       </div>
     </div>
