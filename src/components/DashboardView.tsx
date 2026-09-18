@@ -203,7 +203,7 @@ export default function DashboardView({
           display: flex;
           align-items: center;
           gap: 14px;
-          min-width: 200px;
+          min-width: 140px;
         }
         .icon-btn {
           width: 38px;
@@ -248,9 +248,57 @@ export default function DashboardView({
         .topbar-right {
           display: flex;
           align-items: center;
-          gap: 8px;
-          min-width: 200px;
+          gap: 10px;
+          min-width: 140px;
           justify-content: flex-end;
+        }
+
+        .topbar-admin-chip {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 4px 12px 4px 5px;
+          border-radius: 999px;
+          background: rgba(255, 30, 75, 0.08);
+          border: 1px solid rgba(255, 45, 85, 0.22);
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .topbar-admin-chip:hover {
+          background: rgba(255, 30, 75, 0.16);
+          border-color: rgba(255, 60, 95, 0.45);
+        }
+        .topbar-admin-avatar {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #ff1e4b, #b8002c);
+          color: #fff;
+          font-size: 12px;
+          font-weight: 800;
+          display: grid;
+          place-items: center;
+          box-shadow: 0 0 10px rgba(255, 30, 75, 0.4);
+          flex-shrink: 0;
+        }
+        .topbar-admin-info {
+          display: flex;
+          flex-direction: column;
+          line-height: 1.15;
+          text-align: left;
+        }
+        .topbar-admin-name {
+          font-size: 12px;
+          font-weight: 800;
+          color: #fff2f4;
+          white-space: nowrap;
+        }
+        .topbar-admin-badge {
+          font-size: 9px;
+          font-weight: 800;
+          color: #ff4d6d;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
         }
 
         /* ============ MAIN LAYOUT ============ */
@@ -263,27 +311,40 @@ export default function DashboardView({
         /* ============ GREETING ROW ============ */
         .greet-row {
           display: flex;
-          align-items: flex-start;
+          align-items: center;
           justify-content: space-between;
-          gap: 20px;
+          gap: 18px;
           flex-wrap: wrap;
           margin-bottom: 22px;
+          width: 100%;
+        }
+        .greet-text {
+          flex: 1 1 300px;
+          min-width: 0;
         }
         .greet-text h1 {
-          font-size: 26px;
+          font-size: clamp(20px, 2.5vw, 28px);
           font-weight: 900;
-          letter-spacing: -0.6px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
+          letter-spacing: -0.5px;
+          line-height: 1.3;
           margin-bottom: 5px;
           color: #fff2f4;
+          word-break: break-word;
+          overflow-wrap: break-word;
+        }
+        .greet-text h1 .user-highlight {
+          color: #ff3b65;
+          background: linear-gradient(135deg, #ff4d6d, #ff1e4b);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
         }
         .greet-text h1 .wave {
           display: inline-block;
           animation: wave 2.5s ease-in-out infinite;
           transform-origin: 70% 70%;
           font-size: 24px;
+          vertical-align: -1px;
+          margin-left: 6px;
         }
         @keyframes wave {
           0%,100% { transform: rotate(0deg); }
@@ -857,6 +918,21 @@ export default function DashboardView({
         <div className="topbar-center">Dashboard</div>
 
         <div className="topbar-right">
+          {/* Admin User Chip in Topbar */}
+          <div 
+            className="topbar-admin-chip"
+            onClick={() => onViewChange('profile')}
+            title={`Logged in as Admin: ${displayName}`}
+          >
+            <div className="topbar-admin-avatar">
+              {(displayName[0] || 'A').toUpperCase()}
+            </div>
+            <div className="topbar-admin-info">
+              <span className="topbar-admin-name">{displayName}</span>
+              <span className="topbar-admin-badge">Admin</span>
+            </div>
+          </div>
+
           <button 
             className="icon-btn" 
             aria-label="Notifications"
@@ -888,7 +964,9 @@ export default function DashboardView({
         <div className="greet-row">
           <div className="greet-text">
             <h1>
-              {greeting}, {displayName} <span className="wave">👋</span>
+              <span>{greeting}, </span>
+              <span className="user-highlight">{displayName}</span>
+              <span className="wave">👋</span>
             </h1>
             <p>Here's your account overview.</p>
           </div>

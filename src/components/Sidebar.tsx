@@ -29,11 +29,11 @@ export default function Sidebar({
 }: SidebarProps) {
   const { user } = useAuth();
 
-  // Collapsible groups state (default expanded like in the template)
+  // Collapsible groups state - default collapsed so subsections do not open automatically
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    cashier: true,
-    dev: true,
-    store: true,
+    cashier: currentView === 'fampay' || currentView === 'paytm',
+    dev: currentView === 'developer',
+    store: currentView === 'store',
   });
 
   const toggleGroup = (group: string) => {
@@ -217,17 +217,26 @@ export default function Sidebar({
               </span>
               <span className="flex-1 min-w-0 truncate">Cashier Connect</span>
               <span className="hp-new-badge">New</span>
-              <svg
-                className={`hp-chevron ${expandedGroups.cashier ? 'rotate-180' : ''}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+              <div
+                className={`w-6 h-6 rounded-md flex items-center justify-center ml-1.5 transition-all duration-250 shrink-0 ${
+                  expandedGroups.cashier
+                    ? 'bg-[#ff1e4b]/20 text-[#ff4d6d] border border-[#ff1e4b]/35 shadow-[0_0_8px_rgba(255,30,75,0.25)]'
+                    : 'bg-white/5 text-[rgba(255,242,244,0.6)] border border-white/10 group-hover:text-white group-hover:bg-white/10'
+                }`}
+                title={expandedGroups.cashier ? "Subsections expanded (click to close)" : "Contains subsections (click to expand)"}
               >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
+                <svg
+                  className={`w-3.5 h-3.5 transition-transform duration-250 ${expandedGroups.cashier ? 'rotate-180' : 'rotate-0'}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
             </div>
             <div className="hp-sub-wrap">
               <div className="hp-sub-inner">
@@ -313,17 +322,26 @@ export default function Sidebar({
               </span>
               <span className="flex-1 min-w-0 truncate">Developer Portal</span>
               <span className="hp-new-badge">New</span>
-              <svg
-                className={`hp-chevron ${expandedGroups.dev ? 'rotate-180' : ''}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+              <div
+                className={`w-6 h-6 rounded-md flex items-center justify-center ml-1.5 transition-all duration-250 shrink-0 ${
+                  expandedGroups.dev
+                    ? 'bg-[#ff1e4b]/20 text-[#ff4d6d] border border-[#ff1e4b]/35 shadow-[0_0_8px_rgba(255,30,75,0.25)]'
+                    : 'bg-white/5 text-[rgba(255,242,244,0.6)] border border-white/10 group-hover:text-white group-hover:bg-white/10'
+                }`}
+                title={expandedGroups.dev ? "Subsections expanded (click to close)" : "Contains subsections (click to expand)"}
               >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
+                <svg
+                  className={`w-3.5 h-3.5 transition-transform duration-250 ${expandedGroups.dev ? 'rotate-180' : 'rotate-0'}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
             </div>
             <div className="hp-sub-wrap">
               <div className="hp-sub-inner">
@@ -410,17 +428,26 @@ export default function Sidebar({
               </span>
               <span className="flex-1 min-w-0 truncate">Store Portal</span>
               <span className="hp-new-badge">New</span>
-              <svg
-                className={`hp-chevron ${expandedGroups.store ? 'rotate-180' : ''}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+              <div
+                className={`w-6 h-6 rounded-md flex items-center justify-center ml-1.5 transition-all duration-250 shrink-0 ${
+                  expandedGroups.store
+                    ? 'bg-[#ff1e4b]/20 text-[#ff4d6d] border border-[#ff1e4b]/35 shadow-[0_0_8px_rgba(255,30,75,0.25)]'
+                    : 'bg-white/5 text-[rgba(255,242,244,0.6)] border border-white/10 group-hover:text-white group-hover:bg-white/10'
+                }`}
+                title={expandedGroups.store ? "Subsections expanded (click to close)" : "Contains subsections (click to expand)"}
               >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
+                <svg
+                  className={`w-3.5 h-3.5 transition-transform duration-250 ${expandedGroups.store ? 'rotate-180' : 'rotate-0'}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
             </div>
             <div className="hp-sub-wrap">
               <div className="hp-sub-inner">

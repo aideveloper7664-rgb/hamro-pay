@@ -93,13 +93,12 @@
   flex: 1;
 }
 .hp-user-name {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  word-break: break-word;
 }
 .hp-user-email {
   font-size: 11px;
