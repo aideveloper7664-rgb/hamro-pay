@@ -728,6 +728,7 @@ export default function App() {
 
       // Accordionconnected placeholders
       case 'fampay':
+      case 'paytm':
       case 'store':
         return (
           <ConnectView 
@@ -842,7 +843,7 @@ export default function App() {
       />
 
       {/* Main viewport area */}
-      <div className={`flex-1 ml-0 md:ml-64 flex flex-col min-h-screen ${currentView === 'dashboard' ? 'bg-[#070102]' : ''}`}>
+      <div className={`flex-1 min-w-0 flex flex-col min-h-screen ${currentView === 'dashboard' ? 'bg-[#070102]' : ''}`}>
         {currentView !== 'dashboard' && (
           <Header
             onOpenSidebar={() => setIsSidebarOpen(true)}

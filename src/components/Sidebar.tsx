@@ -1,10 +1,7 @@
 import { useState } from 'react';
-import { 
-  Grid, Link as LinkIcon, Wallet, Clock, ArrowUp, Bell, 
-  CreditCard, Code, ShoppingBag, 
-  User, LogOut, ChevronDown, Sparkles 
-} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { PlanType } from '../types';
+import { LogOut, User, X } from 'lucide-react';
 
 interface SidebarProps {
   currentView: string;
@@ -12,7 +9,7 @@ interface SidebarProps {
   balance: number;
   profileName: string;
   profileEmail: string;
-  unreadNotifications: number;
+  unreadNotifications?: number;
   currentPlan?: PlanType;
   onSignOut: () => void;
   isOpen: boolean;
@@ -25,281 +22,542 @@ export default function Sidebar({
   balance,
   profileName,
   profileEmail,
-  unreadNotifications,
+  unreadNotifications: _unreadNotifications = 0,
   onSignOut,
   isOpen,
-  onClose
+  onClose,
 }: SidebarProps) {
-  // Accordion submenus
-  const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({
-    cashier: false,
-    developer: false,
-    store: false
+  const { user } = useAuth();
+
+  // Collapsible groups state (default expanded like in the template)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    cashier: true,
+    dev: true,
+    store: true,
   });
 
-  const toggleSubmenu = (menu: string) => {
-    setOpenSubmenus(prev => ({
+  const toggleGroup = (group: string) => {
+    setExpandedGroups(prev => ({
       ...prev,
-      [menu]: !prev[menu]
+      [group]: !prev[group],
     }));
   };
 
-  const getInitials = (name: any) => {
-    if (!name || typeof name !== 'string') return 'HP';
-    const cleanName = name.trim();
-    if (!cleanName) return 'HP';
-    return cleanName.split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join('').toUpperCase() || 'HP';
-  };
-
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Grid, color: 'bg-rose-500' },
-    { id: 'links', label: 'Payment Links', icon: LinkIcon, color: 'bg-indigo-500' },
-    { id: 'wallet', label: 'Wallet', icon: Wallet, color: 'bg-emerald-500' },
-    { id: 'transactions', label: 'Transactions', icon: Clock, color: 'bg-amber-500' },
-    { id: 'withdraw', label: 'Withdraw', icon: ArrowUp, color: 'bg-rose-600' },
-  ];
-
   const handleNavClick = (viewId: string) => {
     onViewChange(viewId);
-    onClose(); // Close sidebar on mobile
+    onClose();
   };
+
+  // Determine dynamic user info according to logged-in user
+  const displayName = user?.name?.trim() || profileName?.trim() || 'Ai developer';
+  const displayEmail = user?.email?.trim() || profileEmail?.trim() || 'aideveloper7664@gmail.com';
+  const avatarLetter = (displayName[0] || 'A').toUpperCase();
 
   return (
     <>
       {/* Mobile Backdrop Overlay */}
       {isOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-30 md:hidden"
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-xs z-40 md:hidden"
           onClick={onClose}
         />
       )}
 
-      <aside className={`
-        fixed inset-y-0 left-0 w-64 bg-slate-900 text-slate-100 flex flex-col z-40
-        transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
-        transition-transform duration-300 ease-in-out border-r border-slate-800 shadow-xl
-        h-full overflow-y-auto scrollbar-thin
-      `}>
-        {/* Brand Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-rose-600 flex items-center justify-center shadow-lg shadow-rose-950/20">
-              <Wallet className="w-5 h-5 stroke-[2.5]" />
-            </div>
-            <span className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-white to-rose-200 bg-clip-text text-transparent">
-              Hamro Pay
-            </span>
+      {/* Main Sidebar */}
+      <aside
+        className={`
+          hp-sidebar fixed md:sticky top-0 left-0 z-50
+          transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
+          transition-transform duration-300 ease-in-out
+          flex-shrink-0 select-none
+        `}
+      >
+        {/* Mobile close button header */}
+        <div className="flex md:hidden items-center justify-between pb-3 mb-2 border-b border-[rgba(255,45,85,0.18)]">
+          <div className="text-xs font-bold uppercase tracking-wider text-[rgba(255,242,244,0.7)]">
+            Navigation
           </div>
-          <button 
+          <button
             onClick={onClose}
-            className="md:hidden p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            title="Close Sidebar"
           >
-            <ChevronDown className="w-5 h-5 rotate-90" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Merchant Summary */}
-        <div className="m-4 p-3 bg-slate-800/40 rounded-xl border border-slate-800 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-500 to-rose-600 text-white font-bold text-xs flex items-center justify-center border border-white/10 shrink-0">
-            {getInitials(profileName)}
+        {/* User Card */}
+        <div
+          className="hp-user-card cursor-pointer group"
+          onClick={() => handleNavClick('profile')}
+          title="View Account Profile"
+        >
+          <div className="hp-user-avatar group-hover:scale-105 transition-transform">
+            {avatarLetter}
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-xs font-bold text-slate-200 truncate">{profileName}</div>
-            <div className="text-[10px] text-slate-400 truncate">{profileEmail}</div>
+          <div className="hp-user-info">
+            <div className="hp-user-name group-hover:text-[#ff4d6d] transition-colors">
+              {displayName}
+            </div>
+            <div className="hp-user-email">
+              {displayEmail}
+            </div>
           </div>
         </div>
 
-        {/* Available Balance Pill */}
-        <div className="mx-4 mb-2 p-3 bg-white text-rose-600 rounded-xl shadow-lg border border-rose-100/50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wallet className="w-4 h-4" />
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Hamro Cash</span>
-          </div>
-          <span className="text-sm font-black tracking-tight text-rose-600">
-            Rs. {balance.toLocaleString('en-NP', { minimumFractionDigits: 2 })}
+        {/* Balance Pill */}
+        <div
+          className="hp-balance-pill"
+          onClick={() => handleNavClick('wallet')}
+          title="Open Wallet"
+        >
+          <span className="hp-wallet-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+              <path d="M16 12h3v4h-3a2 2 0 0 1 0-4Z" />
+            </svg>
+          </span>
+          <span className="hp-balance-amount">
+            ₹ {balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </div>
 
-        {/* Nav list */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          <div className="px-3 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-            Workspace
-          </div>
-
-          {/* Standard Menu Items */}
-          {menuItems.map(item => {
-            const Icon = item.icon;
-            const isActive = currentView === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                className={`
-                  w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold tracking-wide transition-all
-                  ${isActive 
-                    ? 'bg-rose-600 text-white shadow-md shadow-rose-600/10' 
-                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
-                  }
-                `}
+        {/* Nav List */}
+        <div className="flex flex-col gap-[3px] flex-1">
+          {/* Dashboard */}
+          <div
+            className={`hp-nav-item ${currentView === 'dashboard' ? 'active' : ''}`}
+            onClick={() => handleNavClick('dashboard')}
+          >
+            <span
+              className="hp-nav-icon"
+              style={{
+                background: 'linear-gradient(135deg, #5b8dff, #3b6ce6)',
+                boxShadow: '0 4px 14px rgba(91,141,255,0.35)',
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4"
               >
-                <div className={`w-6 h-6 rounded-lg ${isActive ? 'bg-white/10' : item.color} text-white flex items-center justify-center shrink-0`}>
-                  <Icon className="w-3.5 h-3.5" />
-                </div>
-                <span className="flex-1 text-left">{item.label}</span>
-              </button>
-            );
-          })}
+                <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                <rect x="14" y="14" width="7" height="7" rx="1.5" />
+              </svg>
+            </span>
+            <span className="flex-1 min-w-0 truncate">Dashboard</span>
+          </div>
 
-          {/* Notifications (UI kept, no API call) */}
-          <button
-            onClick={() => handleNavClick('notifications')}
-            className={`
-              w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold tracking-wide transition-all
-              ${currentView === 'notifications' 
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-600/10' 
-                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
-              }
-            `}
+          {/* Payment Links */}
+          <div
+            className={`hp-nav-item ${currentView === 'links' ? 'active' : ''}`}
+            onClick={() => handleNavClick('links')}
           >
-            <div className={`w-6 h-6 rounded-lg ${currentView === 'notifications' ? 'bg-white/10' : 'bg-pink-500'} text-white flex items-center justify-center shrink-0`}>
-              <Bell className="w-3.5 h-3.5" />
-            </div>
-            <span className="flex-1 text-left">Notifications</span>
-            {unreadNotifications > 0 && (
-              <span className="bg-rose-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
-                {unreadNotifications}
+            <span
+              className="hp-nav-icon"
+              style={{
+                background: 'linear-gradient(135deg, #a78bfa, #7c5cf0)',
+                boxShadow: '0 4px 14px rgba(167,139,250,0.35)',
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4"
+              >
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+            </span>
+            <span className="flex-1 min-w-0 truncate">Payment Links</span>
+          </div>
+
+          {/* Cashier Connect Group */}
+          <div className={`hp-nav-group flex flex-col ${expandedGroups.cashier ? 'expanded' : ''}`}>
+            <div
+              className={`hp-nav-item ${expandedGroups.cashier ? 'expanded' : ''}`}
+              onClick={() => toggleGroup('cashier')}
+            >
+              <span
+                className="hp-nav-icon"
+                style={{
+                  background: 'linear-gradient(135deg, #ffb834, #e89a15)',
+                  boxShadow: '0 4px 14px rgba(255,184,52,0.35)',
+                }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-4 h-4"
+                >
+                  <rect x="3" y="6" width="13" height="12" rx="2" />
+                  <path d="m22 8-6 4 6 4V8Z" />
+                </svg>
               </span>
-            )}
-          </button>
-
-          <div className="h-px bg-slate-800 my-4 mx-2" />
-
-          {/* Cashier Connect Accordion */}
-          <div className="space-y-1">
-            <button
-              onClick={() => toggleSubmenu('cashier')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-800/30"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-lg bg-yellow-500 text-white flex items-center justify-center shrink-0">
-                  <CreditCard className="w-3.5 h-3.5" />
-                </div>
-                <span>Cashier Connect</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 px-1 py-0.5 rounded-md font-extrabold">UPI</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openSubmenus.cashier ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
-            {openSubmenus.cashier && (
-              <div className="pl-4 space-y-1">
-                <button
-                  onClick={() => handleNavClick('fampay')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs font-semibold
-                    ${currentView === 'fampay' ? 'text-rose-500' : 'text-slate-400 hover:text-slate-200'}
-                  `}
-                >
-                  <CreditCard className="w-3.5 h-3.5 shrink-0" />
-                  <span>FamPay Connect</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Developer Portal Accordion */}
-          <div className="space-y-1">
-            <button
-              onClick={() => toggleSubmenu('developer')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-800/30"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-lg bg-teal-500 text-white flex items-center justify-center shrink-0">
-                  <Code className="w-3.5 h-3.5" />
-                </div>
-                <span>Developer Portal</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] bg-teal-500/10 border border-teal-500/20 text-teal-400 px-1 py-0.5 rounded-md font-extrabold">API</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openSubmenus.developer ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
-            {openSubmenus.developer && (
-              <div className="pl-4 space-y-1">
-                <button
-                  onClick={() => handleNavClick('developer')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs font-semibold
-                    ${currentView === 'developer' ? 'text-rose-500' : 'text-slate-400 hover:text-slate-200'}
-                  `}
-                >
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                  <span>Hamro API Keys</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Store Portal Accordion */}
-          <div className="space-y-1">
-            <button
-              onClick={() => toggleSubmenu('store')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-800/30"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-lg bg-purple-500 text-white flex items-center justify-center shrink-0">
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                </div>
-                <span>Store Portal</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openSubmenus.store ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
-            {openSubmenus.store && (
-              <div className="pl-4 space-y-1">
-                <button
-                  onClick={() => handleNavClick('store')}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs font-semibold
-                    ${currentView === 'store' ? 'text-rose-500' : 'text-slate-400 hover:text-slate-200'}
-                  `}
-                >
-                  <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
-                  <span>Customize Store</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="h-px bg-slate-800 my-4 mx-2" />
-
-          {/* Profile */}
-          <button
-            onClick={() => handleNavClick('profile')}
-            className={`
-              w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold tracking-wide transition-all
-              ${currentView === 'profile' 
-                ? 'bg-rose-600 text-white shadow-md' 
-                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
-              }
-            `}
-          >
-            <div className={`w-6 h-6 rounded-lg ${currentView === 'profile' ? 'bg-white/10' : 'bg-slate-500'} text-white flex items-center justify-center shrink-0`}>
-              <User className="w-3.5 h-3.5" />
+              <span className="flex-1 min-w-0 truncate">Cashier Connect</span>
+              <span className="hp-new-badge">New</span>
+              <svg
+                className={`hp-chevron ${expandedGroups.cashier ? 'rotate-180' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             </div>
-            <span className="flex-1 text-left">Account Settings</span>
-          </button>
-        </nav>
+            <div className="hp-sub-wrap">
+              <div className="hp-sub-inner">
+                <div className="hp-sub-list">
+                  {/* FamPay */}
+                  <div
+                    className={`hp-sub-item ${currentView === 'fampay' ? 'active' : ''}`}
+                    onClick={() => handleNavClick('fampay')}
+                  >
+                    <span
+                      className="hp-sub-icon"
+                      style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)' }}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-3.5 h-3.5"
+                      >
+                        <rect x="5" y="3" width="14" height="18" rx="2" />
+                        <path d="M12 18h.01" />
+                      </svg>
+                    </span>
+                    <span className="flex-1 min-w-0 truncate">FamPay</span>
+                  </div>
 
-        {/* Sign Out Button in Footer */}
-        <div className="mt-auto p-4 border-t border-slate-800">
+                  {/* Paytm */}
+                  <div
+                    className={`hp-sub-item ${currentView === 'paytm' ? 'active' : ''}`}
+                    onClick={() => handleNavClick('paytm')}
+                  >
+                    <span
+                      className="hp-sub-icon"
+                      style={{ background: 'linear-gradient(135deg, #5b8dff, #3b6ce6)' }}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-3.5 h-3.5"
+                      >
+                        <path d="M4 6h16v12H4z" />
+                        <path d="M8 10h8M8 14h5" />
+                      </svg>
+                    </span>
+                    <span className="flex-1 min-w-0 truncate">Paytm</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Developer Portal Group */}
+          <div className={`hp-nav-group flex flex-col ${expandedGroups.dev ? 'expanded' : ''}`}>
+            <div
+              className={`hp-nav-item ${expandedGroups.dev ? 'expanded' : ''}`}
+              onClick={() => toggleGroup('dev')}
+            >
+              <span
+                className="hp-nav-icon"
+                style={{
+                  background: 'linear-gradient(135deg, #2bf29a, #10b673)',
+                  boxShadow: '0 4px 14px rgba(43,242,154,0.35)',
+                }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-4 h-4"
+                >
+                  <path d="m8 6-6 6 6 6M16 6l6 6-6 6" />
+                </svg>
+              </span>
+              <span className="flex-1 min-w-0 truncate">Developer Portal</span>
+              <span className="hp-new-badge">New</span>
+              <svg
+                className={`hp-chevron ${expandedGroups.dev ? 'rotate-180' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
+            <div className="hp-sub-wrap">
+              <div className="hp-sub-inner">
+                <div className="hp-sub-list">
+                  {/* Zap API */}
+                  <div
+                    className={`hp-sub-item ${currentView === 'developer' ? 'active' : ''}`}
+                    onClick={() => handleNavClick('developer')}
+                  >
+                    <span
+                      className="hp-sub-icon"
+                      style={{ background: 'linear-gradient(135deg, #5b8dff, #3b6ce6)' }}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-3.5 h-3.5"
+                      >
+                        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                      </svg>
+                    </span>
+                    <span className="flex-1 min-w-0 truncate">Zap API</span>
+                  </div>
+
+                  {/* API Integration */}
+                  <div
+                    className="hp-sub-item"
+                    onClick={() => handleNavClick('developer')}
+                  >
+                    <span
+                      className="hp-sub-icon"
+                      style={{ background: 'linear-gradient(135deg, #a78bfa, #7c5cf0)' }}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-3.5 h-3.5"
+                      >
+                        <path d="M20 3H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1Z" />
+                        <path d="M8 10h8M8 14h5" />
+                      </svg>
+                    </span>
+                    <span className="flex-1 min-w-0 truncate">API Integration</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Store Portal Group */}
+          <div className={`hp-nav-group flex flex-col ${expandedGroups.store ? 'expanded' : ''}`}>
+            <div
+              className={`hp-nav-item ${expandedGroups.store ? 'expanded' : ''}`}
+              onClick={() => toggleGroup('store')}
+            >
+              <span
+                className="hp-nav-icon"
+                style={{
+                  background: 'linear-gradient(135deg, #ff4d8e, #d81f5f)',
+                  boxShadow: '0 4px 14px rgba(255,77,142,0.35)',
+                }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-4 h-4"
+                >
+                  <path d="M3 9 4.5 4h15L21 9" />
+                  <path d="M4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" />
+                  <path d="M9 13h6" />
+                </svg>
+              </span>
+              <span className="flex-1 min-w-0 truncate">Store Portal</span>
+              <span className="hp-new-badge">New</span>
+              <svg
+                className={`hp-chevron ${expandedGroups.store ? 'rotate-180' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
+            <div className="hp-sub-wrap">
+              <div className="hp-sub-inner">
+                <div className="hp-sub-list">
+                  {/* My Store */}
+                  <div
+                    className={`hp-sub-item ${currentView === 'store' ? 'active' : ''}`}
+                    onClick={() => handleNavClick('store')}
+                  >
+                    <span
+                      className="hp-sub-icon"
+                      style={{ background: 'linear-gradient(135deg, #ff4d8e, #d81f5f)' }}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-3.5 h-3.5"
+                      >
+                        <path d="M3 9 4.5 4h15L21 9" />
+                        <path d="M4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" />
+                      </svg>
+                    </span>
+                    <span className="flex-1 min-w-0 truncate">My Store</span>
+                  </div>
+
+                  {/* Customize Store */}
+                  <div
+                    className="hp-sub-item"
+                    onClick={() => handleNavClick('store')}
+                  >
+                    <span
+                      className="hp-sub-icon"
+                      style={{ background: 'linear-gradient(135deg, #a78bfa, #7c5cf0)' }}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-3.5 h-3.5"
+                      >
+                        <circle cx="13.5" cy="6.5" r="1.5" />
+                        <circle cx="17.5" cy="10.5" r="1.5" />
+                        <circle cx="8.5" cy="7.5" r="1.5" />
+                        <circle cx="6.5" cy="12.5" r="1.5" />
+                        <path d="M12 2a10 10 0 1 0 0 20c1 0 1.5-.5 1.5-1.5 0-.5-.2-.8-.5-1.2-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H16a6 6 0 0 0 6-6c0-4.4-4.5-8-10-8Z" />
+                      </svg>
+                    </span>
+                    <span className="flex-1 min-w-0 truncate">Customize Store</span>
+                    <svg
+                      className="w-3 h-3 text-[rgba(131,104,110,0.7)] flex-shrink-0"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="4" y="11" width="16" height="10" rx="2" />
+                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
+                  </div>
+
+                  {/* Store Settings */}
+                  <div
+                    className="hp-sub-item"
+                    onClick={() => handleNavClick('store')}
+                  >
+                    <span
+                      className="hp-sub-icon"
+                      style={{ background: 'linear-gradient(135deg, #5b8dff, #3b6ce6)' }}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-3.5 h-3.5"
+                      >
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+                      </svg>
+                    </span>
+                    <span className="flex-1 min-w-0 truncate">Store Settings</span>
+                    <svg
+                      className="w-3 h-3 text-[rgba(131,104,110,0.7)] flex-shrink-0"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="4" y="11" width="16" height="10" rx="2" />
+                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer actions: Account Settings & Sign Out */}
+        <div className="mt-auto pt-3 border-t border-[rgba(255,45,85,0.18)] flex flex-col gap-1">
+          <div
+            className={`hp-nav-item py-2 ${currentView === 'profile' ? 'active' : ''}`}
+            onClick={() => handleNavClick('profile')}
+          >
+            <span
+              className="hp-nav-icon w-7 h-7 rounded-lg text-slate-300"
+              style={{ background: 'rgba(255,255,255,0.06)' }}
+            >
+              <User className="w-3.5 h-3.5" />
+            </span>
+            <span className="flex-1 text-xs">Account Settings</span>
+          </div>
+
           <button
             onClick={onSignOut}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-rose-300 hover:text-white hover:bg-rose-950/20 active:scale-[0.98] transition-all"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-[rgba(255,180,195,0.8)] hover:text-white hover:bg-[rgba(255,30,75,0.12)] transition-all cursor-pointer"
           >
-            <LogOut className="w-4 h-4 shrink-0" />
-            <span>Sign out of Workspace</span>
+            <span
+              className="hp-nav-icon w-7 h-7 rounded-lg text-rose-400"
+              style={{ background: 'rgba(255,30,75,0.15)' }}
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </span>
+            <span className="flex-1 text-left">Sign Out</span>
           </button>
         </div>
       </aside>
