@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Menu, Bell, Smartphone, Plus, CheckCircle2, AlertCircle, Trash2, 
+  Smartphone, Plus, CheckCircle2, AlertCircle, Trash2, 
   ShieldCheck, ArrowRight, X, Mail, Check, Play, RefreshCw, Lock, Radio
 } from 'lucide-react';
 import { 
@@ -176,38 +176,6 @@ export default function FamPayConnectView({
 
   return (
     <div className="min-h-screen bg-[#070102] text-[#fff2f4] font-sans antialiased selection:bg-rose-500 selection:text-white">
-
-      {/* TOPBAR */}
-      <header className="sticky top-0 z-40 h-16 flex items-center justify-between px-5 bg-[#0b0204]/85 backdrop-blur-xl border-b border-[rgba(255,45,85,0.18)]">
-        <div className="flex items-center gap-2 min-w-[120px] sm:min-w-[180px]">
-          {onOpenSidebar && (
-            <button 
-              onClick={onOpenSidebar}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-[#b89fa5] hover:text-[#ff94a7] hover:bg-[rgba(255,30,75,0.08)] transition-all"
-              aria-label="Toggle Navigation"
-            >
-              <Menu className="w-5 h-5 stroke-[2.2]" />
-            </button>
-          )}
-        </div>
-
-        <div className="text-sm font-bold tracking-tight text-[#fff2f4]">
-          FamPay Connect
-        </div>
-
-        <div className="flex items-center justify-end gap-2 min-w-[120px] sm:min-w-[180px]">
-          <button 
-            onClick={() => onViewChange?.('notifications')}
-            className="relative w-9 h-9 rounded-xl flex items-center justify-center text-[#b89fa5] hover:text-[#ff94a7] hover:bg-[rgba(255,30,75,0.08)] transition-all"
-            aria-label="Notifications"
-          >
-            <Bell className="w-5 h-5 stroke-[2]" />
-            {unreadNotifications > 0 && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#ff1e4b] shadow-[0_0_8px_#ff1e4b] border-[1.5px] border-[#0b0204]" />
-            )}
-          </button>
-        </div>
-      </header>
 
       {/* MAIN CONTAINER */}
       <main className="max-w-[1300px] mx-auto px-4 sm:px-6 py-6 pb-20">
