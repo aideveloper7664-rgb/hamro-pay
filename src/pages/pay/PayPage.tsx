@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 const API_URL = 'https://hamropay-backends.onrender.com';
-const UPI_ID = '9769516928@fam';
+const DEFAULT_UPI_ID = '9769516928@fam';
 const DEFAULT_MERCHANT = 'MOHD MUKHTAR';
 const TOTAL_SECONDS = 8 * 60;
 
@@ -9,6 +9,7 @@ const PayPage: React.FC = () => {
   const [id, setId] = useState<string>('');
   const [data, setData] = useState<{ title?: string; amount?: number; merchant_name?: string; [key: string]: any } | null>(null);
   const [isLink, setIsLink] = useState<boolean>(false);
+  const [activeUpi, setActiveUpi] = useState<string>(DEFAULT_UPI_ID);
 
   // Timer
   const [remaining, setRemaining] = useState<number>(TOTAL_SECONDS);
@@ -76,12 +77,50 @@ const PayPage: React.FC = () => {
     fetch(fetchUrl)
       .then((res) => res.json())
       .then((resData) => {
+        let paymentData: any = null;
         if (resData?.success && resData?.data) {
-          setData(resData.data);
+          paymentData = resData.data;
         } else if (resData?.data) {
-          setData(resData.data);
+          paymentData = resData.data;
         } else if (resData?.amount) {
-          setData(resData);
+          paymentData = resData;
+        }
+
+        if (paymentData) {
+          setData(paymentData);
+
+          // Check if merchant has active cashier: GET /api/cashier/active
+          // Headers: x-api-key (use merchant's api_key from order data)
+          const merchantKey = paymentData.merchant_api_key 
+            || paymentData.api_key 
+            || paymentData.merchant?.api_key 
+            || paymentData.apiKey
+            || (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('hamropay_merchant') || '{}').api_key) : '');
+
+          if (merchantKey) {
+            fetch(`${API_URL}/api/cashier/active`, {
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': merchantKey,
+              },
+            })
+              .then((res) => res.json())
+              .then((cashierRes) => {
+                const cashier = cashierRes?.cashier || cashierRes?.data || cashierRes;
+                const upi = cashier?.upi_id || cashier?.upiId;
+                if (upi) {
+                  setActiveUpi(upi);
+                } else {
+                  setActiveUpi(DEFAULT_UPI_ID);
+                }
+              })
+              .catch((err) => {
+                console.error('Error fetching active cashier:', err);
+                setActiveUpi(DEFAULT_UPI_ID);
+              });
+          } else {
+            setActiveUpi(DEFAULT_UPI_ID);
+          }
         }
       })
       .catch((err) => {
@@ -127,7 +166,7 @@ const PayPage: React.FC = () => {
     showToast('New payment session started', 'info');
   };
 
-  const qrDataUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`;
+  const qrDataUrl = `upi://pay?pa=${activeUpi}&pn=MOHD MUKHTAR&am=${amount}&cu=INR`;
   const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=${encodeURIComponent(qrDataUrl)}&t=${qrTimestamp}`;
 
   const handleDownloadQr = async () => {
@@ -981,12 +1020,12 @@ const PayPage: React.FC = () => {
             {/* UPI & Merchant Info */}
             <div className="upi-info-box">
               <div className="upi-info-details">
-                <div className="upi-id-text">{UPI_ID}</div>
+                <div className="upi-id-text">{activeUpi}</div>
                 <div className="upi-merchant-text">{merchantName}</div>
               </div>
               <button
                 className="copy-upi-btn"
-                onClick={() => copyToClipboard(UPI_ID, 'UPI ID')}
+                onClick={() => copyToClipboard(activeUpi, 'UPI ID')}
                 title="Copy UPI ID"
               >
                 Copy ID

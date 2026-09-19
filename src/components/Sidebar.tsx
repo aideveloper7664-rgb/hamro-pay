@@ -30,7 +30,7 @@ export default function Sidebar({
 
   // Collapsible groups state - default collapsed so subsections do not open automatically
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    cashier: currentView === 'fampay',
+    cashier: currentView === 'fampay' || currentView === 'paytm',
     dev: currentView === 'developer',
     store: currentView === 'store',
   });
@@ -257,6 +257,31 @@ export default function Sidebar({
                         </svg>
                       </span>
                       <span className="flex-1 min-w-0 truncate">FamPay</span>
+                    </div>
+
+                    {/* Paytm */}
+                    <div
+                      className={`hp-sub-item ${currentView === 'paytm' ? 'active' : ''}`}
+                      onClick={() => handleNavClick('paytm')}
+                    >
+                      <span
+                        className="hp-sub-icon"
+                        style={{ background: 'linear-gradient(135deg, #00b9f5, #0072bc)' }}
+                      >
+                        <svg
+                          className="w-3.5 h-3.5"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect x="2" y="5" width="20" height="14" rx="2" />
+                          <line x1="2" y1="10" x2="22" y2="10" />
+                        </svg>
+                      </span>
+                      <span className="flex-1 min-w-0 truncate">Paytm</span>
                     </div>
                   </div>
                 </div>

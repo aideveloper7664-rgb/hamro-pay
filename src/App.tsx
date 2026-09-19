@@ -694,6 +694,7 @@ export default function App() {
             transactions={transactions}
             onAddFunds={() => setActiveModal('add_funds')}
             onViewChange={setCurrentView}
+            showToast={showToast}
           />
         );
       case 'transactions':
