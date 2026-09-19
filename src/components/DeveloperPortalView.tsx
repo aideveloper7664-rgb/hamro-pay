@@ -166,8 +166,8 @@ export default function DeveloperPortalView({
           </div>
         </div>
 
-        {/* Stat Cards */}
-        <div className="stats-grid">
+        {/* Stat Cards - 2 rows (2 cards per row) */}
+        <div className="stats-grid !grid-cols-1 sm:!grid-cols-2">
           <div className="stat-card" data-accent="blue">
             <div className="stat-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
