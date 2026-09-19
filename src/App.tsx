@@ -765,6 +765,9 @@ export default function App() {
             apiBaseUrl={apiBaseUrl}
             apiToken={apiToken}
             apiStatus={apiStatus}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            onViewChange={setCurrentView}
+            unreadNotifications={unreadNotificationsCount}
           />
         );
 

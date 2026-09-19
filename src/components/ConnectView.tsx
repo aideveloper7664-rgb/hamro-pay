@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CreditCard, Code, ShoppingBag, ShieldCheck, Cpu, CheckCircle2, AlertTriangle, Link as LinkIcon, Lock, Database, ArrowRight, Activity, Terminal } from 'lucide-react';
 import { getStatus } from '../services/fampay.service';
+import FamPayConnectView from './FamPayConnectView';
 
 interface ConnectViewProps {
   viewId: 'fampay' | 'developer' | 'store' | string;
@@ -9,6 +10,9 @@ interface ConnectViewProps {
   apiBaseUrl: string;
   apiToken: string;
   apiStatus: Record<string, { status: 'REAL' | 'SIMULATED'; route: string; error?: string }>;
+  onOpenSidebar?: () => void;
+  onViewChange?: (view: string) => void;
+  unreadNotifications?: number;
 }
 
 export default function ConnectView({ 
@@ -17,9 +21,24 @@ export default function ConnectView({
   isApiSimulated, 
   apiBaseUrl, 
   apiToken,
-  apiStatus 
+  apiStatus,
+  onOpenSidebar,
+  onViewChange,
+  unreadNotifications
 }: ConnectViewProps) {
   const isFamPay = viewId === 'fampay';
+
+  if (isFamPay) {
+    return (
+      <FamPayConnectView
+        showToast={showToast}
+        onOpenSidebar={onOpenSidebar}
+        onViewChange={onViewChange}
+        unreadNotifications={unreadNotifications}
+      />
+    );
+  }
+
   const isDeveloper = viewId === 'developer';
   const isStore = viewId === 'store';
   const [fampayConnected, setFampayConnected] = useState(false);

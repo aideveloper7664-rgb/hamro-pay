@@ -519,6 +519,120 @@ app.get('/api/referral', authGateway, (req: any, res) => {
 });
 
 // -------------------------------------------------------------
+// FAMPAY ACCOUNTS MANAGEMENT
+// -------------------------------------------------------------
+app.get('/api/fampay/accounts', authGateway, (req: any, res) => {
+  const db = getDb();
+  if (!db.fampayAccounts) db.fampayAccounts = [];
+  const accounts = db.fampayAccounts.filter((a: any) => a.userId === req.user.id);
+  res.json({ success: true, accounts });
+});
+
+app.post('/api/fampay/accounts', authGateway, (req: any, res) => {
+  const { phone, upiId, gmail, name } = req.body;
+  if (!phone || !upiId || !gmail) {
+    return res.status(400).json({ success: false, message: 'Phone, UPI ID, and Gmail are required.' });
+  }
+
+  const db = getDb();
+  if (!db.fampayAccounts) db.fampayAccounts = [];
+  const userAccounts = db.fampayAccounts.filter((a: any) => a.userId === req.user.id);
+
+  if (userAccounts.length >= 3) {
+    return res.status(400).json({ success: false, message: 'Maximum 3 FamPay accounts allowed.' });
+  }
+
+  const isFirst = userAccounts.length === 0;
+
+  const newAcc = {
+    id: 'fampay-' + Date.now(),
+    userId: req.user.id,
+    phone: phone.trim(),
+    upiId: upiId.trim(),
+    gmail: gmail.trim(),
+    name: name ? name.trim() : 'FamPay Merchant',
+    isGmailVerified: false,
+    isActive: false, // Must be Gmail verified before activated unless verified
+    createdAt: new Date().toISOString()
+  };
+
+  db.fampayAccounts.push(newAcc);
+  saveDb(db);
+
+  res.json({ success: true, account: newAcc, message: 'FamPay account added successfully. Please verify Gmail to activate.' });
+});
+
+app.post('/api/fampay/accounts/:id/activate', authGateway, (req: any, res) => {
+  const { id } = req.params;
+  const db = getDb();
+  if (!db.fampayAccounts) db.fampayAccounts = [];
+
+  const acc = db.fampayAccounts.find((a: any) => a.id === id && a.userId === req.user.id);
+  if (!acc) {
+    return res.status(404).json({ success: false, message: 'FamPay account not found.' });
+  }
+
+  if (!acc.isGmailVerified) {
+    return res.status(400).json({ success: false, message: 'Account must be Gmail verified before activation.' });
+  }
+
+  // Deactivate all other user accounts
+  db.fampayAccounts.forEach((a: any) => {
+    if (a.userId === req.user.id) {
+      a.isActive = (a.id === id);
+    }
+  });
+
+  saveDb(db);
+  res.json({ success: true, message: 'FamPay account set to active.' });
+});
+
+app.post('/api/fampay/accounts/:id/verify-gmail', authGateway, (req: any, res) => {
+  const { id } = req.params;
+  const db = getDb();
+  if (!db.fampayAccounts) db.fampayAccounts = [];
+
+  const acc = db.fampayAccounts.find((a: any) => a.id === id && a.userId === req.user.id);
+  if (!acc) {
+    return res.status(404).json({ success: false, message: 'FamPay account not found.' });
+  }
+
+  acc.isGmailVerified = true;
+  // If no other account is active, automatically activate this one
+  const activeAcc = db.fampayAccounts.find((a: any) => a.userId === req.user.id && a.isActive);
+  if (!activeAcc) {
+    acc.isActive = true;
+  }
+
+  saveDb(db);
+  res.json({ success: true, account: acc, message: 'Gmail verified successfully! Account is ready for checkout.' });
+});
+
+app.delete('/api/fampay/accounts/:id', authGateway, (req: any, res) => {
+  const { id } = req.params;
+  const db = getDb();
+  if (!db.fampayAccounts) db.fampayAccounts = [];
+
+  const idx = db.fampayAccounts.findIndex((a: any) => a.id === id && a.userId === req.user.id);
+  if (idx === -1) {
+    return res.status(404).json({ success: false, message: 'FamPay account not found.' });
+  }
+
+  const removed = db.fampayAccounts.splice(idx, 1)[0];
+  
+  // If removed account was active, set the first verified account as active
+  if (removed.isActive) {
+    const nextVerified = db.fampayAccounts.find((a: any) => a.userId === req.user.id && a.isGmailVerified);
+    if (nextVerified) {
+      nextVerified.isActive = true;
+    }
+  }
+
+  saveDb(db);
+  res.json({ success: true, message: 'FamPay account removed.' });
+});
+
+// -------------------------------------------------------------
 // VITE OR STATIC FILE HOOKS
 // -------------------------------------------------------------
 async function bootstrapServer() {
