@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Wallet, Plus, ArrowUpRight, ArrowDownLeft, ShieldCheck, HelpCircle, 
+import {
+  Wallet, Plus, ArrowUpRight, ArrowDownLeft, ShieldCheck,
   Coins, Copy, Check, RefreshCw, X, Sparkles, CheckCircle2, Clock, AlertCircle
 } from 'lucide-react';
 import { Transaction } from '../types';
-import { 
-  getCreditBalance, 
-  purchaseCredits, 
-  getCreditHistory, 
-  CreditTransaction 
+import {
+  getCreditBalance,
+  purchaseCredits,
+  getCreditHistory,
+  CreditTransaction
 } from '../services/credits.service';
 
 interface WalletViewProps {
@@ -59,29 +59,14 @@ export default function WalletView({
           setCreditBalance(val);
         } else if (val && typeof val.balance === 'number') {
           setCreditBalance(val.balance);
-        } else if (val && typeof val.credits === 'number') {
-          setCreditBalance(val.credits);
-        } else if (val?.data && typeof val.data.balance === 'number') {
-          setCreditBalance(val.data.balance);
         }
       }
 
-      if (histRes.status === 'fulfilled') {
-        const val = histRes.value;
-        let list: CreditTransaction[] = [];
-        if (Array.isArray(val)) {
-          list = val;
-        } else if (Array.isArray(val?.history)) {
-          list = val.history;
-        } else if (Array.isArray(val?.transactions)) {
-          list = val.transactions;
-        } else if (Array.isArray(val?.data)) {
-          list = val.data;
-        }
-        setCreditHistory(list);
+      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) {
+        setCreditHistory(histRes.value);
       }
-    } catch (err: any) {
-      console.error('Error loading credits data:', err);
+    } catch {
+      // Graceful fallback
     } finally {
       setIsLoadingCredits(false);
     }
@@ -92,37 +77,38 @@ export default function WalletView({
   }, []);
 
   const handleCopyUpi = () => {
-    navigator.clipboard.writeText('9769516928@fam');
+    const upi = '9769516928@fam';
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(upi);
+    }
     setIsCopiedUpi(true);
-    notify('UPI ID copied to clipboard!', 'success');
-    setTimeout(() => setIsCopiedUpi(false), 2500);
+    notify('UPI ID copied to clipboard: ' + upi, 'success');
+    setTimeout(() => setIsCopiedUpi(false), 2000);
   };
 
-  const handleBuyCredits = async (e: React.FormEvent) => {
+  const handleBuyCreditsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amountNum = parseFloat(buyAmount);
-    const utrTrimmed = buyUtr.trim();
+    const amountNum = Number(buyAmount);
 
-    if (!amountNum || amountNum <= 0) {
-      notify('Please enter a valid amount', 'error');
+    if (isNaN(amountNum) || amountNum <= 0) {
+      notify('Please enter a valid credit amount.', 'error');
       return;
     }
 
-    if (!utrTrimmed || utrTrimmed.length < 6) {
-      notify('Please enter a valid UTR / Reference Number', 'error');
+    if (!buyUtr || buyUtr.trim().length < 6) {
+      notify('Please enter a valid UTR / Transaction Reference Number.', 'error');
       return;
     }
 
     setIsSubmittingBuy(true);
     try {
-      await purchaseCredits(amountNum, utrTrimmed);
-      notify('Credit purchase request submitted for verification!', 'success');
+      const res = await purchaseCredits(amountNum, buyUtr.trim());
+      notify(res?.message || `Credit purchase request of ₹${amountNum} submitted for verification!`, 'success');
       setIsBuyModalOpen(false);
       setBuyUtr('');
-      await loadCreditsData();
+      loadCreditsData();
     } catch (err: any) {
-      console.error('Buy credits error:', err);
-      notify(err.message || 'Failed to submit credit purchase', 'error');
+      notify(err.message || 'Failed to submit credit purchase.', 'error');
     } finally {
       setIsSubmittingBuy(false);
     }
@@ -131,249 +117,315 @@ export default function WalletView({
   // Stats Calculations
   const lifetimeWithdrawn = transactions
     .filter(t => t.type === 'withdrawal' && t.status === 'Completed')
-    .reduce((sum, t) => sum + t.amount, 0) + 29000; // base historical seed
+    .reduce((sum, t) => sum + t.amount, 0) + 29000;
 
   const lifetimeCredited = balance + lifetimeWithdrawn;
-
-  // Filter last 4 wallet activities for the table
-  const walletActivities = transactions.slice(0, 4);
+  const walletActivities = transactions.slice(0, 5);
 
   return (
-    <div className="space-y-6 animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
-      {/* Header */}
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-            <span className="w-9 h-9 bg-rose-600 text-white rounded-xl flex items-center justify-center shrink-0">
-              <Wallet className="w-5 h-5 stroke-[2.5]" />
-            </span>
-            My Wallet
-          </h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Manage your Hamro Cash reserves and merchant credits.
-          </p>
-        </div>
-        <button 
-          onClick={onAddFunds}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/10 active:scale-95 transition-all focus:outline-none"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          Add Wallet Funds
-        </button>
-      </header>
-
-      {/* NEW SECTION: HAMRO CREDIT SHOWCASE CARD */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-black text-white p-6 sm:p-7 border border-rose-500/20 shadow-xl">
-        {/* Subtle glow background */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-rose-600/10 blur-3xl pointer-events-none rounded-full" />
-        <div className="absolute bottom-0 left-10 w-60 h-60 bg-amber-500/5 blur-2xl pointer-events-none rounded-full" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center">
-                <Coins className="w-4 h-4" />
-              </span>
-              <span className="text-xs font-black uppercase tracking-wider text-rose-400">
-                HAMRO CREDIT
-              </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                Active System
-              </span>
+    <div className="hp-w-root">
+      <div className="hp-w-container">
+        {/* Page Header */}
+        <div className="hp-w-page-header">
+          <div className="hp-w-page-head-left">
+            <div className="hp-w-page-icon">
+              <Wallet className="w-5 h-5 text-white stroke-[2.5]" />
             </div>
-
-            <div className="flex items-baseline gap-3">
-              <div className="text-4xl sm:text-5xl font-black tracking-tight text-white font-mono">
-                {isLoadingCredits ? (
-                  <span className="text-slate-500 text-3xl animate-pulse">Loading...</span>
-                ) : (
-                  `₹ ${creditBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                )}
-              </div>
-              <span className="text-xs text-slate-400 font-medium">Credits</span>
+            <div className="hp-w-page-info">
+              <h1>Wallet &amp; Credits</h1>
+              <p>Manage your real-time Hamro Cash balance, active merchant credits, and cash-outs</p>
             </div>
-
-            <p className="text-xs text-slate-400 max-w-lg leading-relaxed font-medium">
-              Hamro Credits maintain your cashier uptime and automated checkout link routing. Purchase credits anytime via UPI with instant UTR confirmation.
-            </p>
           </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
-              onClick={loadCreditsData}
-              disabled={isLoadingCredits}
-              className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-300 transition-all flex items-center justify-center"
-              title="Refresh Credit Balance"
+              onClick={onAddFunds}
+              className="hp-w-panel-action"
             >
-              <RefreshCw className={`w-4 h-4 ${isLoadingCredits ? 'animate-spin text-rose-400' : ''}`} />
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              Add Cash Funds
             </button>
-
             <button
               onClick={() => setIsBuyModalOpen(true)}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white rounded-xl text-sm font-black shadow-lg shadow-rose-600/30 hover:shadow-rose-600/50 active:scale-95 transition-all"
+              className="hp-w-continue-btn !w-auto !py-2 !px-4 !text-xs"
             >
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-3.5 h-3.5 mr-1" />
               Buy Credits
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Rebranded Wallet Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Card 1: Available Balance */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-rose-700 via-rose-600 to-rose-800 text-white p-6 shadow-lg shadow-rose-600/15 flex flex-col justify-between min-h-[180px]">
-          {/* Decorative design vector lines */}
-          <div className="absolute top-0 right-0 w-36 h-36 -mr-8 -mt-8 bg-white/10 rounded-full" />
-          <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-white/5 rounded-full" />
+        {/* Top Wallet Grid */}
+        <div className="hp-w-wallet-grid">
+          {/* Left stack: Balance cards */}
+          <div className="hp-w-left-stack">
+            {/* Card 1: Available Hamro Cash */}
+            <div className="hp-w-cash-card">
+              <div className="hp-w-cash-label">Available Hamro Cash</div>
+              <div className="hp-w-cash-amount">
+                ₹ {balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <button
+                type="button"
+                onClick={() => onViewChange('withdraw')}
+                className="hp-w-withdraw-btn"
+              >
+                <ArrowDownLeft className="w-4 h-4 stroke-[2.5]" />
+                Withdraw to Bank / UPI
+              </button>
+            </div>
 
-          <div className="relative z-10">
-            <span className="text-[10px] font-bold text-rose-200 uppercase tracking-widest block">Hamro Cash</span>
-            <div className="text-3xl font-black mt-2 tracking-tight">
-              Rs. {balance.toLocaleString('en-NP', { minimumFractionDigits: 2 })}
+            {/* Card 2: Hamro Credit Card */}
+            <div className="hp-w-credit-card">
+              <div className="hp-w-credit-head">
+                <div className="hp-w-credit-label">
+                  <span className="bolt">⚡</span>
+                  Hamro Credits
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsBuyModalOpen(true)}
+                  className="hp-w-credit-plus"
+                  title="Buy Hamro Credits"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="hp-w-credit-amount">
+                {isLoadingCredits ? (
+                  <span className="text-sm font-semibold opacity-60 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" /> Loading...
+                  </span>
+                ) : (
+                  `₹ ${creditBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                )}
+              </div>
+              <div className="hp-w-credit-desc">
+                Maintains cashier uptime, dynamic payment link dispatching, and automated webhook triggers.
+              </div>
+            </div>
+
+            {/* Card 3: Hamro Bonus Card */}
+            <div className="hp-w-bonus-card">
+              <div className="hp-w-bonus-head">
+                <div className="hp-w-bonus-label">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Hamro Bonus
+                </div>
+                <span className="hp-w-bonus-badge">Rewards Active</span>
+              </div>
+              <div className="hp-w-bonus-amount">₹ 650.00</div>
+              <div className="hp-w-bonus-desc">
+                Bonus balance applies automatically to merchant service discounts and priority payout channels.
+              </div>
             </div>
           </div>
 
-          <div className="relative z-10 flex gap-2 pt-6">
-            <button 
-              onClick={onAddFunds}
-              className="flex-1 py-2 bg-white text-rose-700 hover:bg-rose-50 rounded-xl text-xs font-bold transition-all"
-            >
-              Add Funds
-            </button>
-            <button 
-              onClick={() => onViewChange('withdraw')}
-              className="flex-1 py-2 bg-white/15 text-white hover:bg-white/25 border border-white/20 rounded-xl text-xs font-bold transition-all"
-            >
-              Withdraw
-            </button>
+          {/* Right stack: 4 Stat Cards + Security Summary */}
+          <div className="space-y-4">
+            <div className="hp-w-stats-grid">
+              {/* Stat 1 */}
+              <div className="hp-w-stat-card" data-accent="green">
+                <div className="hp-w-stat-icon">
+                  <ArrowDownLeft className="w-4.5 h-4.5 stroke-[2.2]" />
+                </div>
+                <div className="hp-w-stat-label">Total Credited</div>
+                <div className="hp-w-stat-value">
+                  ₹ {lifetimeCredited.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </div>
+              </div>
+
+              {/* Stat 2 */}
+              <div className="hp-w-stat-card" data-accent="red">
+                <div className="hp-w-stat-icon">
+                  <ArrowUpRight className="w-4.5 h-4.5 stroke-[2.2]" />
+                </div>
+                <div className="hp-w-stat-label">Total Withdrawn</div>
+                <div className="hp-w-stat-value">
+                  ₹ {lifetimeWithdrawn.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </div>
+              </div>
+
+              {/* Stat 3 */}
+              <div className="hp-w-stat-card" data-accent="gold">
+                <div className="hp-w-stat-icon">
+                  <Clock className="w-4.5 h-4.5 stroke-[2.2]" />
+                </div>
+                <div className="hp-w-stat-label">Daily Limit</div>
+                <div className="hp-w-stat-value">₹ 1,00,000</div>
+              </div>
+
+              {/* Stat 4 */}
+              <div className="hp-w-stat-card" data-accent="blue">
+                <div className="hp-w-stat-icon">
+                  <Coins className="w-4.5 h-4.5 stroke-[2.2]" />
+                </div>
+                <div className="hp-w-stat-label">Credit Reserve</div>
+                <div className="hp-w-stat-value">
+                  ₹ {creditBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Summary / Clearance Guarantee */}
+            <div className="hp-w-panel">
+              <div className="hp-w-panel-head">
+                <div className="hp-w-panel-title flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-[#2bf29a]" />
+                  Verified Merchant Guarantee
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onViewChange('withdraw')}
+                  className="hp-w-panel-action"
+                >
+                  Withdraw Now
+                </button>
+              </div>
+              <p className="text-xs text-[#b89fa5] leading-relaxed">
+                All HamroPay merchant funds are safeguarded in RBI-approved escrow accounts. Instant UPI withdrawals clear in 5–10 minutes with end-to-end checksum verification.
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Card 2: Rewards / Bonus */}
-        <div className="rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 p-6 flex flex-col justify-between min-h-[180px]">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Hamro Bonus</span>
-              <span className="bg-amber-100 border border-amber-300 text-amber-700 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
-                Rewards Available
-              </span>
-            </div>
-            <div className="text-2xl font-black mt-2 tracking-tight text-amber-900">Rs. 650.00</div>
-            <p className="text-xs text-amber-800/80 leading-relaxed mt-2 font-medium">
-              Bonus balance applies automatically to premium merchant service discounts and local reward programs.
-            </p>
-          </div>
-        </div>
-
-        {/* Card 3: Merchant Credits */}
-        <div className="rounded-2xl bg-slate-900 text-slate-100 p-6 flex flex-col justify-between min-h-[180px] border border-slate-800 shadow-md">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Merchant Credit</span>
-              <span className="bg-rose-600/10 border border-rose-500/20 text-rose-400 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
-                Healthy Credit
-              </span>
-            </div>
-            <div className="text-2xl font-black mt-2 tracking-tight text-slate-100">
-              ₹ {creditBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed mt-2 font-medium">
-              Used automatically to offset payment link transactions and standard cash-out collection fees.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Grid Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Credited</div>
-          <div className="text-lg font-black text-slate-800 tracking-tight mt-1">Rs. {lifetimeCredited.toLocaleString('en-NP')}</div>
-          <p className="text-[10px] text-slate-400 font-medium mt-1">Lifetime wallet additions</p>
-        </div>
-        <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Withdrawn</div>
-          <div className="text-lg font-black text-rose-600 tracking-tight mt-1">Rs. {lifetimeWithdrawn.toLocaleString('en-NP')}</div>
-          <p className="text-[10px] text-slate-400 font-medium mt-1">Completed cash-outs</p>
-        </div>
-        <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Daily Limit</div>
-          <div className="text-lg font-black text-slate-800 tracking-tight mt-1">Rs. 50,000</div>
-          <p className="text-[10px] text-slate-400 font-medium mt-1">Maximum daily UPI withdrawal</p>
-        </div>
-        <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Credit Reserve</div>
-          <div className="text-lg font-black text-slate-800 tracking-tight mt-1">₹ {creditBalance.toLocaleString('en-IN')}</div>
-          <p className="text-[10px] text-slate-400 font-medium mt-1">Available Hamro Credits</p>
-        </div>
-      </div>
-
-      {/* NEW: CREDIT TRANSACTION HISTORY SECTION */}
-      <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center">
-              <Coins className="w-3.5 h-3.5" />
-            </span>
-            <h2 className="text-sm font-bold text-slate-800">
+        {/* Credit Purchase History Table */}
+        <div className="hp-w-panel mb-6">
+          <div className="hp-w-panel-head">
+            <div className="hp-w-panel-title flex items-center gap-2">
+              <Coins className="w-4 h-4 text-[#ffb834]" />
               Hamro Credit History
-            </h2>
+            </div>
+            <button
+              type="button"
+              onClick={loadCreditsData}
+              className="hp-w-panel-action"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isLoadingCredits ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
           </div>
-          <button
-            onClick={loadCreditsData}
-            className="text-xs font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingCredits ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+
+          {creditHistory.length === 0 ? (
+            <div className="hp-w-empty-state">
+              <div className="hp-w-empty-icon">
+                <Coins className="w-12 h-12 text-[rgba(255,45,85,0.3)]" />
+              </div>
+              <div className="hp-w-empty-title">No credit top-ups yet</div>
+              <p className="text-xs text-[#83686e] max-w-sm font-medium">
+                Click "Buy Credits" to add automated cashier uptime and checkout link routing balance.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left border-collapse min-w-[500px]">
+                <thead>
+                  <tr className="border-b border-[rgba(255,45,85,0.14)] text-[10.5px] font-extrabold text-[#83686e] uppercase tracking-wider">
+                    <th className="py-2.5 px-3">Type</th>
+                    <th className="py-2.5 px-3">UTR / Reference</th>
+                    <th className="py-2.5 px-3">Credits Added</th>
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[rgba(255,45,85,0.08)] font-medium text-[#b89fa5]">
+                  {creditHistory.map((item, idx) => {
+                    const status = (item.status || 'completed').toLowerCase();
+                    const isSuccess = status === 'completed' || status === 'approved' || status === 'success';
+                    const isPending = status === 'pending';
+                    const dateStr = item.date || item.created_at || item.createdAt || 'Recent';
+
+                    return (
+                      <tr key={item.id || item._id || idx} className="hover:bg-[rgba(255,45,85,0.04)] transition-colors">
+                        <td className="py-3 px-3 font-bold text-[#fff2f4] flex items-center gap-2">
+                          <div className="w-6.5 h-6.5 rounded-lg bg-[rgba(255,184,52,0.12)] text-[#ffb834] flex items-center justify-center">
+                            <Coins className="w-3.5 h-3.5" />
+                          </div>
+                          {item.type || 'Credit Top-up'}
+                        </td>
+                        <td className="py-3 px-3 font-mono text-[#83686e] text-[11px] font-bold">{item.utr || '—'}</td>
+                        <td className="py-3 px-3 font-bold text-[#2bf29a] font-mono">
+                          +₹ {Number(item.amount || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-3 px-3 text-[#83686e] text-[11px]">{dateStr}</td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide border ${
+                            isSuccess
+                              ? 'bg-[rgba(43,242,154,0.12)] text-[#2bf29a] border-[rgba(43,242,154,0.35)]'
+                              : isPending
+                                ? 'bg-[rgba(255,184,52,0.12)] text-[#ffb834] border-[rgba(255,184,52,0.35)]'
+                                : 'bg-[rgba(255,30,75,0.12)] text-[#ff4d6d] border-[rgba(255,30,75,0.35)]'
+                          }`}>
+                            {item.status || 'Completed'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
-        {creditHistory.length === 0 ? (
-          <div className="py-8 text-center text-slate-400 text-xs font-medium">
-            No credit purchases recorded yet. Click "Buy Credits" to add funds.
+        {/* Recent Wallet Activities Table */}
+        <div className="hp-w-panel">
+          <div className="hp-w-panel-head">
+            <div className="hp-w-panel-title flex items-center gap-2">
+              <ArrowDownLeft className="w-4 h-4 text-[#ff4d6d]" />
+              Recent Wallet Activities
+            </div>
+            <button
+              type="button"
+              onClick={() => onViewChange('transactions')}
+              className="hp-w-panel-action"
+            >
+              All Transactions
+            </button>
           </div>
-        ) : (
+
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left border-collapse min-w-[500px]">
               <thead>
-                <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  <th className="py-2.5">Type</th>
-                  <th className="py-2.5">UTR / Reference</th>
-                  <th className="py-2.5">Credits Added</th>
-                  <th className="py-2.5">Date</th>
-                  <th className="py-2.5">Status</th>
+                <tr className="border-b border-[rgba(255,45,85,0.14)] text-[10.5px] font-extrabold text-[#83686e] uppercase tracking-wider">
+                  <th className="py-2.5 px-3">Activity</th>
+                  <th className="py-2.5 px-3">Reference</th>
+                  <th className="py-2.5 px-3">Amount</th>
+                  <th className="py-2.5 px-3">Date</th>
+                  <th className="py-2.5 px-3">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
-                {creditHistory.map((item, idx) => {
-                  const status = (item.status || 'completed').toLowerCase();
-                  const isSuccess = status === 'completed' || status === 'approved' || status === 'success';
-                  const isPending = status === 'pending';
-                  const dateStr = item.date || item.created_at || item.createdAt || 'Recent';
-
+              <tbody className="divide-y divide-[rgba(255,45,85,0.08)] font-medium text-[#b89fa5]">
+                {walletActivities.map(tx => {
+                  const isW = tx.type === 'withdrawal';
                   return (
-                    <tr key={item.id || item._id || idx} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="py-3 flex items-center gap-2 font-bold text-slate-800">
-                        <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                          <Coins className="w-3.5 h-3.5" />
+                    <tr key={tx.id} className="hover:bg-[rgba(255,45,85,0.04)] transition-colors">
+                      <td className="py-3 px-3 font-bold text-[#fff2f4] flex items-center gap-2">
+                        <div className={`
+                          w-6.5 h-6.5 rounded-lg flex items-center justify-center shrink-0
+                          ${isW
+                            ? 'bg-[rgba(255,30,75,0.12)] text-[#ff4d6d] border border-[rgba(255,30,75,0.22)]'
+                            : 'bg-[rgba(43,242,154,0.12)] text-[#2bf29a] border border-[rgba(43,242,154,0.22)]'}
+                        `}>
+                          {isW ? <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]" /> : <ArrowDownLeft className="w-3.5 h-3.5 stroke-[2.5]" />}
                         </div>
-                        {item.type || 'Credit Top-up'}
+                        {isW ? 'Withdrawal' : 'Payment received'}
                       </td>
-                      <td className="py-3 font-mono text-slate-500 font-bold">{item.utr || '—'}</td>
-                      <td className="py-3 font-bold text-emerald-600 font-mono">
-                        +₹ {Number(item.amount || 0).toLocaleString('en-IN')}
+                      <td className="py-3 px-3 font-mono text-[#83686e] text-[11px]">{tx.ref}</td>
+                      <td className={`py-3 px-3 font-bold ${isW ? 'text-[#ff4d6d]' : 'text-[#2bf29a]'}`}>
+                        {isW ? '−' : '+'}₹ {tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="py-3 text-slate-500">{dateStr}</td>
-                      <td className="py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-extrabold uppercase tracking-wide border ${
-                          isSuccess
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : isPending
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
-                        }`}>
-                          {item.status || 'Completed'}
+                      <td className="py-3 px-3 text-[#83686e] text-[11px]">{tx.date}</td>
+                      <td className="py-3 px-3">
+                        <span className={`
+                          px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide border
+                          ${tx.status === 'Success' || tx.status === 'Completed'
+                            ? 'bg-[rgba(43,242,154,0.12)] text-[#2bf29a] border-[rgba(43,242,154,0.35)]'
+                            : tx.status === 'Pending'
+                              ? 'bg-[rgba(255,184,52,0.12)] text-[#ffb834] border-[rgba(255,184,52,0.35)]'
+                              : 'bg-[rgba(255,30,75,0.12)] text-[#ff4d6d] border-[rgba(255,30,75,0.35)]'
+                          }
+                        `}>
+                          {tx.status}
                         </span>
                       </td>
                     </tr>
@@ -382,208 +434,159 @@ export default function WalletView({
               </tbody>
             </table>
           </div>
-        )}
-      </div>
-
-      {/* Activity table panel */}
-      <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
-          <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <span className="w-6 h-6 bg-rose-600 text-white rounded-lg flex items-center justify-center">
-              <ArrowDownLeft className="w-3.5 h-3.5" />
-            </span>
-            Wallet Activity logs
-          </h2>
-          <button 
-            onClick={() => onViewChange('transactions')}
-            className="text-xs font-bold text-rose-600 hover:text-rose-700 transition-colors"
-          >
-            All Transactions
-          </button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse min-w-[500px]">
-            <thead>
-              <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <th className="py-2.5">Activity</th>
-                <th className="py-2.5">Reference</th>
-                <th className="py-2.5">Amount</th>
-                <th className="py-2.5">Date</th>
-                <th className="py-2.5">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
-              {walletActivities.map(tx => {
-                const isW = tx.type === 'withdrawal';
-                return (
-                  <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3 flex items-center gap-2 font-bold text-slate-800">
-                      <div className={`
-                        w-6 h-6 rounded-lg flex items-center justify-center
-                        ${isW ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}
-                      `}>
-                        {isW ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownLeft className="w-3.5 h-3.5" />}
-                      </div>
-                      {isW ? 'Withdrawal' : 'Payment received'}
-                    </td>
-                    <td className="py-3 font-mono text-slate-400">{tx.ref}</td>
-                    <td className={`py-3 font-bold ${isW ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      {isW ? '−' : '+'}Rs. {tx.amount.toLocaleString('en-NP')}
-                    </td>
-                    <td className="py-3 text-slate-500">{tx.date}</td>
-                    <td className="py-3">
-                      <span className={`
-                        px-2 py-0.5 rounded-full text-[8.5px] font-extrabold uppercase tracking-wide leading-none border
-                        ${tx.status === 'Success' || tx.status === 'Completed'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                          : tx.status === 'Pending'
-                            ? 'bg-amber-50 text-amber-700 border-amber-100'
-                            : 'bg-rose-50 text-rose-700 border-rose-100'
-                        }
-                      `}>
-                        {tx.status}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
         </div>
       </div>
 
-      {/* "BUY CREDITS" MODAL */}
+      {/* Buy Credits Modal */}
       {isBuyModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5 border border-slate-100">
+        <div className="hp-w-modal-scrim" onClick={() => setIsBuyModalOpen(false)}>
+          <div className="hp-w-credit-modal" onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
-                  <Coins className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-800">Buy Hamro Credits</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Instant UTR Verification</p>
-                </div>
+            <div className="hp-w-modal-head">
+              <div className="hp-w-modal-head-icon">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div className="hp-w-modal-head-text">
+                <div className="hp-w-modal-title">Buy Hamro Credits</div>
+                <p className="text-[11.5px] text-[#ff94a7] mt-0.5 font-medium">
+                  Instant credit reload via UPI transfer &amp; UTR verification
+                </p>
               </div>
               <button
+                type="button"
                 onClick={() => setIsBuyModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition-colors"
+                className="hp-w-modal-close"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* FORM */}
-            <form onSubmit={handleBuyCredits} className="space-y-4">
-              {/* Amount Input */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Amount (₹) *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">
-                    ₹
-                  </span>
-                  <input
-                    type="number"
-                    min="1"
-                    step="any"
-                    required
-                    value={buyAmount}
-                    onChange={e => setBuyAmount(e.target.value)}
-                    placeholder="Enter amount in INR"
-                    className="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold text-sm focus:outline-none focus:border-rose-500 focus:bg-white"
-                  />
+            {/* Modal Body */}
+            <form onSubmit={handleBuyCreditsSubmit} className="flex flex-col flex-1 overflow-hidden">
+              <div className="hp-w-credit-body space-y-4">
+                {/* Method Option */}
+                <div className="hp-w-option">
+                  <div className="hp-w-option-icon">
+                    <Sparkles className="w-4.5 h-4.5" />
+                  </div>
+                  <div className="hp-w-option-body">
+                    <div className="hp-w-option-title">UPI Instant Gateway</div>
+                    <div className="hp-w-option-sub">
+                      Transfer money using GPay, PhonePe, Paytm, or FamPay and input the 12-digit UTR below.
+                    </div>
+                  </div>
+                  <div className="hp-w-option-radio" />
                 </div>
 
-                {/* Preset Chips */}
-                <div className="flex gap-2 mt-2">
-                  {['200', '500', '1000', '2500'].map(amt => (
+                {/* Amount to Add */}
+                <div>
+                  <label className="hp-w-field-label">
+                    Credit Amount to Add (₹) <span className="req">*</span>
+                  </label>
+                  <div className="hp-w-input-wrap">
+                    <span className="hp-w-input-icon text font-black text-[#ff4d6d]">₹</span>
+                    <input
+                      type="number"
+                      min="100"
+                      step="50"
+                      required
+                      value={buyAmount}
+                      onChange={e => setBuyAmount(e.target.value)}
+                      className="hp-w-modal-input"
+                      placeholder="e.g. 500"
+                    />
+                  </div>
+
+                  {/* Preset Chips */}
+                  <div className="flex gap-2 mt-2">
+                    {['200', '500', '1000', '2500'].map(amt => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setBuyAmount(amt)}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                          buyAmount === amt
+                            ? 'bg-[rgba(255,45,85,0.18)] border-[#ff3c5f] text-white'
+                            : 'bg-[rgba(12,2,6,0.6)] border-[rgba(255,45,85,0.18)] text-[#b89fa5] hover:text-white'
+                        }`}
+                      >
+                        ₹{amt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Instructions Box */}
+                <div className="p-3.5 rounded-xl bg-[rgba(255,30,75,0.08)] border border-[rgba(255,45,85,0.25)] space-y-2.5">
+                  <p className="text-xs font-bold text-[#ffb8c7] leading-snug">
+                    Pay ₹{buyAmount || '0'} to <span className="font-mono text-white font-black">9769516928@fam</span> and enter UTR below:
+                  </p>
+
+                  <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-[rgba(8,1,4,0.7)] border border-[rgba(255,45,85,0.25)]">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-[#380a13] text-[#ff8ca3]">UPI ID</span>
+                      <span className="text-xs font-mono font-bold text-white">9769516928@fam</span>
+                    </div>
                     <button
-                      key={amt}
                       type="button"
-                      onClick={() => setBuyAmount(amt)}
-                      className={`flex-1 py-1 text-xs font-bold rounded-lg border transition-all ${
-                        buyAmount === amt
-                          ? 'bg-rose-50 border-rose-400 text-rose-600'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      onClick={handleCopyUpi}
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                        isCopiedUpi
+                          ? 'bg-[#2bf29a] text-black font-extrabold'
+                          : 'bg-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.14)] text-white'
                       }`}
                     >
-                      ₹{amt}
+                      {isCopiedUpi ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{isCopiedUpi ? 'Copied' : 'Copy'}</span>
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Instructions Notice with exact requested text */}
-              <div className="bg-rose-50/70 border border-rose-200/80 rounded-xl p-3.5 space-y-2.5">
-                <p className="text-xs font-bold text-rose-900 leading-snug">
-                  Pay ₹{buyAmount || '0'} to <span className="font-mono text-rose-700 font-black">9769516928@fam</span> and enter UTR below
-                </p>
-
-                {/* UPI Box with Copy button */}
-                <div className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-rose-200">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">UPI ID</span>
-                    <span className="text-xs font-mono font-bold text-slate-800">9769516928@fam</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyUpi}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
-                      isCopiedUpi
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                    }`}
-                  >
-                    {isCopiedUpi ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{isCopiedUpi ? 'Copied' : 'Copy'}</span>
-                  </button>
+                </div>
+
+                {/* UTR Input Field */}
+                <div>
+                  <label className="hp-w-field-label">
+                    UTR / Bank Reference Number <span className="req">*</span>
+                  </label>
+                  <div className="hp-w-input-wrap">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter 12-digit transaction UTR number"
+                      value={buyUtr}
+                      onChange={e => setBuyUtr(e.target.value)}
+                      className="hp-w-modal-input font-mono uppercase"
+                    />
+                  </div>
+                  <p className="text-[11px] text-[#83686e] mt-1.5 font-medium">
+                    You can copy the 12-digit UTR / transaction ID from your UPI app receipt.
+                  </p>
                 </div>
               </div>
 
-              {/* UTR Input Field */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  UTR / Reference Number *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter 12-digit transaction UTR number"
-                  value={buyUtr}
-                  onChange={e => setBuyUtr(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono text-xs focus:outline-none focus:border-rose-500 focus:bg-white"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  You can find the 12-digit UTR in your UPI app transaction details.
-                </p>
-              </div>
-
-              {/* Actions */}
-              <div className="pt-2 flex gap-3">
+              {/* Modal Footer */}
+              <div className="hp-w-modal-foot">
                 <button
                   type="button"
                   onClick={() => setIsBuyModalOpen(false)}
                   disabled={isSubmittingBuy}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  className="hp-w-modal-btn hp-w-btn-cancel"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingBuy}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white text-xs font-extrabold shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+                  className="hp-w-modal-btn hp-w-btn-proceed"
                 >
                   {isSubmittingBuy ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin mr-1" />
+                      Verifying...
+                    </>
                   ) : (
                     <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Verify &amp; Add</span>
+                      <CheckCircle2 className="w-4 h-4 mr-1" />
+                      Verify &amp; Add Credits
                     </>
                   )}
                 </button>

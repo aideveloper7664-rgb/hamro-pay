@@ -710,6 +710,7 @@ export default function App() {
             balance={balance}
             onWithdrawSubmit={handleWithdrawalSubmit}
             showToast={showToast}
+            onViewChange={setCurrentView}
           />
         );
       case 'notifications':
@@ -997,10 +998,10 @@ export default function App() {
         onClose={() => setActiveModal(null)}
         title={
           <span className="flex items-center gap-2">
-            <span className="w-6.5 h-6.5 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center">
-              <Wallet className="w-3.5 h-3.5" />
+            <span className="w-7 h-7 bg-gradient-to-br from-[#ff1e4b] to-[#b30e30] text-white rounded-lg flex items-center justify-center shadow-md shadow-[#ff1e4b]/20">
+              <Wallet className="w-3.5 h-3.5 stroke-[2.2]" />
             </span>
-            Add Wallet Funds
+            <span>Add Wallet Cash Funds</span>
           </span>
         }
         footer={
@@ -1013,9 +1014,9 @@ export default function App() {
             </button>
             <button 
               onClick={handleConfirmAddFunds}
-              className="px-4 py-2 bg-emerald-650 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md active:scale-95 outline-none"
+              className="px-4 py-2 bg-gradient-to-r from-[#ff1e4b] to-[#d8153d] hover:from-[#ff3c63] hover:to-[#ff1e4b] text-white rounded-xl text-xs font-bold shadow-md shadow-[#ff1e4b]/30 active:scale-95 outline-none"
             >
-              Confirm Top-Up
+              Confirm Deposit
             </button>
           </>
         }
@@ -1023,22 +1024,38 @@ export default function App() {
         <div className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="fundAmount" className="block text-xs font-bold text-slate-700 uppercase">
-              Amount to Deposit (Rs.)
+              Amount to Deposit (₹)
             </label>
-            <input
-              id="fundAmount"
-              type="number"
-              min="100"
-              placeholder="Minimum Rs. 100"
-              value={modalFundAmount}
-              onChange={(e) => setModalFundAmount(e.target.value)}
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-rose-500 focus:outline-none transition-all font-semibold"
-              required
-            />
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 font-bold text-slate-400">₹</span>
+              <input
+                id="fundAmount"
+                type="number"
+                min="100"
+                placeholder="Minimum ₹ 100"
+                value={modalFundAmount}
+                onChange={(e) => setModalFundAmount(e.target.value)}
+                className="w-full text-xs pl-8 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-[#ff1e4b] focus:outline-none transition-all font-semibold"
+                required
+              />
+            </div>
+            {/* Quick preset chips */}
+            <div className="flex gap-2 pt-1">
+              {[500, 1000, 2500, 5000].map(amt => (
+                <button
+                  key={amt}
+                  type="button"
+                  onClick={() => setModalFundAmount(amt.toString())}
+                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 hover:border-[#ff1e4b]/40 hover:text-[#ff1e4b] text-slate-600 bg-slate-50 transition-all"
+                >
+                  ₹{amt}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex gap-2.5 bg-sky-50 border border-sky-100 text-sky-900/80 rounded-xl p-3 text-xs leading-normal font-semibold">
-            <Info className="w-4.5 h-4.5 text-sky-600 shrink-0 mt-0.5" />
+          <div className="flex gap-2.5 bg-rose-50/70 border border-rose-100 text-rose-900/90 rounded-xl p-3 text-xs leading-normal font-medium">
+            <Info className="w-4.5 h-4.5 text-[#ff1e4b] shrink-0 mt-0.5" />
             <span>
               This triggers a demo wallet funding sandbox transaction. Funds will appear instantly on your on-screen cash reserves.
             </span>
