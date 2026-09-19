@@ -54,10 +54,10 @@ export default function Sidebar({
 
   return (
     <>
-      {/* Mobile Backdrop Overlay */}
+      {/* Backdrop Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-xs z-40 md:hidden"
+          className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 transition-opacity duration-300"
           onClick={onClose}
         />
       )}
@@ -65,15 +65,15 @@ export default function Sidebar({
       {/* Main Sidebar */}
       <aside
         className={`
-          sidebar ${isOpen ? 'open' : ''} hp-sidebar fixed md:sticky top-0 left-0 z-50
-          transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
+          sidebar ${isOpen ? 'open' : ''} hp-sidebar fixed top-0 left-0 z-50
+          transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           transition-transform duration-300 ease-in-out
-          flex-shrink-0 select-none
+          flex-shrink-0 select-none shadow-[10px_0_40px_rgba(0,0,0,0.85)]
         `}
       >
         <div className="hp-sidebar-inner flex flex-col h-full">
-          {/* Mobile close button header */}
-          <div className="flex md:hidden items-center justify-between pb-3 mb-2 border-b border-[rgba(255,45,85,0.18)] shrink-0">
+          {/* Close button header */}
+          <div className="flex items-center justify-between pb-3 mb-2 border-b border-[rgba(255,45,85,0.18)] shrink-0">
             <div className="text-xs font-bold uppercase tracking-wider text-[rgba(255,242,244,0.7)]">
               Navigation
             </div>
@@ -826,7 +826,10 @@ export default function Sidebar({
             {/* Sign Out */}
             <div
               className="hp-nav-item"
-              onClick={onSignOut}
+              onClick={() => {
+                onClose();
+                onSignOut();
+              }}
             >
               <span
                 className="hp-nav-icon"

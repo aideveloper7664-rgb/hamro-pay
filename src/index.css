@@ -428,17 +428,27 @@
   width: 300px;
   flex-shrink: 0;
   height: 100vh;
-  position: sticky;
+  position: fixed;
+  left: 0;
   top: 0;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 100;
   padding: 16px 14px;
   background: linear-gradient(180deg, rgba(20,5,10,0.98), rgba(10,2,5,0.99));
   border-right: 1px solid rgba(255,45,85,0.18);
   overflow-y: auto;
+  box-shadow: 10px 0 40px rgba(0, 0, 0, 0.85);
+}
+
+.sidebar.open {
+  transform: translateX(0);
 }
 
 .main-area {
   flex: 1;
   min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   height: 100vh;

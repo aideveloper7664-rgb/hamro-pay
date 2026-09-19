@@ -33,9 +33,9 @@ export default function Header({
   }
 
   return (
-    <header className="sticky top-0 bg-[#0b0204]/90 backdrop-blur-xl border-b border-[rgba(255,45,85,0.18)] px-6 py-3.5 flex items-center justify-between md:justify-end gap-4 z-20 shadow-lg">
-      {/* Mobile Menu Trigger & Logo */}
-      <div className="flex items-center gap-3 md:hidden">
+    <header className="sticky top-0 bg-[#0b0204]/90 backdrop-blur-xl border-b border-[rgba(255,45,85,0.18)] px-6 py-3.5 flex items-center justify-between gap-4 z-20 shadow-lg">
+      {/* Menu Trigger & Logo */}
+      <div className="flex items-center gap-3">
         <button
           onClick={onOpenSidebar}
           className="w-9 h-9 rounded-[11px] bg-[#1a050a] border border-[#831f33] flex items-center justify-center text-[#ff8ca3] hover:text-white hover:border-[#ff2d55] hover:bg-[#280810] transition-all cursor-pointer shadow-[0_2px_10px_rgba(255,30,75,0.15)] active:scale-95"
