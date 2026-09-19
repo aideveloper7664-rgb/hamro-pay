@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { PanelLeft } from 'lucide-react';
 import { getTokenInfo, regenerateKey, setMode } from '../services/developer.service';
 
 interface DeveloperPortalViewProps {
@@ -123,14 +124,12 @@ export default function DeveloperPortalView({
       <header className="topbar">
         <div className="topbar-left">
           <button 
-            className="icon-btn" 
-            aria-label="Menu" 
+            className="w-9 h-9 rounded-[11px] bg-[#1a050a] border border-[#831f33] flex items-center justify-center text-[#ff8ca3] hover:text-white hover:border-[#ff2d55] hover:bg-[#280810] transition-all cursor-pointer shadow-[0_2px_10px_rgba(255,30,75,0.15)] active:scale-95" 
+            aria-label="Open navigation menu" 
             onClick={onOpenSidebar} 
             title="Toggle Menu"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 6h18M3 12h18M3 18h18"/>
-            </svg>
+            <PanelLeft className="w-4.5 h-4.5 stroke-[2.2]" />
           </button>
         </div>
         <div className="topbar-center">Hamro API</div>

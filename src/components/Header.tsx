@@ -1,4 +1,4 @@
-import { Menu, Bell, Wallet } from 'lucide-react';
+import { PanelLeft, Bell, Wallet } from 'lucide-react';
 import { PlanType } from '../types';
 
 interface HeaderProps {
@@ -38,10 +38,10 @@ export default function Header({
       <div className="flex items-center gap-3 md:hidden">
         <button
           onClick={onOpenSidebar}
-          className="p-2 rounded-xl text-[#b89fa5] hover:text-[#ff94a7] hover:bg-[rgba(255,30,75,0.08)] border border-[rgba(255,45,85,0.2)] transition-colors cursor-pointer"
+          className="w-9 h-9 rounded-[11px] bg-[#1a050a] border border-[#831f33] flex items-center justify-center text-[#ff8ca3] hover:text-white hover:border-[#ff2d55] hover:bg-[#280810] transition-all cursor-pointer shadow-[0_2px_10px_rgba(255,30,75,0.15)] active:scale-95"
           aria-label="Open navigation menu"
         >
-          <Menu className="w-5 h-5" />
+          <PanelLeft className="w-4.5 h-4.5 stroke-[2.2]" />
         </button>
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] flex items-center justify-center shadow-[0_0_12px_rgba(255,30,75,0.4)]">
