@@ -40,12 +40,10 @@ export default function AuthScreen({
       setIsLoading(true);
       setErrorMsg(null);
 
-      const redirectTo = 'https://hamro-pay-kilj.vercel.app/auth/callback';
-
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo
+          redirectTo: 'https://hamro-pay-kilj.vercel.app/auth/callback'
         }
       });
 
