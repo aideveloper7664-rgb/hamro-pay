@@ -24,6 +24,7 @@ import PromoView from './components/PromoView';
 import SupportView from './components/SupportView';
 import ConnectView from './components/ConnectView';
 import DeveloperPortalView from './components/DeveloperPortalView';
+import StorePortalView from './components/StorePortalView';
 import Modal from './components/Modal';
 import CreatePaymentLinkModal from './components/CreatePaymentLinkModal';
 import NoCashierWarningModal from './components/NoCashierWarningModal';
@@ -790,10 +791,18 @@ export default function App() {
           />
         );
 
+      case 'store':
+        return (
+          <StorePortalView
+            showToast={showToast}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            onViewChange={setCurrentView}
+          />
+        );
+
       // Accordionconnected placeholders
       case 'fampay':
       case 'paytm':
-      case 'store':
         return (
           <ConnectView 
             viewId={currentView} 
@@ -855,12 +864,12 @@ export default function App() {
   // If session is restoring and token exists, show loading screen
   if (isSessionChecking && apiToken) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center">
+      <div className="min-h-screen bg-[#070102] text-white flex flex-col justify-center items-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center animate-bounce shadow-lg">
+          <div className="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center animate-bounce shadow-lg shadow-rose-600/30">
             <Wallet className="w-7 h-7 stroke-[2.5]" />
           </div>
-          <p className="text-sm font-bold text-slate-600 animate-pulse">Restoring secure session...</p>
+          <p className="text-sm font-bold text-rose-200/80 animate-pulse">Restoring secure session...</p>
         </div>
       </div>
     );
@@ -879,7 +888,7 @@ export default function App() {
 
     if (authMode || isResetRoute || isRegisterRoute) {
       return (
-        <div className="min-h-screen bg-slate-50 font-sans">
+        <div className="min-h-screen bg-[#070102] text-white font-sans">
           <AuthScreen 
             onLoginSuccess={(token, user) => {
               setAuthMode(null);

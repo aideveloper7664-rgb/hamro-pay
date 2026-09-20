@@ -3,6 +3,7 @@ import { CreditCard, Code, ShoppingBag, ShieldCheck, Cpu, CheckCircle2, AlertTri
 import { getStatus } from '../services/fampay.service';
 import FamPayConnectView from './FamPayConnectView';
 import PaytmConnectView from './PaytmConnectView';
+import StorePortalView from './StorePortalView';
 
 interface ConnectViewProps {
   viewId: 'fampay' | 'paytm' | 'developer' | 'store' | string;
@@ -47,6 +48,16 @@ export default function ConnectView({
         onOpenSidebar={onOpenSidebar}
         onViewChange={onViewChange}
         unreadNotifications={unreadNotifications}
+      />
+    );
+  }
+
+  if (viewId === 'store') {
+    return (
+      <StorePortalView
+        showToast={showToast}
+        onOpenSidebar={onOpenSidebar}
+        onViewChange={onViewChange}
       />
     );
   }

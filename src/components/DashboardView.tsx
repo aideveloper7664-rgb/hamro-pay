@@ -443,7 +443,7 @@ export default function DashboardView({
           flex: 1;
           min-width: 280px;
         }
-        .plan-icon {
+        .plan-banner-icon {
           width: 46px;
           height: 46px;
           border-radius: 12px;
@@ -452,8 +452,9 @@ export default function DashboardView({
           place-items: center;
           flex-shrink: 0;
           box-shadow: 0 0 22px rgba(255,30,75,0.5);
+          margin: 0 !important;
         }
-        .plan-icon svg {
+        .plan-banner-icon svg {
           width: 22px;
           height: 22px;
           color: #fff;
@@ -995,7 +996,7 @@ export default function DashboardView({
         {/* Plan banner */}
         <div className="plan-banner">
           <div className="plan-left">
-            <div className="plan-icon">
+            <div className="plan-banner-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
               </svg>
