@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import App from './App.tsx';
 import { PayPage } from './pages/pay/PayPage';
+import AuthCallback from './pages/AuthCallback';
+import AuthScreen from './components/AuthScreen';
 import './index.css';
 import { AuthProvider } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
@@ -12,6 +14,8 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/login" element={<AuthScreen />} />
           <Route path="/pay/:id" element={<PayPage />} />
           <Route path="*" element={<App />} />
         </Routes>

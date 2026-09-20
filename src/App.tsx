@@ -31,6 +31,8 @@ import NoCashierWarningModal from './components/NoCashierWarningModal';
 import Toast, { ToastItem } from './components/Toast';
 import { Link as LinkIcon, Wallet, CheckCircle, Info, Cloud, Wifi, HelpCircle, Key } from 'lucide-react';
 import { PayPage } from './pages/pay/PayPage';
+import AuthCallback from './pages/AuthCallback';
+import { supabase } from './config/supabase';
 
 export default function App() {
   // --- Persistent State Synchronization (localStorage) ---
@@ -378,7 +380,15 @@ export default function App() {
     setCurrentView('dashboard');
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Supabase signout error:', err);
+    }
+    localStorage.removeItem('hamropay_token');
+    localStorage.removeItem('hamropay_merchant');
+    localStorage.removeItem('hamro_is_logged_in');
     setApiToken('');
     saveApiConfig({
       baseUrl: apiBaseUrl,
@@ -848,6 +858,12 @@ export default function App() {
     }
   };
 
+  // Check if current route is Auth Callback (/auth/callback)
+  const isCallbackView = typeof window !== 'undefined' && window.location.pathname.includes('/auth/callback');
+  if (isCallbackView) {
+    return <AuthCallback />;
+  }
+
   // Check if current route is Pay View (public payment checkout link: /pay/:linkId)
   const isPayView = typeof window !== 'undefined' && window.location.pathname.includes('/pay/');
   if (isPayView) {
@@ -875,18 +891,11 @@ export default function App() {
     );
   }
 
-  // If not signed in, show LandingPage or AuthScreen (handling /reset-password or /register?ref=CODE)
+  // If not signed in, show LandingPage or AuthScreen (handling /login)
   if (!isLoggedIn) {
-    const isResetRoute = typeof window !== 'undefined' && (
-      window.location.pathname.includes('/reset-password') || 
-      new URLSearchParams(window.location.search).has('token')
-    );
-    const isRegisterRoute = typeof window !== 'undefined' && (
-      window.location.pathname.includes('/register') || 
-      new URLSearchParams(window.location.search).has('ref')
-    );
+    const isLoginRoute = typeof window !== 'undefined' && window.location.pathname.includes('/login');
 
-    if (authMode || isResetRoute || isRegisterRoute) {
+    if (authMode || isLoginRoute) {
       return (
         <div className="min-h-screen bg-[#070102] text-white font-sans">
           <AuthScreen 
@@ -897,11 +906,10 @@ export default function App() {
             showToast={showToast} 
             onBackToLanding={() => {
               setAuthMode(null);
-              if (isResetRoute || isRegisterRoute) {
+              if (isLoginRoute) {
                 window.history.pushState({}, '', '/');
               }
             }}
-            initialIsSignUp={authMode === 'signup' || isRegisterRoute}
           />
           <Toast toasts={toasts} onRemove={removeToast} />
         </div>
@@ -910,7 +918,7 @@ export default function App() {
 
     return (
       <div className="min-h-screen font-sans">
-        <LandingPage onOpenAuth={(mode) => setAuthMode(mode || 'signup')} />
+        <LandingPage onOpenAuth={() => setAuthMode('login')} />
         <Toast toasts={toasts} onRemove={removeToast} />
       </div>
     );

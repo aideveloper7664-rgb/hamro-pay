@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-
-const API_URL = import.meta.env.VITE_API_URL || 'https://hamropay-backends.onrender.com';
+import { supabase } from '../config/supabase';
 
 export interface Merchant {
   id: string;
@@ -13,14 +12,9 @@ export interface Merchant {
 export interface AuthContextType {
   user: Merchant | null;
   loading: boolean;
-  loginWithEmail: (email: string, password: string) => Promise<any>;
-  registerWithEmail: (name: string, email: string, password: string, webhookUrl?: string) => Promise<any>;
-  signOutUser: () => void;
+  signOutUser: () => Promise<void>;
   refreshUser: () => void;
-  // Aliases for seamless integration with existing components
-  login: (email: string, password: string) => Promise<any>;
-  register: (name: string, email: string, password: string, webhookUrl?: string) => Promise<any>;
-  logout: () => void;
+  logout: () => Promise<void>;
   merchant: Merchant | null;
   token: string | null;
 }
@@ -44,43 +38,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, []);
 
-  const loginWithEmail = async (email: string, password: string) => {
-    const res = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.message || 'Login failed');
-    localStorage.setItem('hamropay_token', data.data.token);
-    localStorage.setItem('hamropay_merchant', JSON.stringify(data.data.merchant));
-    setUser(data.data.merchant);
-    toast.success('Logged in successfully!');
-    return data.data;
-  };
-
-  const registerWithEmail = async (name: string, email: string, password: string, webhookUrl?: string) => {
-    const payload: any = { name, email, password };
-    if (webhookUrl) payload.webhook_url = webhookUrl;
-    const res = await fetch(`${API_URL}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.message || 'Registration failed');
-    if (data.data?.token && data.data?.merchant) {
-      localStorage.setItem('hamropay_token', data.data.token);
-      localStorage.setItem('hamropay_merchant', JSON.stringify(data.data.merchant));
-      setUser(data.data.merchant);
+  const signOutUser = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Supabase signout error:', err);
     }
-    toast.success('Account created! Please login.');
-    return data.data;
-  };
-
-  const signOutUser = () => {
     localStorage.removeItem('hamropay_token');
     localStorage.removeItem('hamropay_merchant');
+    localStorage.removeItem('hamro_is_logged_in');
     setUser(null);
     toast.success('Signed out.');
   };
@@ -99,12 +65,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{ 
         user, 
         loading, 
-        loginWithEmail, 
-        registerWithEmail, 
         signOutUser, 
         refreshUser,
-        login: loginWithEmail,
-        register: registerWithEmail,
         logout: signOutUser,
         merchant: user,
         token: typeof window !== 'undefined' ? localStorage.getItem('hamropay_token') : null,
