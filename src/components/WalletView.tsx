@@ -9,7 +9,11 @@ import {
   Sparkles,
   Award,
   Loader2,
-  DollarSign
+  DollarSign,
+  Check,
+  TrendingUp,
+  ArrowUpRight,
+  X
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { getCreditBalance, purchaseCredits, getCreditHistory, CreditTransaction } from '../services/credits.service';
@@ -199,215 +203,243 @@ export default function WalletView({
   };
 
   return (
-    <div className="space-y-6 animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
-      {/* Header */}
-      <header className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <span className="w-9 h-9 bg-rose-600 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-rose-600/20">
-              <Wallet className="w-5 h-5 stroke-[2.5]" />
-            </span>
-            Wallet &amp; Balances
-          </h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Manage your real-time Hamro Cash, Hamro Credits, Hamro Bonus, and commission payouts
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchAllWallets}
-            disabled={isLoadingData}
-            className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingData ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
-          <button
-            onClick={() => setIsBuyCreditsOpen(true)}
-            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400 fill-current" />
-            <span>Buy Credits</span>
-          </button>
-        </div>
-      </header>
-
-      {/* 4 WALLETS GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
-        {/* Wallet 1: HAMRO CASH */}
-        <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-rose-950 text-white border border-rose-500/30 rounded-2xl p-5 shadow-xl flex flex-col justify-between space-y-4 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/10 rounded-full blur-xl pointer-events-none" />
-
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
-              <Wallet className="w-4 h-4 text-rose-400" />
-              <span>Hamro Cash</span>
-            </span>
-            <span className="text-[9px] font-extrabold bg-rose-500/20 text-rose-200 border border-rose-500/30 px-2 py-0.5 rounded-full">
-              Primary
-            </span>
-          </div>
-
-          <div>
-            <div className="text-2xl font-black tracking-tight text-white">
-              ₹ {cashBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    <div className="hp-w-root">
+      <div className="hp-w-container">
+        {/* Page Header */}
+        <div className="hp-w-page-header">
+          <div className="hp-w-page-head-left">
+            <div className="hp-w-page-icon">
+              <Wallet />
             </div>
-            <p className="text-[10.5px] text-slate-400 mt-1">Real-time withdrawal balance</p>
-          </div>
-
-          <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
-            <button
-              onClick={() => setIsWithdrawOpen(true)}
-              className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <ArrowDownLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Withdraw</span>
-            </button>
-            <button
-              onClick={() => setIsConvertCashOpen(true)}
-              className="w-full py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer"
-            >
-              <Coins className="w-3 h-3 text-amber-400" />
-              <span>Convert to Credit</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Wallet 2: HAMRO CREDIT */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <span>Hamro Credit</span>
-            </span>
-            <span className="text-[9px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
-              API Credits
-            </span>
-          </div>
-
-          <div>
-            <div className="text-2xl font-black tracking-tight text-slate-900">
-              ₹ {creditBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <div className="hp-w-page-info">
+              <h1>Wallet &amp; Balances</h1>
+              <p>Manage your real-time Hamro Cash, Hamro Credits, Hamro Bonus, and referral earnings</p>
             </div>
-            <p className="text-[10.5px] text-slate-400 mt-1">Used for developer API calls</p>
           </div>
 
-          <div className="pt-2 border-t border-slate-100">
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={fetchAllWallets}
+              disabled={isLoadingData}
+              className="hp-w-panel-action"
+              style={{ cursor: 'pointer' }}
+            >
+              <RefreshCw className={isLoadingData ? 'animate-spin' : ''} style={{ width: 14, height: 14 }} />
+              <span>Refresh</span>
+            </button>
             <button
               onClick={() => setIsBuyCreditsOpen(true)}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              className="btn-primary"
+              style={{ cursor: 'pointer', padding: '9px 16px', fontSize: '12.5px' }}
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Sparkles style={{ width: 14, height: 14 }} />
               <span>Buy Credits</span>
             </button>
           </div>
         </div>
 
-        {/* Wallet 3: HAMRO BONUS */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
-              <Coins className="w-4 h-4 text-purple-600" />
-              <span>Hamro Bonus</span>
-            </span>
-            <span className="text-[9px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full">
-              Promos
-            </span>
-          </div>
-
-          <div>
-            <div className="text-2xl font-black tracking-tight text-slate-900">
-              ₹ {bonusBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+        {/* 4 WALLETS GRID */}
+        <div className="hp-w-wallet-grid">
+          {/* Left Column Stack: Cash Card & Credit Card */}
+          <div className="hp-w-left-stack">
+            {/* Wallet 1: HAMRO CASH */}
+            <div className="hp-w-cash-card">
+              <div className="hp-w-cash-label">HAMRO CASH (REAL BALANCE)</div>
+              <div className="hp-w-cash-amount">
+                ₹ {cashBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <button
+                onClick={() => setIsWithdrawOpen(true)}
+                className="hp-w-withdraw-btn"
+              >
+                <ArrowDownLeft />
+                <span>Withdraw Funds</span>
+              </button>
+              <button
+                onClick={() => setIsConvertCashOpen(true)}
+                style={{
+                  width: '100%',
+                  marginTop: '8px',
+                  padding: '8px',
+                  borderRadius: '9px',
+                  background: 'rgba(0,0,0,0.25)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  color: '#fff',
+                  fontSize: '11.5px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                <Coins style={{ width: 13, height: 13, color: '#ffb834' }} />
+                <span>Convert Cash to Credit</span>
+              </button>
             </div>
-            <p className="text-[10.5px] text-slate-400 mt-1">Voucher rewards &amp; cashbacks</p>
+
+            {/* Wallet 2: HAMRO CREDIT */}
+            <div className="hp-w-credit-card">
+              <div className="hp-w-credit-head">
+                <div className="hp-w-credit-label">
+                  <span className="bolt">⚡</span>
+                  <span>HAMRO CREDIT</span>
+                </div>
+                <button
+                  onClick={() => setIsBuyCreditsOpen(true)}
+                  className="hp-w-credit-plus"
+                  title="Buy Credits"
+                >
+                  <Plus />
+                </button>
+              </div>
+              <div className="hp-w-credit-amount">
+                ₹ {creditBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <div className="hp-w-credit-desc">
+                API credits are consumed automatically for incoming transaction webhooks and gateway calls.
+              </div>
+            </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-100">
-            <button
-              onClick={() => setIsConvertBonusOpen(true)}
-              disabled={bonusBalance <= 0}
-              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-            >
-              <Coins className="w-3.5 h-3.5" />
-              <span>Convert to Credit</span>
-            </button>
+          {/* Right Column Stack: Bonus Card & Commission Stats */}
+          <div className="hp-w-left-stack">
+            {/* Wallet 3: HAMRO BONUS */}
+            <div className="hp-w-bonus-card">
+              <div className="hp-w-bonus-head">
+                <div className="hp-w-bonus-label">
+                  <Coins />
+                  <span>HAMRO BONUS</span>
+                </div>
+                <div className="hp-w-bonus-badge">REWARDS</div>
+              </div>
+              <div className="hp-w-bonus-amount">
+                ₹ {bonusBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <div className="hp-w-bonus-desc" style={{ marginBottom: '12px' }}>
+                Earned via promo codes and welcome vouchers. Convertible to Hamro Credits.
+              </div>
+              <button
+                onClick={() => setIsConvertBonusOpen(true)}
+                disabled={bonusBalance <= 0}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 184, 52, 0.16)',
+                  border: '1px solid rgba(255, 184, 52, 0.45)',
+                  color: '#ffb834',
+                  fontSize: '12px',
+                  fontWeight: 900,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  cursor: bonusBalance <= 0 ? 'not-allowed' : 'pointer',
+                  opacity: bonusBalance <= 0 ? 0.5 : 1
+                }}
+              >
+                <Coins style={{ width: 14, height: 14 }} />
+                <span>Convert Bonus to Credit</span>
+              </button>
+            </div>
+
+            {/* Wallet 4: COMMISSION PAID STATS */}
+            <div className="hp-w-stats-grid">
+              <div className="hp-w-stat-card" data-accent="green">
+                <div className="hp-w-stat-icon">
+                  <Award />
+                </div>
+                <div className="hp-w-stat-label">COMMISSION EARNED</div>
+                <div className="hp-w-stat-value">
+                  ₹ {commissionPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+
+              <div className="hp-w-stat-card" data-accent="gold">
+                <div className="hp-w-stat-icon">
+                  <TrendingUp />
+                </div>
+                <div className="hp-w-stat-label">REFERRAL REWARDS</div>
+                <div className="hp-w-stat-value">
+                  18% Cash
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Wallet 4: COMMISSION PAID */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-emerald-600" />
-              <span>Commission Paid</span>
-            </span>
-            <span className="text-[9px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
-              Earnings
-            </span>
-          </div>
-
-          <div>
-            <div className="text-2xl font-black tracking-tight text-slate-900">
-              ₹ {commissionPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-[10.5px] text-slate-400 mt-1">Total referral commissions earned</p>
-          </div>
-
-          <div className="pt-2 border-t border-slate-100">
+        {/* Credit Purchase & History Panel */}
+        <div className="hp-w-panel">
+          <div className="hp-w-panel-head">
+            <div className="hp-w-panel-title">Recent Wallet &amp; Credit Activity</div>
             <button
-              onClick={() => onViewChange('referral')}
-              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+              onClick={() => onViewChange('transactions')}
+              className="hp-w-panel-action"
             >
-              <span>Refer &amp; Earn More</span>
+              <span>View All Transactions</span>
+              <ArrowUpRight style={{ width: 12, height: 12 }} />
             </button>
           </div>
-        </div>
-      </div>
 
-      {/* Credit Purchase History Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-        <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-rose-600" />
-          <span>Recent Wallet Activity &amp; Credit Transactions</span>
-        </h2>
-
-        {creditHistory.length === 0 ? (
-          <p className="text-xs text-slate-400 py-4 text-center">No credit transactions recorded yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="border-b border-slate-100 text-slate-400 uppercase tracking-wider font-bold">
-                  <th className="py-2.5 px-3">Date</th>
-                  <th className="py-2.5 px-3">Type</th>
-                  <th className="py-2.5 px-3">Amount</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3">UTR Reference</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {creditHistory.map((item, idx) => (
-                  <tr key={item.id || idx} className="hover:bg-slate-50">
-                    <td className="py-2.5 px-3 font-mono">{item.created_at || item.date || 'Today'}</td>
-                    <td className="py-2.5 px-3 font-bold text-slate-900">{item.type || 'Credit Purchase'}</td>
-                    <td className="py-2.5 px-3 font-bold text-emerald-600">+₹{item.amount}</td>
-                    <td className="py-2.5 px-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        item.status === 'Completed' || item.status === 'Approved'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}>
-                        {item.status || 'Pending'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 font-mono text-slate-500">{item.utr || '—'}</td>
+          {creditHistory.length === 0 ? (
+            <div className="hp-w-empty-state">
+              <div className="hp-w-empty-icon">
+                <Sparkles />
+              </div>
+              <div className="hp-w-empty-title">No Credit Transactions Yet</div>
+              <div style={{ fontSize: '12px', color: 'var(--hp-w-muted)', maxWidth: 360 }}>
+                Purchased credits and bonus conversions will appear here in your real-time log.
+              </div>
+            </div>
+          ) : (
+            <div className="hp-tx-table-wrapper">
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255, 45, 85, 0.12)', color: 'var(--hp-w-muted-dim)', fontSize: '10.5px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    <th style={{ padding: '10px 14px' }}>Date</th>
+                    <th style={{ padding: '10px 14px' }}>Type</th>
+                    <th style={{ padding: '10px 14px' }}>Amount</th>
+                    <th style={{ padding: '10px 14px' }}>Status</th>
+                    <th style={{ padding: '10px 14px' }}>UTR / Ref</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  {creditHistory.map((item, idx) => (
+                    <tr key={item.id || idx} style={{ borderBottom: '1px solid rgba(255, 45, 85, 0.08)' }}>
+                      <td style={{ padding: '12px 14px', fontFamily: 'monospace', color: 'var(--hp-w-muted)' }}>
+                        {item.created_at || item.date || 'Today'}
+                      </td>
+                      <td style={{ padding: '12px 14px', fontWeight: 800, color: '#fff' }}>
+                        {item.type || 'Credit Purchase'}
+                      </td>
+                      <td style={{ padding: '12px 14px', fontWeight: 900, color: '#2bf29a' }}>
+                        +₹{item.amount}
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={{
+                          padding: '3px 9px',
+                          borderRadius: '999px',
+                          fontSize: '10px',
+                          fontWeight: 900,
+                          background: item.status === 'Completed' || item.status === 'Approved' ? 'rgba(43, 242, 154, 0.14)' : 'rgba(255, 184, 52, 0.14)',
+                          color: item.status === 'Completed' || item.status === 'Approved' ? '#2bf29a' : '#ffb834',
+                          border: `1px solid ${item.status === 'Completed' || item.status === 'Approved' ? 'rgba(43, 242, 154, 0.35)' : 'rgba(255, 184, 52, 0.35)'}`
+                        }}>
+                          {item.status || 'Pending'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 14px', fontFamily: 'monospace', color: '#b89fa5' }}>
+                        {item.utr || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* WITHDRAW MODAL */}
@@ -421,152 +453,218 @@ export default function WalletView({
 
       {/* BUY CREDITS MODAL */}
       {isBuyCreditsOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200"
-          onClick={() => setIsBuyCreditsOpen(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white rounded-2xl p-6 space-y-4 text-slate-900 shadow-2xl border border-slate-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-amber-500" />
-                <span>Buy Hamro Credits</span>
-              </h3>
-              <button onClick={() => setIsBuyCreditsOpen(false)} className="text-slate-400 font-bold text-xs">✕</button>
-            </div>
-
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1">
-              <div className="text-[11px] font-bold text-rose-900">Payment UPI ID:</div>
-              <div className="font-mono text-xs font-black text-rose-700 select-all">9769516928@fam</div>
-              <p className="text-[10.5px] text-rose-800">Pay using UPI, then enter the 12-digit UTR below for instant clearance.</p>
-            </div>
-
-            <form onSubmit={handleBuyCreditsSubmit} className="space-y-3">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-700 uppercase">Credit Amount (₹)</label>
-                <input
-                  type="number"
-                  min="50"
-                  value={buyAmount}
-                  onChange={(e) => setBuyAmount(e.target.value)}
-                  className="w-full text-xs font-bold px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:border-rose-500 focus:bg-white focus:outline-none"
-                  required
-                />
+        <div className="hp-w-modal-scrim" onClick={() => setIsBuyCreditsOpen(false)}>
+          <div className="hp-w-credit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="hp-w-modal-head">
+              <div className="hp-w-modal-head-icon">
+                <Sparkles />
               </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-700 uppercase">12-Digit UTR / Ref Number</label>
-                <input
-                  type="text"
-                  maxLength={12}
-                  value={buyUtr}
-                  onChange={(e) => setBuyUtr(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="e.g. 423456789012"
-                  className="w-full text-xs font-mono font-bold px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:border-rose-500 focus:bg-white focus:outline-none"
-                  required
-                />
+              <div className="hp-w-modal-head-text">
+                <div className="hp-w-modal-title">Buy Hamro Credits</div>
               </div>
-
-              <button
-                type="submit"
-                disabled={isSubmittingBuy}
-                className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 flex items-center justify-center gap-1.5 cursor-pointer mt-2"
-              >
-                {isSubmittingBuy ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Submit UTR Verification</span>}
+              <button onClick={() => setIsBuyCreditsOpen(false)} className="hp-w-modal-close">
+                <X />
               </button>
-            </form>
+            </div>
+
+            <div className="hp-w-credit-body">
+              <div style={{
+                padding: '14px 16px',
+                borderRadius: '14px',
+                background: 'rgba(255, 30, 75, 0.08)',
+                border: '1px solid rgba(255, 45, 85, 0.25)',
+                marginBottom: '16px'
+              }}>
+                <div style={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', color: '#ff94a7', marginBottom: '4px' }}>
+                  UPI Payment ID
+                </div>
+                <div style={{ fontFamily: 'monospace', fontSize: '15px', fontWeight: 900, color: '#fff' }}>
+                  9769516928@fam
+                </div>
+                <p style={{ fontSize: '11.5px', color: 'var(--hp-w-muted)', marginTop: '4px', lineHeight: 1.4 }}>
+                  Pay the desired amount to the UPI ID above, then enter the 12-digit UTR reference number below for instant credit.
+                </p>
+              </div>
+
+              <form onSubmit={handleBuyCreditsSubmit}>
+                <div className="hp-w-field">
+                  <div className="hp-w-field-label">
+                    <span>Credit Amount (₹)</span>
+                    <span className="req">*</span>
+                  </div>
+                  <div className="hp-w-input-wrap-f">
+                    <input
+                      type="number"
+                      min="50"
+                      value={buyAmount}
+                      onChange={(e) => setBuyAmount(e.target.value)}
+                      className="hp-w-input-field"
+                      placeholder="500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="hp-w-field">
+                  <div className="hp-w-field-label">
+                    <span>12-Digit UTR / Reference Number</span>
+                    <span className="req">*</span>
+                  </div>
+                  <div className="hp-w-input-wrap-f">
+                    <input
+                      type="text"
+                      maxLength={12}
+                      value={buyUtr}
+                      onChange={(e) => setBuyUtr(e.target.value.replace(/[^0-9]/g, ''))}
+                      className="hp-w-input-field mono"
+                      placeholder="e.g. 423456789012"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="hp-w-modal-foot" style={{ borderTop: 'none', padding: '12px 0 0' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsBuyCreditsOpen(false)}
+                    className="hp-w-modal-btn hp-w-btn-cancel"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingBuy}
+                    className="hp-w-modal-btn hp-w-btn-proceed"
+                  >
+                    {isSubmittingBuy ? <Loader2 className="animate-spin" /> : <span>Submit UTR</span>}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* CONVERT CASH MODAL */}
       {isConvertCashOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200"
-          onClick={() => setIsConvertCashOpen(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white rounded-2xl p-6 space-y-4 text-slate-900 shadow-2xl border border-slate-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900">Convert Hamro Cash to Credit</h3>
-              <button onClick={() => setIsConvertCashOpen(false)} className="text-slate-400 font-bold text-xs">✕</button>
+        <div className="hp-w-modal-scrim" onClick={() => setIsConvertCashOpen(false)}>
+          <div className="hp-w-credit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="hp-w-modal-head">
+              <div className="hp-w-modal-head-icon">
+                <Coins />
+              </div>
+              <div className="hp-w-modal-head-text">
+                <div className="hp-w-modal-title">Convert Cash to Credits</div>
+              </div>
+              <button onClick={() => setIsConvertCashOpen(false)} className="hp-w-modal-close">
+                <X />
+              </button>
             </div>
 
-            <p className="text-xs text-slate-500">
-              Available Cash: <strong>₹{cashBalance.toLocaleString('en-IN')}</strong>
-            </p>
+            <div className="hp-w-credit-body">
+              <p style={{ fontSize: '12.5px', color: 'var(--hp-w-muted)', marginBottom: '14px' }}>
+                Available Cash: <strong style={{ color: '#fff' }}>₹{cashBalance.toLocaleString('en-IN')}</strong>
+              </p>
 
-            <form onSubmit={handleConvertCashSubmit} className="space-y-3">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-700 uppercase">Amount to Convert (₹)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max={cashBalance}
-                  value={convertCashAmt}
-                  onChange={(e) => setConvertCashAmt(e.target.value)}
-                  className="w-full text-xs font-bold px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:border-rose-500 focus:bg-white focus:outline-none"
-                  required
-                />
-              </div>
+              <form onSubmit={handleConvertCashSubmit}>
+                <div className="hp-w-field">
+                  <div className="hp-w-field-label">
+                    <span>Amount to Convert (₹)</span>
+                    <span className="req">*</span>
+                  </div>
+                  <div className="hp-w-input-wrap-f">
+                    <input
+                      type="number"
+                      min="1"
+                      max={cashBalance}
+                      value={convertCashAmt}
+                      onChange={(e) => setConvertCashAmt(e.target.value)}
+                      className="hp-w-input-field"
+                      required
+                    />
+                  </div>
+                </div>
 
-              <button
-                type="submit"
-                disabled={isSubmittingConvert}
-                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                {isSubmittingConvert ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Confirm Conversion</span>}
-              </button>
-            </form>
+                <div className="hp-w-modal-foot" style={{ borderTop: 'none', padding: '12px 0 0' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsConvertCashOpen(false)}
+                    className="hp-w-modal-btn hp-w-btn-cancel"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingConvert}
+                    className="hp-w-modal-btn hp-w-btn-proceed"
+                  >
+                    {isSubmittingConvert ? <Loader2 className="animate-spin" /> : <span>Confirm Conversion</span>}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* CONVERT BONUS MODAL */}
       {isConvertBonusOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200"
-          onClick={() => setIsConvertBonusOpen(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white rounded-2xl p-6 space-y-4 text-slate-900 shadow-2xl border border-slate-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900">Convert Hamro Bonus to Credit</h3>
-              <button onClick={() => setIsConvertBonusOpen(false)} className="text-slate-400 font-bold text-xs">✕</button>
+        <div className="hp-w-modal-scrim" onClick={() => setIsConvertBonusOpen(false)}>
+          <div className="hp-w-credit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="hp-w-modal-head">
+              <div className="hp-w-modal-head-icon">
+                <Coins />
+              </div>
+              <div className="hp-w-modal-head-text">
+                <div className="hp-w-modal-title">Convert Bonus to Credits</div>
+              </div>
+              <button onClick={() => setIsConvertBonusOpen(false)} className="hp-w-modal-close">
+                <X />
+              </button>
             </div>
 
-            <p className="text-xs text-slate-500">
-              Available Bonus: <strong>₹{bonusBalance.toLocaleString('en-IN')}</strong>
-            </p>
+            <div className="hp-w-credit-body">
+              <p style={{ fontSize: '12.5px', color: 'var(--hp-w-muted)', marginBottom: '14px' }}>
+                Available Bonus: <strong style={{ color: '#fff' }}>₹{bonusBalance.toLocaleString('en-IN')}</strong>
+              </p>
 
-            <form onSubmit={handleConvertBonusSubmit} className="space-y-3">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-700 uppercase">Amount to Convert (₹)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max={bonusBalance}
-                  value={convertBonusAmt}
-                  onChange={(e) => setConvertBonusAmt(e.target.value)}
-                  className="w-full text-xs font-bold px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:border-rose-500 focus:bg-white focus:outline-none"
-                  required
-                />
-              </div>
+              <form onSubmit={handleConvertBonusSubmit}>
+                <div className="hp-w-field">
+                  <div className="hp-w-field-label">
+                    <span>Amount to Convert (₹)</span>
+                    <span className="req">*</span>
+                  </div>
+                  <div className="hp-w-input-wrap-f">
+                    <input
+                      type="number"
+                      min="1"
+                      max={bonusBalance}
+                      value={convertBonusAmt}
+                      onChange={(e) => setConvertBonusAmt(e.target.value)}
+                      className="hp-w-input-field"
+                      required
+                    />
+                  </div>
+                </div>
 
-              <button
-                type="submit"
-                disabled={isSubmittingConvert}
-                className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                {isSubmittingConvert ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Confirm Conversion</span>}
-              </button>
-            </form>
+                <div className="hp-w-modal-foot" style={{ borderTop: 'none', padding: '12px 0 0' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsConvertBonusOpen(false)}
+                    className="hp-w-modal-btn hp-w-btn-cancel"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingConvert}
+                    className="hp-w-modal-btn hp-w-btn-proceed"
+                  >
+                    {isSubmittingConvert ? <Loader2 className="animate-spin" /> : <span>Confirm Conversion</span>}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

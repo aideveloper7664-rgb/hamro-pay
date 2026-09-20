@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, Copy, Check, Users, Gift, RefreshCw, Loader2, ArrowUpRight, Award, UserCheck } from 'lucide-react';
+import { Share2, Copy, Check, Users, Gift, RefreshCw, Award, UserCheck, Zap, ShieldCheck } from 'lucide-react';
 import { getReferralInfo, ReferralInfo } from '../services/referral.service';
 
 interface ReferralViewProps {
@@ -70,157 +70,168 @@ export default function ReferralView({ showToast }: ReferralViewProps) {
   };
 
   return (
-    <div className="space-y-6 animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
-      {/* Header */}
-      <header className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <span className="w-9 h-9 bg-sky-600 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-sky-600/20">
-              <Users className="w-5 h-5 stroke-[2.5]" />
-            </span>
-            Refer &amp; Earn
-          </h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Invite merchants to HamroPay and earn <strong>18% cashback</strong> on their first deposit!
-          </p>
+    <div className="hp-ref-container">
+      {/* Page Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap', marginBottom: '22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div className="hp-w-page-icon">
+            <Users />
+          </div>
+          <div className="hp-w-page-info">
+            <h1>Refer &amp; Earn</h1>
+            <p>Invite merchants to HamroPay and earn <strong>18% cashback</strong> on their first deposit!</p>
+          </div>
         </div>
 
         <button
           onClick={loadReferral}
           disabled={isLoading}
-          className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          className="hp-w-panel-action"
+          style={{ cursor: 'pointer' }}
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={isLoading ? 'animate-spin' : ''} style={{ width: 14, height: 14 }} />
           <span>Refresh</span>
         </button>
-      </header>
+      </div>
 
-      {/* Hero Banner: Code & Link */}
-      <div className="bg-gradient-to-br from-slate-900 via-sky-950 to-slate-950 text-white border border-sky-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="space-y-2 max-w-xl">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/20 border border-sky-400/30 text-[10px] font-extrabold uppercase tracking-widest text-sky-300">
-            <Gift className="w-3.5 h-3.5" />
-            Merchant Partner Program
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">
-            Share your link. Earn <span className="text-sky-400">18% Cashback</span> instantly.
-          </h2>
-          <p className="text-xs text-sky-200/80 leading-relaxed">
-            When a merchant creates an account using your referral link and makes their first cash deposit, 18% of the deposit amount is automatically credited to your wallet.
-          </p>
+      {/* Hero Banner: Referral Code & URL */}
+      <div className="hp-ref-hero-card">
+        <div className="hp-ref-hero-title">
+          Share your link. Earn <span style={{ color: '#ffb834' }}>18% Cashback</span> instantly.
+        </div>
+        <div className="hp-ref-hero-desc">
+          When a merchant creates an account using your referral link and completes their first deposit, <strong>18% cashback reward</strong> is instantly credited to your Hamro Cash wallet.
         </div>
 
-        {/* Inputs row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          {/* Box 1: Referral Code */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 space-y-2">
-            <label className="block text-[10px] font-extrabold uppercase tracking-widest text-sky-300">
-              Your Referral Code
-            </label>
-            <div className="flex items-center justify-between gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-white/10">
-              <span className="font-mono text-base font-black tracking-wider text-white px-2">
-                {referralCode}
-              </span>
-              <button
-                onClick={handleCopyCode}
-                className="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1 shrink-0"
-              >
-                {isCopiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{isCopiedCode ? 'Copied' : 'Copy'}</span>
-              </button>
-            </div>
+        {/* Code Display Box */}
+        <div className="hp-ref-code-box">
+          <div style={{ fontSize: '10.5px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1.4px', color: 'rgba(255,255,255,0.8)', marginBottom: '4px' }}>
+            YOUR REFERRAL CODE
           </div>
+          <div className="hp-ref-code-value">{referralCode}</div>
+          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', marginTop: '4px', fontFamily: 'monospace' }}>
+            URL: {referralUrl}
+          </div>
+        </div>
 
-          {/* Box 2: Referral URL */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 space-y-2">
-            <label className="block text-[10px] font-extrabold uppercase tracking-widest text-sky-300">
-              Direct Invitation URL
-            </label>
-            <div className="flex items-center justify-between gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-white/10">
-              <span className="font-mono text-xs font-bold text-sky-200 truncate px-2 select-all">
-                {referralUrl}
-              </span>
-              <button
-                onClick={handleCopyUrl}
-                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-950 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1 shrink-0"
-              >
-                {isCopiedUrl ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-                <span>{isCopiedUrl ? 'Copied' : 'Copy URL'}</span>
-              </button>
-            </div>
-          </div>
+        {/* Action Buttons Row */}
+        <div className="hp-ref-hero-actions">
+          <button onClick={handleCopyCode} className="hp-ref-hero-btn">
+            {isCopiedCode ? <Check /> : <Copy />}
+            <span>{isCopiedCode ? 'Code Copied!' : 'Copy Referral Code'}</span>
+          </button>
+          <button onClick={handleCopyUrl} className="hp-ref-hero-btn">
+            {isCopiedUrl ? <Check /> : <Share2 />}
+            <span>{isCopiedUrl ? 'URL Copied!' : 'Copy Invitation Link'}</span>
+          </button>
         </div>
       </div>
 
-      {/* Stats Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-400 text-xs font-bold">
-            <span>TOTAL REFERRALS</span>
-            <Users className="w-4 h-4 text-slate-400" />
+      {/* Stats Cards Row (3 Cards) */}
+      <div className="hp-ref-stats-grid">
+        <div className="hp-ref-stat-card" data-accent="purple">
+          <div className="hp-ref-stat-icon">
+            <Users />
           </div>
-          <div className="text-2xl font-black text-slate-900">{totalReferrals}</div>
-          <p className="text-[11px] text-slate-400">Merchants invited</p>
+          <div className="hp-ref-stat-value">{totalReferrals}</div>
+          <div className="hp-ref-stat-label">TOTAL REFERRALS</div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-emerald-600 text-xs font-bold">
-            <span>SUCCESSFUL REFERRALS</span>
-            <UserCheck className="w-4 h-4 text-emerald-600" />
+        <div className="hp-ref-stat-card" data-accent="green">
+          <div className="hp-ref-stat-icon">
+            <UserCheck />
           </div>
-          <div className="text-2xl font-black text-emerald-600">{successfulReferrals}</div>
-          <p className="text-[11px] text-slate-400">Completed first deposit</p>
+          <div className="hp-ref-stat-value">{successfulReferrals}</div>
+          <div className="hp-ref-stat-label">SUCCESSFUL MERCHANTS</div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-sky-600 text-xs font-bold">
-            <span>TOTAL EARNINGS</span>
-            <Award className="w-4 h-4 text-sky-600" />
+        <div className="hp-ref-stat-card" data-accent="gold">
+          <div className="hp-ref-stat-icon">
+            <Award />
           </div>
-          <div className="text-2xl font-black text-slate-900">
+          <div className="hp-ref-stat-value">
             ₹ {totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
-          <p className="text-[11px] text-slate-400">18% cashback rewards earned</p>
+          <div className="hp-ref-stat-label">TOTAL CASHBACK EARNED</div>
         </div>
       </div>
 
-      {/* Referred Merchants List Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-        <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <Users className="w-4 h-4 text-sky-600" />
-          <span>Referred Merchants Directory</span>
-        </h2>
+      {/* Info Cards Row (2 Cards) */}
+      <div className="hp-ref-info-grid">
+        <div className="hp-ref-info-card">
+          <div className="hp-ref-info-icon red">
+            <Zap />
+          </div>
+          <div className="hp-ref-info-title">18% Instant Deposit Cashback</div>
+          <div className="hp-ref-info-desc">
+            Earn an unbeatable 18% instant cashback reward whenever a merchant you referred completes their first successful cash deposit.
+          </div>
+        </div>
+
+        <div className="hp-ref-info-card">
+          <div className="hp-ref-info-icon">
+            <ShieldCheck />
+          </div>
+          <div className="hp-ref-info-title">Real-time Wallet Clearance</div>
+          <div className="hp-ref-info-desc">
+            Commissions and rewards are automatically credited directly to your Hamro Cash wallet with zero delay, ready for withdrawal.
+          </div>
+        </div>
+      </div>
+
+      {/* Referred Merchants Directory */}
+      <div className="hp-ref-history-panel">
+        <div className="hp-ref-history-head">
+          <div className="hp-ref-history-icon">
+            <Award />
+          </div>
+          <div className="hp-ref-history-title">Referred Merchants Directory</div>
+        </div>
 
         {merchantsList.length === 0 ? (
-          <p className="text-xs text-slate-400 py-6 text-center">No referred merchants yet. Share your code above to get started!</p>
+          <div className="hp-ref-empty-state">
+            <div className="hp-ref-empty-icon">
+              <Gift />
+            </div>
+            <div className="hp-ref-empty-title">No Referred Merchants Yet</div>
+            <div className="hp-ref-empty-sub">
+              Share your referral code or invitation link with merchants to start earning 18% instant cashback rewards.
+            </div>
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+          <div className="hp-tx-table-wrapper">
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
-                <tr className="border-b border-slate-100 text-slate-400 uppercase tracking-wider font-bold">
-                  <th className="py-2.5 px-3">Merchant</th>
-                  <th className="py-2.5 px-3">Date Joined</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3">Reward Earned</th>
+                <tr style={{ borderBottom: '1px solid rgba(255, 45, 85, 0.12)', color: 'var(--hp-w-muted-dim)', fontSize: '10.5px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  <th style={{ padding: '10px 14px' }}>Merchant</th>
+                  <th style={{ padding: '10px 14px' }}>Date Joined</th>
+                  <th style={{ padding: '10px 14px' }}>Status</th>
+                  <th style={{ padding: '10px 14px' }}>Reward Earned</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+              <tbody>
                 {merchantsList.map((m: any, idx: number) => (
-                  <tr key={m.id || idx} className="hover:bg-slate-50">
-                    <td className="py-2.5 px-3 font-bold text-slate-900">{m.name || m.merchant_name || 'Merchant User'}</td>
-                    <td className="py-2.5 px-3 font-mono text-slate-500">{m.date || m.created_at || 'Recent'}</td>
-                    <td className="py-2.5 px-3">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        m.status === 'Active' || m.status === 'Completed'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}>
+                  <tr key={m.id || idx} className="hp-ref-item" style={{ display: 'table-row' }}>
+                    <td style={{ padding: '12px 14px', fontWeight: 900, color: '#fff' }}>
+                      {m.name || m.merchant_name || 'Merchant User'}
+                    </td>
+                    <td style={{ padding: '12px 14px', fontFamily: 'monospace', color: '#b89fa5' }}>
+                      {m.date || m.created_at || 'Recent'}
+                    </td>
+                    <td style={{ padding: '12px 14px' }}>
+                      <span style={{
+                        padding: '3px 9px',
+                        borderRadius: '999px',
+                        fontSize: '10px',
+                        fontWeight: 900,
+                        background: m.status === 'Active' || m.status === 'Completed' ? 'rgba(43, 242, 154, 0.14)' : 'rgba(255, 184, 52, 0.14)',
+                        color: m.status === 'Active' || m.status === 'Completed' ? '#2bf29a' : '#ffb834',
+                        border: `1px solid ${m.status === 'Active' || m.status === 'Completed' ? 'rgba(43, 242, 154, 0.35)' : 'rgba(255, 184, 52, 0.35)'}`
+                      }}>
                         {m.status || 'Active'}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 font-bold text-emerald-600">
+                    <td style={{ padding: '12px 14px', fontWeight: 900, color: '#2bf29a' }}>
                       +₹{m.reward || m.commission || 0}
                     </td>
                   </tr>
