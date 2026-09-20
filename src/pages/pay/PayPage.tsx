@@ -984,6 +984,35 @@ const PayPage: React.FC = () => {
               Back to Home
             </button>
           </div>
+        ) : data && (data.status === 'inactive' || data.active === false || data.status === 'deactivated') ? (
+          /* INACTIVE PAYMENT LINK CARD */
+          <div className="pay-card" style={{ textAlign: 'center', padding: '36px 20px' }}>
+            <div style={{ fontSize: '42px', marginBottom: '12px' }}>❌</div>
+            <div style={{ fontSize: '18px', fontWeight: '900', color: '#fff', marginBottom: '8px' }}>
+              This payment link is no longer active
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: '1.5', marginBottom: '20px' }}>
+              The merchant has deactivated or removed this payment link. Please contact the merchant to generate a new active link.
+            </p>
+            <button
+              className="refresh-btn"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  window.history.back();
+                } else if (typeof window !== 'undefined') {
+                  window.location.href = '/';
+                }
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: '#fff',
+                margin: '0 auto'
+              }}
+            >
+              Return Home
+            </button>
+          </div>
         ) : (
           /* MAIN PAYMENT CARD */
           <div className="pay-card">

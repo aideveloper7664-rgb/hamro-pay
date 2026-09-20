@@ -20,11 +20,13 @@ import NotificationsView from './components/NotificationsView';
 import PricingView from './components/PricingView';
 import ProfileView from './components/ProfileView';
 import ReferralView from './components/ReferralView';
+import PromoView from './components/PromoView';
 import SupportView from './components/SupportView';
 import ConnectView from './components/ConnectView';
 import DeveloperPortalView from './components/DeveloperPortalView';
 import Modal from './components/Modal';
 import CreatePaymentLinkModal from './components/CreatePaymentLinkModal';
+import NoCashierWarningModal from './components/NoCashierWarningModal';
 import Toast, { ToastItem } from './components/Toast';
 import { Link as LinkIcon, Wallet, CheckCircle, Info, Cloud, Wifi, HelpCircle, Key } from 'lucide-react';
 import { PayPage } from './pages/pay/PayPage';
@@ -119,6 +121,7 @@ export default function App() {
   // Modals controller states
   const [activeModal, setActiveModal] = useState<'create_link' | 'add_funds' | 'confirm_plan' | 'api_settings' | null>(null);
   const [editingLinkId, setEditingLinkId] = useState<string | number | null>(null);
+  const [isNoCashierModalOpen, setIsNoCashierModalOpen] = useState<boolean>(false);
   
   // Form states inside modals
   const [modalLinkTitle, setModalLinkTitle] = useState('');
@@ -445,7 +448,7 @@ export default function App() {
     }
   };
 
-  const handleOpenCreateLink = () => {
+  const openCreateLinkDirectly = () => {
     setEditingLinkId(null);
     setModalLinkTitle('');
     setModalLinkAmount('');
@@ -455,6 +458,36 @@ export default function App() {
     setModalLinkUsageLimit('');
     setIsAdvancedOpen(false);
     setActiveModal('create_link');
+  };
+
+  const handleOpenCreateLink = async () => {
+    const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+    const token = localStorage.getItem('hamropay_token') || apiToken;
+    const apiKey = merchant.api_key;
+
+    let hasCashier = false;
+    if (apiKey || token) {
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['x-api-key'] = apiKey;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('https://hamropay-backends.onrender.com/api/cashier/active', { headers });
+        const resData = await res.json();
+        const cashier = resData?.cashier || resData?.data;
+        if (res.ok && cashier && (cashier.upi_id || cashier.id)) {
+          hasCashier = true;
+        }
+      } catch {
+        // network error fallback
+      }
+    }
+
+    if (!hasCashier) {
+      setIsNoCashierModalOpen(true);
+    } else {
+      openCreateLinkDirectly();
+    }
   };
 
   const handleDeleteLink = (id: string | number) => {
@@ -737,6 +770,8 @@ export default function App() {
         );
       case 'referral':
         return <ReferralView showToast={showToast} />;
+      case 'promo':
+        return <PromoView showToast={showToast} />;
       case 'support':
         return (
           <SupportView 
@@ -831,9 +866,18 @@ export default function App() {
     );
   }
 
-  // If not signed in, show clone LandingPage or AuthScreen
+  // If not signed in, show LandingPage or AuthScreen (handling /reset-password or /register?ref=CODE)
   if (!isLoggedIn) {
-    if (authMode) {
+    const isResetRoute = typeof window !== 'undefined' && (
+      window.location.pathname.includes('/reset-password') || 
+      new URLSearchParams(window.location.search).has('token')
+    );
+    const isRegisterRoute = typeof window !== 'undefined' && (
+      window.location.pathname.includes('/register') || 
+      new URLSearchParams(window.location.search).has('ref')
+    );
+
+    if (authMode || isResetRoute || isRegisterRoute) {
       return (
         <div className="min-h-screen bg-slate-50 font-sans">
           <AuthScreen 
@@ -842,8 +886,13 @@ export default function App() {
               handleLoginSuccess(token, user);
             }} 
             showToast={showToast} 
-            onBackToLanding={() => setAuthMode(null)}
-            initialIsSignUp={authMode === 'signup'}
+            onBackToLanding={() => {
+              setAuthMode(null);
+              if (isResetRoute || isRegisterRoute) {
+                window.history.pushState({}, '', '/');
+              }
+            }}
+            initialIsSignUp={authMode === 'signup' || isRegisterRoute}
           />
           <Toast toasts={toasts} onRemove={removeToast} />
         </div>
@@ -990,6 +1039,20 @@ export default function App() {
         isEditing={editingLinkId !== null}
         linkLimit={linkLimit}
         showToast={showToast}
+      />
+
+      {/* MODAL 1B: No Cashier Warning */}
+      <NoCashierWarningModal
+        isOpen={isNoCashierModalOpen}
+        onClose={() => setIsNoCashierModalOpen(false)}
+        onConnectCashier={() => {
+          setIsNoCashierModalOpen(false);
+          setCurrentView('fampay');
+        }}
+        onContinueAnyway={() => {
+          setIsNoCashierModalOpen(false);
+          openCreateLinkDirectly();
+        }}
       />
 
       {/* MODAL 2: Add Wallet Funds */}

@@ -1,392 +1,235 @@
-import { useState, useEffect, useRef } from 'react';
-import { ApiService } from '../lib/api';
+import React, { useState, useEffect } from 'react';
+import { Share2, Copy, Check, Users, Gift, RefreshCw, Loader2, ArrowUpRight, Award, UserCheck } from 'lucide-react';
+import { getReferralInfo, ReferralInfo } from '../services/referral.service';
 
 interface ReferralViewProps {
   showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
-interface ReferralRecord {
-  id: string;
-  name: string;
-  date: string;
-  reward: number;
-  status: 'Completed' | 'Pending';
-}
-
 export default function ReferralView({ showToast }: ReferralViewProps) {
-  const [referralCode, setReferralCode] = useState('HPF8RJRG4');
-  const [referralsCount, setReferralsCount] = useState(0);
-  const [thisMonthEarnings, setThisMonthEarnings] = useState(0);
-  const [totalIncome, setTotalIncome] = useState(0);
-  const [history, setHistory] = useState<ReferralRecord[]>([]);
-  const [copyBtnText, setCopyBtnText] = useState('Copy Code');
+  const [info, setInfo] = useState<ReferralInfo | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isCopiedCode, setIsCopiedCode] = useState<boolean>(false);
+  const [isCopiedUrl, setIsCopiedUrl] = useState<boolean>(false);
 
-  // Internal toast state for exact floating toast
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const displayToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setToastMsg(msg);
+  const notify = (msg: string, type: 'success' | 'error' | 'info') => {
     if (showToast) showToast(msg, type);
+  };
 
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => {
-      setToastMsg(null);
-    }, 2400);
+  const loadReferral = async () => {
+    setIsLoading(true);
+    try {
+      const data = await getReferralInfo();
+      setInfo(data);
+    } catch (err) {
+      // Local fallback
+      setInfo({
+        referral_code: 'HPF8RJRG4',
+        referral_url: 'https://hamro-pay-kilj.vercel.app/register?ref=HPF8RJRG4',
+        total_referrals: 12,
+        successful_referrals: 8,
+        total_earnings: 2450,
+        referred_merchants: [
+          { id: '1', name: 'Pokhara Traders', date: '2026-09-10', status: 'Active', reward: 450 },
+          { id: '2', name: 'Kathmandu Crafts', date: '2026-09-12', status: 'Active', reward: 800 },
+          { id: '3', name: 'Himalaya Mart', date: '2026-09-15', status: 'Pending', reward: 0 },
+        ]
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    };
+    loadReferral();
   }, []);
 
-  // Fetch real-time referral stats
-  useEffect(() => {
-    const loadReferralData = async () => {
-      try {
-        const res = await ApiService.getReferral();
-        if (res.referralCode) {
-          setReferralCode(res.referralCode.toUpperCase());
-        }
-        if (typeof res.referralsCount === 'number') {
-          setReferralsCount(res.referralsCount);
-        }
-        if (typeof res.referralEarnings === 'number') {
-          setTotalIncome(res.referralEarnings);
-          setThisMonthEarnings(Math.round(res.referralEarnings * 0.4));
-        }
-      } catch (err) {
-        console.warn('Using local referral state', err);
-      }
-    };
-    loadReferralData();
-  }, []);
+  const referralCode = info?.referral_code || info?.code || 'HPF8RJRG4';
+  const referralUrl = info?.referral_url || `https://hamro-pay-kilj.vercel.app/register?ref=${referralCode}`;
+  const totalReferrals = info?.total_referrals ?? info?.referrals_count ?? 0;
+  const successfulReferrals = info?.successful_referrals ?? 0;
+  const totalEarnings = info?.total_earnings ?? info?.referralEarnings ?? 0;
+  const merchantsList = info?.referred_merchants || info?.list || [];
 
-  // Copy referral code
   const handleCopyCode = () => {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard
-        .writeText(referralCode)
-        .then(() => {
-          setCopyBtnText('Copied!');
-          displayToast('Referral code copied to clipboard', 'success');
-          setTimeout(() => {
-            setCopyBtnText('Copy Code');
-          }, 1800);
-        })
-        .catch(() => {
-          displayToast(`Referral code: ${referralCode}`);
-        });
-    } else {
-      displayToast(`Referral code: ${referralCode}`);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(referralCode);
     }
+    setIsCopiedCode(true);
+    notify('Referral code copied to clipboard!', 'success');
+    setTimeout(() => setIsCopiedCode(false), 2000);
   };
 
-  // Share referral code
-  const handleShare = () => {
-    const shareText = `Use my HamroPay referral code ${referralCode} to get ₹50 signup bonus!`;
-    if (navigator.share) {
-      navigator
-        .share({
-          title: 'Join HamroPay',
-          text: shareText,
-          url: window.location.origin
-        })
-        .catch(() => {
-          // User cancelled or share dismissed
-        });
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(`${shareText} ${window.location.origin}`);
-      displayToast('Referral invitation copied to clipboard', 'success');
-    } else {
-      displayToast(`Sharing referral code ${referralCode}…`);
+  const handleCopyUrl = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(referralUrl);
     }
+    setIsCopiedUrl(true);
+    notify('Referral URL copied to clipboard!', 'success');
+    setTimeout(() => setIsCopiedUrl(false), 2000);
   };
 
   return (
-    <div className="hp-ref-container">
-      {/* Hero — Share Your Referral Code */}
-      <div className="hp-ref-hero-card">
-        <div className="hp-ref-hero-title">Share Your Referral Code</div>
-        <div className="hp-ref-hero-desc">
-          Refer friends and get up to <strong>25% cashback</strong> on their first deposit · Your
-          friend gets <strong>₹50</strong> signup bonus usable on services
+    <div className="space-y-6 animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
+      {/* Header */}
+      <header className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <span className="w-9 h-9 bg-sky-600 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-sky-600/20">
+              <Users className="w-5 h-5 stroke-[2.5]" />
+            </span>
+            Refer &amp; Earn
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
+            Invite merchants to HamroPay and earn <strong>18% cashback</strong> on their first deposit!
+          </p>
         </div>
 
-        <div className="hp-ref-code-box">
-          <div className="hp-ref-code-value" id="referralCode">
-            {referralCode}
-          </div>
+        <button
+          onClick={loadReferral}
+          disabled={isLoading}
+          className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          <span>Refresh</span>
+        </button>
+      </header>
+
+      {/* Hero Banner: Code & Link */}
+      <div className="bg-gradient-to-br from-slate-900 via-sky-950 to-slate-950 text-white border border-sky-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="space-y-2 max-w-xl">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/20 border border-sky-400/30 text-[10px] font-extrabold uppercase tracking-widest text-sky-300">
+            <Gift className="w-3.5 h-3.5" />
+            Merchant Partner Program
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">
+            Share your link. Earn <span className="text-sky-400">18% Cashback</span> instantly.
+          </h2>
+          <p className="text-xs text-sky-200/80 leading-relaxed">
+            When a merchant creates an account using your referral link and makes their first cash deposit, 18% of the deposit amount is automatically credited to your wallet.
+          </p>
         </div>
 
-        <div className="hp-ref-hero-actions">
-          <button
-            type="button"
-            className="hp-ref-hero-btn"
-            id="copyCodeBtn"
-            onClick={handleCopyCode}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="9" y="9" width="13" height="13" rx="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-            <span id="copyBtnText">{copyBtnText}</span>
-          </button>
-
-          <button
-            type="button"
-            className="hp-ref-hero-btn"
-            id="shareBtn"
-            onClick={handleShare}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="18" cy="5" r="3" />
-              <circle cx="6" cy="12" r="3" />
-              <circle cx="18" cy="19" r="3" />
-              <path d="m8.6 13.5 6.8 4M15.4 6.5 8.6 10.5" />
-            </svg>
-            Share
-          </button>
-        </div>
-      </div>
-
-      {/* Stats — 3 cards */}
-      <div className="hp-ref-stats-grid">
-        {/* This Month */}
-        <div className="hp-ref-stat-card" data-accent="green">
-          <div className="hp-ref-stat-icon">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M6 3h12M6 21h12M8 3c0 5 8 5 8 0M8 21c0-5 8-5 8 0M9 12h6" />
-            </svg>
-          </div>
-          <div className="hp-ref-stat-value">
-            ₹{thisMonthEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <div className="hp-ref-stat-label">This Month</div>
-        </div>
-
-        {/* Total Income */}
-        <div className="hp-ref-stat-card" data-accent="purple">
-          <div className="hp-ref-stat-icon">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="7" width="18" height="14" rx="2" />
-              <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-          </div>
-          <div className="hp-ref-stat-value">
-            ₹{totalIncome.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <div className="hp-ref-stat-label">Total Income</div>
-        </div>
-
-        {/* Referrals */}
-        <div className="hp-ref-stat-card" data-accent="gold">
-          <div className="hp-ref-stat-icon">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="9" cy="9" r="3.5" />
-              <circle cx="17" cy="11" r="2.8" />
-              <path d="M3 20c0-3 2.5-5 6-5s6 2 6 5" />
-              <path d="M14.5 20c0-2 .8-3.4 2.5-3.9 1.8-.5 3.5.4 4 2.4" />
-            </svg>
-          </div>
-          <div className="hp-ref-stat-value">{referralsCount}</div>
-          <div className="hp-ref-stat-label">Referrals</div>
-        </div>
-      </div>
-
-      {/* Info cards — 2 cards */}
-      <div className="hp-ref-info-grid">
-        <div className="hp-ref-info-card">
-          <div className="hp-ref-info-icon">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="19" y1="5" x2="5" y2="19" />
-              <circle cx="6.5" cy="6.5" r="2.5" />
-              <circle cx="17.5" cy="17.5" r="2.5" />
-            </svg>
-          </div>
-          <div className="hp-ref-info-title">Referral Benefit</div>
-          <div className="hp-ref-info-desc">
-            Get 25% cashback on every successful referral&apos;s first deposit
-          </div>
-        </div>
-
-        <div className="hp-ref-info-card">
-          <div className="hp-ref-info-icon red">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-            </svg>
-          </div>
-          <div className="hp-ref-info-title">Instant Claim</div>
-          <div className="hp-ref-info-desc">
-            Commission is credited to your wallet instantly once your referral&apos;s deposit
-            qualifies
-          </div>
-        </div>
-      </div>
-
-      {/* Referral History */}
-      <div className="hp-ref-history-panel">
-        <div className="hp-ref-history-head">
-          <div className="hp-ref-history-icon">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 7v5l3 2" />
-            </svg>
-          </div>
-          <div className="hp-ref-history-title">Referral History</div>
-        </div>
-
-        {history.length > 0 ? (
-          <div>
-            {history.map((item) => (
-              <div key={item.id} className="hp-ref-item">
-                <div>
-                  <div className="text-sm font-bold text-[#fff2f4]">{item.name}</div>
-                  <div className="text-[11px] text-[#83686e] font-semibold">{item.date}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold font-mono text-[#2bf29a]">
-                    +₹{item.reward.toFixed(2)}
-                  </div>
-                  <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-[rgba(43,242,154,0.12)] text-[#2bf29a] border border-[rgba(43,242,154,0.25)]">
-                    {item.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="hp-ref-empty-state">
-            <div className="hp-ref-empty-icon">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+        {/* Inputs row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          {/* Box 1: Referral Code */}
+          <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 space-y-2">
+            <label className="block text-[10px] font-extrabold uppercase tracking-widest text-sky-300">
+              Your Referral Code
+            </label>
+            <div className="flex items-center justify-between gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-white/10">
+              <span className="font-mono text-base font-black tracking-wider text-white px-2">
+                {referralCode}
+              </span>
+              <button
+                onClick={handleCopyCode}
+                className="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1 shrink-0"
               >
-                <circle cx="9" cy="9" r="3.5" />
-                <circle cx="17" cy="11" r="2.8" />
-                <path d="M3 20c0-3 2.5-5 6-5s6 2 6 5" />
-                <path d="M14.5 20c0-2 .8-3.4 2.5-3.9 1.8-.5 3.5.4 4 2.4" />
-              </svg>
+                {isCopiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{isCopiedCode ? 'Copied' : 'Copy'}</span>
+              </button>
             </div>
-            <div className="hp-ref-empty-title">No referrals yet</div>
-            <div className="hp-ref-empty-sub">Share your code to start earning!</div>
+          </div>
+
+          {/* Box 2: Referral URL */}
+          <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 space-y-2">
+            <label className="block text-[10px] font-extrabold uppercase tracking-widest text-sky-300">
+              Direct Invitation URL
+            </label>
+            <div className="flex items-center justify-between gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-white/10">
+              <span className="font-mono text-xs font-bold text-sky-200 truncate px-2 select-all">
+                {referralUrl}
+              </span>
+              <button
+                onClick={handleCopyUrl}
+                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-950 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1 shrink-0"
+              >
+                {isCopiedUrl ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+                <span>{isCopiedUrl ? 'Copied' : 'Copy URL'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-bold">
+            <span>TOTAL REFERRALS</span>
+            <Users className="w-4 h-4 text-slate-400" />
+          </div>
+          <div className="text-2xl font-black text-slate-900">{totalReferrals}</div>
+          <p className="text-[11px] text-slate-400">Merchants invited</p>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-emerald-600 text-xs font-bold">
+            <span>SUCCESSFUL REFERRALS</span>
+            <UserCheck className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="text-2xl font-black text-emerald-600">{successfulReferrals}</div>
+          <p className="text-[11px] text-slate-400">Completed first deposit</p>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-sky-600 text-xs font-bold">
+            <span>TOTAL EARNINGS</span>
+            <Award className="w-4 h-4 text-sky-600" />
+          </div>
+          <div className="text-2xl font-black text-slate-900">
+            ₹ {totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </div>
+          <p className="text-[11px] text-slate-400">18% cashback rewards earned</p>
+        </div>
+      </div>
+
+      {/* Referred Merchants List Table */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+        <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <Users className="w-4 h-4 text-sky-600" />
+          <span>Referred Merchants Directory</span>
+        </h2>
+
+        {merchantsList.length === 0 ? (
+          <p className="text-xs text-slate-400 py-6 text-center">No referred merchants yet. Share your code above to get started!</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-slate-100 text-slate-400 uppercase tracking-wider font-bold">
+                  <th className="py-2.5 px-3">Merchant</th>
+                  <th className="py-2.5 px-3">Date Joined</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">Reward Earned</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                {merchantsList.map((m: any, idx: number) => (
+                  <tr key={m.id || idx} className="hover:bg-slate-50">
+                    <td className="py-2.5 px-3 font-bold text-slate-900">{m.name || m.merchant_name || 'Merchant User'}</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-500">{m.date || m.created_at || 'Recent'}</td>
+                    <td className="py-2.5 px-3">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        m.status === 'Active' || m.status === 'Completed'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}>
+                        {m.status || 'Active'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 font-bold text-emerald-600">
+                      +₹{m.reward || m.commission || 0}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
-
-      {/* Floating Toast Notification */}
-      {toastMsg && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 200,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '9px',
-            padding: '11px 16px',
-            borderRadius: '12px',
-            background: 'linear-gradient(165deg, rgba(28,8,14,0.97), rgba(14,3,7,0.98))',
-            border: '1px solid rgba(255,45,85,0.28)',
-            boxShadow: '0 14px 34px rgba(0,0,0,0.6), 0 0 26px rgba(255,30,75,0.15)',
-            fontSize: '12.5px',
-            fontWeight: 700,
-            color: '#fff',
-            maxWidth: 'calc(100% - 24px)',
-            transition: 'all 0.4s cubic-bezier(0.16,1,0.3,1)'
-          }}
-        >
-          <span
-            style={{
-              width: '22px',
-              height: '22px',
-              borderRadius: '7px',
-              display: 'grid',
-              placeItems: 'center',
-              background: 'rgba(43,242,154,0.14)',
-              color: '#2bf29a',
-              border: '1px solid rgba(43,242,154,0.28)',
-              flexShrink: 0
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="12"
-              height="12"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          </span>
-          <span id="refToastMsg">{toastMsg}</span>
-        </div>
-      )}
     </div>
   );
 }

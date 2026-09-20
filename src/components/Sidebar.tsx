@@ -711,8 +711,8 @@ export default function Sidebar({
 
             {/* Apply Promo */}
             <div
-              className="hp-nav-item"
-              onClick={() => handleNavClick('dashboard')}
+              className={`hp-nav-item ${currentView === 'promo' ? 'active' : ''}`}
+              onClick={() => handleNavClick('promo')}
             >
               <span
                 className="hp-nav-icon"
