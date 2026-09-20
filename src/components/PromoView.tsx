@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Gift, ArrowRight, Sparkles, RefreshCw, Loader2, Coins, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  Gift,
+  ArrowRight,
+  RefreshCw,
+  Loader2,
+  Coins,
+  X,
+  Sparkles
+} from 'lucide-react';
 import { applyPromo, getBonusBalance, convertBonusToCredit } from '../services/promo.service';
 
 interface PromoViewProps {
@@ -15,7 +23,7 @@ export default function PromoView({ showToast, onRefreshWallet }: PromoViewProps
   const [bonusBalance, setBonusBalance] = useState<number>(0);
   const [isLoadingBonus, setIsLoadingBonus] = useState(true);
 
-  // Convert Bonus to Credit state
+  // Convert Bonus state
   const [convertAmount, setConvertAmount] = useState('100');
   const [isConverting, setIsConverting] = useState(false);
   const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
@@ -50,21 +58,22 @@ export default function PromoView({ showToast, onRefreshWallet }: PromoViewProps
   // Submit Promo Code
   const handleApplyPromo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!promoCode || promoCode.trim().length < 3) {
-      notify('Please enter a valid promo code.', 'error');
+    const code = promoCode.trim().toUpperCase();
+    if (!code || code.length < 3) {
+      notify('Enter a valid promo code', 'error');
       return;
     }
 
     setIsApplying(true);
     try {
-      const res = await applyPromo(promoCode.trim().toUpperCase());
+      const res = await applyPromo(code);
       const bonusAdded = res?.amount || res?.bonus || res?.reward || 100;
-      notify(res?.message || `₹${bonusAdded} added to Hamro Bonus!`, 'success');
+      notify(res?.message || `Promo code "${code}" applied! +₹${bonusAdded} Bonus`, 'success');
       setPromoCode('');
       loadBonus();
       if (onRefreshWallet) onRefreshWallet();
     } catch (err: any) {
-      notify(err?.message || 'Invalid/expired promo code', 'error');
+      notify(err?.message || 'Invalid or expired promo code', 'error');
     } finally {
       setIsApplying(false);
     }
@@ -98,114 +107,112 @@ export default function PromoView({ showToast, onRefreshWallet }: PromoViewProps
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
-      {/* Page Title */}
-      <header className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-            <span className="w-9 h-9 bg-purple-600 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-purple-600/20">
-              <Gift className="w-5 h-5 stroke-[2.5]" />
-            </span>
-            Apply Promo Code
-          </h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Redeem promotional vouchers and manage your active Hamro Bonus wallet.
-          </p>
+    <div className="promo-container">
+      {/* Page Header */}
+      <div className="promo-page-header">
+        <div className="promo-page-head-left">
+          <div className="promo-page-icon">
+            <Gift />
+          </div>
+          <div className="promo-page-info">
+            <h1>Apply Promo Code</h1>
+            <p>Redeem promotional vouchers and manage your active Hamro Bonus wallet.</p>
+          </div>
         </div>
 
         <button
           onClick={loadBonus}
           disabled={isLoadingBonus}
-          className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-600 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          className="promo-refresh-btn"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingBonus ? 'animate-spin' : ''}`} />
-          <span>Refresh Balance</span>
+          <RefreshCw className={isLoadingBonus ? 'animate-spin' : ''} />
+          <span>{isLoadingBonus ? 'Refreshing…' : 'Refresh Balance'}</span>
         </button>
-      </header>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-        {/* Card 1: Apply Promo Code Form */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
-          <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-black">
-              <Sparkles className="w-4 h-4" />
+      {/* Grid: 2 Columns */}
+      <div className="promo-grid">
+        {/* Redeem Voucher Code */}
+        <div className="redeem-card">
+          <div className="redeem-head">
+            <div className="redeem-icon">
+              <Gift />
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-slate-800">Redeem Voucher Code</h2>
-              <p className="text-[11px] text-slate-400">Instant credit to your Hamro Bonus balance</p>
+            <div className="redeem-head-text">
+              <div className="redeem-title">Redeem Voucher Code</div>
+              <div className="redeem-sub">Instant credit to your Hamro Bonus balance</div>
             </div>
           </div>
 
-          <form onSubmit={handleApplyPromo} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Promo Code
-              </label>
+          <form onSubmit={handleApplyPromo}>
+            <div className="promo-field-label">Promo Code</div>
+
+            <div className="code-input-wrap">
               <input
                 type="text"
                 value={promoCode}
-                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                placeholder="e.g. HAMRO100"
-                className="w-full text-xs font-mono font-bold tracking-widest px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-900 uppercase placeholder:text-slate-400 focus:border-purple-500 focus:bg-white focus:outline-none transition"
+                onChange={(e) => setPromoCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                className="code-input"
+                placeholder="E.G. HAMRO100"
+                autoComplete="off"
+                spellCheck="false"
+                maxLength={16}
               />
             </div>
 
             <button
               type="submit"
               disabled={isApplying}
-              className="w-full py-3 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-md shadow-purple-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              className="apply-btn"
             >
               {isApplying ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying Code...</span>
+                  <Loader2 className="animate-spin" />
+                  <span>Applying…</span>
                 </>
               ) : (
                 <>
                   <span>Apply Promo Code</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight />
                 </>
               )}
             </button>
           </form>
         </div>
 
-        {/* Card 2: Hamro Bonus Wallet Box */}
-        <div className="bg-gradient-to-br from-slate-900 via-purple-950 to-slate-950 text-white border border-purple-500/30 rounded-2xl p-6 shadow-xl space-y-5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
-
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-purple-300 flex items-center gap-2">
-              <Coins className="w-4 h-4 text-purple-400" />
+        {/* Hamro Bonus Balance */}
+        <div className="bonus-card">
+          <div className="bonus-head">
+            <div className="bonus-label">
+              <Coins />
               <span>Hamro Bonus Balance</span>
-            </span>
-            <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-              Live Wallet
-            </span>
+            </div>
+            <span className="bonus-tag">Live Wallet</span>
           </div>
 
-          <div className="py-2">
-            <div className="text-3xl font-black tracking-tight text-white">
-              {isLoadingBonus ? (
-                <span className="text-sm text-slate-400 flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Loading...
-                </span>
-              ) : (
-                `₹ ${bonusBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-              )}
-            </div>
-            <p className="text-[11px] text-purple-200/80 mt-1">
-              Bonus funds accumulated from promo codes and referral rewards.
-            </p>
+          <div className="bonus-amount">
+            {isLoadingBonus ? (
+              <span style={{ fontSize: '20px', color: 'rgba(255,255,255,0.6)', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <Loader2 className="animate-spin" style={{ width: 18, height: 18 }} /> Loading...
+              </span>
+            ) : (
+              `₹ ${bonusBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            )}
+          </div>
+
+          <div className="bonus-desc">
+            Bonus funds accumulated from promo codes and referral rewards.
           </div>
 
           <button
             type="button"
-            onClick={() => setIsConvertModalOpen(true)}
+            onClick={() => {
+              if (bonusBalance > 0) setIsConvertModalOpen(true);
+            }}
             disabled={bonusBalance <= 0}
-            className="w-full py-3 bg-gradient-to-r from-purple-500 to-rose-600 hover:from-purple-600 hover:to-rose-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition shadow-lg shadow-purple-900/40 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+            className={`convert-btn ${bonusBalance > 0 ? 'enabled' : ''}`}
           >
-            <Coins className="w-4 h-4" />
+            <Coins />
             <span>Convert to Credit</span>
           </button>
         </div>
@@ -213,68 +220,62 @@ export default function PromoView({ showToast, onRefreshWallet }: PromoViewProps
 
       {/* Convert Bonus Modal */}
       {isConvertModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200"
-          onClick={() => setIsConvertModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white rounded-2xl p-6 space-y-4 text-slate-900 shadow-2xl border border-slate-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <Coins className="w-5 h-5 text-purple-600" />
-                <span>Convert Bonus to Hamro Credit</span>
-              </h3>
-              <button
-                onClick={() => setIsConvertModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 text-xs font-bold"
-              >
-                ✕
+        <div className="hp-w-modal-scrim" onClick={() => setIsConvertModalOpen(false)}>
+          <div className="hp-w-credit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="hp-w-modal-head">
+              <div className="hp-w-modal-head-icon">
+                <Coins />
+              </div>
+              <div className="hp-w-modal-head-text">
+                <div className="hp-w-modal-title">Convert Bonus to Credits</div>
+              </div>
+              <button onClick={() => setIsConvertModalOpen(false)} className="hp-w-modal-close">
+                <X />
               </button>
             </div>
 
-            <p className="text-xs text-slate-500">
-              Available Bonus: <strong>₹{bonusBalance.toLocaleString('en-IN')}</strong>. Converted credits can be used for API transactions and fees.
-            </p>
+            <div className="hp-w-credit-body">
+              <p style={{ fontSize: '12.5px', color: 'var(--hp-w-muted, #b89fa5)', marginBottom: '14px' }}>
+                Available Bonus: <strong style={{ color: '#fff' }}>₹{bonusBalance.toLocaleString('en-IN')}</strong>. Converted credits can be used for API transactions and fees.
+              </p>
 
-            <form onSubmit={handleConvertBonusSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-700 uppercase">
-                  Amount to Convert (₹)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max={bonusBalance}
-                  value={convertAmount}
-                  onChange={(e) => setConvertAmount(e.target.value)}
-                  className="w-full text-xs font-bold px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:border-purple-500 focus:bg-white focus:outline-none"
-                  required
-                />
-              </div>
+              <form onSubmit={handleConvertBonusSubmit}>
+                <div className="hp-w-field">
+                  <div className="hp-w-field-label">
+                    <span>Amount to Convert (₹)</span>
+                    <span className="req">*</span>
+                  </div>
+                  <div className="hp-w-input-wrap-f">
+                    <input
+                      type="number"
+                      min="1"
+                      max={bonusBalance}
+                      value={convertAmount}
+                      onChange={(e) => setConvertAmount(e.target.value)}
+                      className="hp-w-input-field"
+                      required
+                    />
+                  </div>
+                </div>
 
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsConvertModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isConverting}
-                  className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-600/20 flex items-center justify-center gap-1.5"
-                >
-                  {isConverting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <span>Confirm Convert</span>
-                  )}
-                </button>
-              </div>
-            </form>
+                <div className="hp-w-modal-foot" style={{ borderTop: 'none', padding: '12px 0 0' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsConvertModalOpen(false)}
+                    className="hp-w-modal-btn hp-w-btn-cancel"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isConverting}
+                    className="hp-w-modal-btn hp-w-btn-proceed"
+                  >
+                    {isConverting ? <Loader2 className="animate-spin" /> : <span>Confirm Conversion</span>}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
