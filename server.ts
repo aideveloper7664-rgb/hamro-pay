@@ -633,6 +633,122 @@ app.delete('/api/fampay/accounts/:id', authGateway, (req: any, res) => {
 });
 
 // -------------------------------------------------------------
+// CASHIER MANAGEMENT (FAMPAY & PAYTM)
+// -------------------------------------------------------------
+app.get('/api/cashier/list', (req: any, res) => {
+  const db = getDb();
+  if (!db.cashiers) {
+    db.cashiers = [
+      {
+        id: 'fampay-default',
+        type: 'fampay',
+        upi_id: 'merchant@fam',
+        phone: '9876543210',
+        gmail_email: 'merchant@gmail.com',
+        is_active: true,
+        status: 'active',
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'paytm-default',
+        type: 'paytm',
+        upi_id: '9876543210@paytm',
+        phone: '9876543210',
+        paytm_mid: 'HAMRO_PAYTM_PRO',
+        is_active: true,
+        status: 'active',
+        created_at: new Date().toISOString()
+      }
+    ];
+    saveDb(db);
+  }
+  res.json({ success: true, data: db.cashiers, cashiers: db.cashiers });
+});
+
+app.post('/api/cashier/fampay/add', (req: any, res) => {
+  const { upi_id, phone, gmail_email, gmail_app_password } = req.body;
+  if (!upi_id || !phone) {
+    return res.status(400).json({ success: false, message: 'UPI ID and Phone are required.' });
+  }
+  const db = getDb();
+  if (!db.cashiers) db.cashiers = [];
+
+  const newAcc = {
+    id: 'fampay-' + Date.now(),
+    type: 'fampay',
+    upi_id: upi_id.trim(),
+    phone: phone.trim(),
+    gmail_email: gmail_email ? gmail_email.trim() : '',
+    is_active: true,
+    status: 'active',
+    created_at: new Date().toISOString()
+  };
+
+  db.cashiers.push(newAcc);
+  saveDb(db);
+  res.json({ success: true, data: newAcc, cashier: newAcc, message: 'FamPay cashier connected successfully.' });
+});
+
+app.post('/api/cashier/paytm/add', (req: any, res) => {
+  const { upi_id, phone, paytm_mid } = req.body;
+  if (!upi_id || !phone) {
+    return res.status(400).json({ success: false, message: 'UPI ID and Phone are required.' });
+  }
+  const db = getDb();
+  if (!db.cashiers) db.cashiers = [];
+
+  const newAcc = {
+    id: 'paytm-' + Date.now(),
+    type: 'paytm',
+    upi_id: upi_id.trim(),
+    phone: phone.trim(),
+    paytm_mid: paytm_mid ? paytm_mid.trim() : '',
+    is_active: true,
+    status: 'active',
+    created_at: new Date().toISOString()
+  };
+
+  db.cashiers.push(newAcc);
+  saveDb(db);
+  res.json({ success: true, data: newAcc, cashier: newAcc, message: 'Paytm cashier connected successfully.' });
+});
+
+app.patch('/api/cashier/:id/toggle', (req: any, res) => {
+  const { id } = req.params;
+  const db = getDb();
+  if (!db.cashiers) db.cashiers = [];
+
+  const acc = db.cashiers.find((c: any) => c.id === id);
+  if (!acc) {
+    return res.status(404).json({ success: false, message: 'Cashier not found' });
+  }
+
+  acc.is_active = !acc.is_active;
+  acc.status = acc.is_active ? 'active' : 'inactive';
+  saveDb(db);
+  res.json({ success: true, data: acc, message: 'Status updated' });
+});
+
+app.delete('/api/cashier/:id', (req: any, res) => {
+  const { id } = req.params;
+  const db = getDb();
+  if (!db.cashiers) db.cashiers = [];
+
+  const idx = db.cashiers.findIndex((c: any) => c.id === id);
+  if (idx !== -1) {
+    db.cashiers.splice(idx, 1);
+    saveDb(db);
+  }
+  res.json({ success: true, message: 'Cashier removed successfully' });
+});
+
+app.get('/api/cashier/active', (req: any, res) => {
+  const db = getDb();
+  const active = (db.cashiers || []).find((c: any) => c.is_active);
+  res.json({ success: true, data: active || null });
+});
+
+// -------------------------------------------------------------
 // VITE OR STATIC FILE HOOKS
 // -------------------------------------------------------------
 async function bootstrapServer() {

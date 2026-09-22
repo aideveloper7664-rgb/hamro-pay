@@ -195,7 +195,12 @@ export default function Sidebar({
             <div className={`hp-nav-group flex flex-col ${expandedGroups.cashier ? 'expanded' : ''}`}>
               <div
                 className={`hp-nav-item ${expandedGroups.cashier ? 'expanded' : ''}`}
-                onClick={() => toggleGroup('cashier')}
+                onClick={() => {
+                  toggleGroup('cashier');
+                  if (currentView !== 'fampay' && currentView !== 'paytm') {
+                    handleNavClick('fampay');
+                  }
+                }}
               >
                 <span
                   className="hp-nav-icon"
@@ -257,9 +262,6 @@ export default function Sidebar({
                         </svg>
                       </span>
                       <span className="flex-1 min-w-0 truncate">FamPay</span>
-                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/35 tracking-wider shrink-0 ml-1">
-                        Coming Soon
-                      </span>
                     </div>
 
                     {/* Paytm */}
@@ -285,9 +287,6 @@ export default function Sidebar({
                         </svg>
                       </span>
                       <span className="flex-1 min-w-0 truncate">Paytm</span>
-                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/35 tracking-wider shrink-0 ml-1">
-                        Coming Soon
-                      </span>
                     </div>
                   </div>
                 </div>

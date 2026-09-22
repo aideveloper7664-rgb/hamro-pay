@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   CreditCard, Plus, CheckCircle2, AlertCircle, Trash2, 
   ShieldCheck, ArrowRight, X, Check, RefreshCw, Smartphone, 
-  ToggleLeft, ToggleRight, Building2, Clock
+  ToggleLeft, ToggleRight, Building2
 } from 'lucide-react';
 import { 
   CashierAccount, 
@@ -44,7 +44,7 @@ export default function PaytmConnectView({
   const loadAccounts = async () => {
     setIsLoading(true);
     try {
-      const res = await getCashierList();
+      const res: any = await getCashierList();
       let rawList: CashierAccount[] = [];
       if (Array.isArray(res)) {
         rawList = res;
@@ -78,8 +78,14 @@ export default function PaytmConnectView({
   }, []);
 
   const openAddModal = () => {
-    showToast('Paytm Connect is coming soon!', 'info');
-    return;
+    if (accounts.length >= 3) {
+      showToast('Maximum 3 Paytm accounts allowed.', 'error');
+      return;
+    }
+    setUpiId('');
+    setPhone('');
+    setPaytmMid('');
+    setIsAddModalOpen(true);
   };
 
   // Submit Paytm Account
@@ -164,26 +170,6 @@ export default function PaytmConnectView({
     <div className="min-h-screen bg-[#070102] text-[#fff2f4] font-sans antialiased selection:bg-rose-500 selection:text-white">
       {/* MAIN CONTAINER */}
       <main className="max-w-[1300px] mx-auto px-4 sm:px-6 py-6 pb-20">
-        {/* COMING SOON BANNER */}
-        <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-sky-500/15 via-[rgba(0,185,245,0.12)] to-sky-500/15 border border-sky-500/30 flex items-center justify-between gap-4 shadow-lg backdrop-blur-md">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400 shrink-0 shadow-[0_0_15px_rgba(0,185,245,0.3)]">
-              <Clock className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-white flex items-center gap-2">
-                <span>Paytm Connect is coming soon!</span>
-                <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-black uppercase tracking-wider border border-sky-500/30">
-                  Coming Soon
-                </span>
-              </h3>
-              <p className="text-xs text-[#b89fa5] mt-0.5">
-                Automated Paytm cashier integration is coming soon. Customer payments currently route directly to Admin UPI (<span className="text-sky-300 font-mono font-bold">9769516928@fam</span>).
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* PAGE HEADER */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3.5">
@@ -214,9 +200,12 @@ export default function PaytmConnectView({
 
             <button 
               onClick={openAddModal}
-              disabled={true}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[11px] text-[13.5px] font-extrabold text-white/50 bg-slate-800/80 border border-slate-700/60 cursor-not-allowed opacity-60 transition-all duration-200 whitespace-nowrap tracking-tight"
-              title="Paytm Connect is coming soon!"
+              disabled={accounts.length >= 3}
+              className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[11px] text-[13.5px] font-extrabold text-white transition-all duration-200 whitespace-nowrap tracking-tight ${
+                accounts.length >= 3
+                  ? 'opacity-50 cursor-not-allowed bg-slate-800'
+                  : 'bg-gradient-to-r from-[#00b9f5] to-[#0072bc] shadow-[0_8px_24px_rgba(0,185,245,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,185,245,0.55)] active:translate-y-0'
+              }`}
             >
               <Plus className="w-[15px] h-[15px] stroke-[2.8]" />
               Add Paytm Account

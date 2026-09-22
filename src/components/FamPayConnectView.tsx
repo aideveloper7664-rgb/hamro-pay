@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Smartphone, Plus, CheckCircle2, AlertCircle, Trash2, 
   ShieldCheck, ArrowRight, ArrowLeft, X, Mail, Check, Play, RefreshCw, 
-  Lock, Eye, EyeOff, Radio, ToggleLeft, ToggleRight, Clock
+  Lock, Eye, EyeOff, Radio, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { 
   CashierAccount, 
@@ -47,7 +47,7 @@ export default function FamPayConnectView({
   const loadAccounts = async () => {
     setIsLoading(true);
     try {
-      const res = await getCashierList();
+      const res: any = await getCashierList();
       let rawList: CashierAccount[] = [];
       if (Array.isArray(res)) {
         rawList = res;
@@ -81,8 +81,17 @@ export default function FamPayConnectView({
   }, []);
 
   const openAddModal = () => {
-    showToast('FamPay Connect is coming soon!', 'info');
-    return;
+    if (accounts.length >= 3) {
+      showToast('Maximum 3 FamPay accounts allowed.', 'error');
+      return;
+    }
+    setStep(1);
+    setUpiId('');
+    setPhone('');
+    setGmailEmail('');
+    setGmailAppPassword('');
+    setShowPassword(false);
+    setIsAddModalOpen(true);
   };
 
   // Step 1 Validation -> Next
@@ -188,26 +197,6 @@ export default function FamPayConnectView({
     <div className="min-h-screen bg-[#070102] text-[#fff2f4] font-sans antialiased selection:bg-rose-500 selection:text-white">
       {/* MAIN CONTAINER */}
       <main className="max-w-[1300px] mx-auto px-4 sm:px-6 py-6 pb-20">
-        {/* COMING SOON BANNER */}
-        <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-[#ff7a00]/15 via-[rgba(255,45,85,0.12)] to-[#ff7a00]/15 border border-[#ff7a00]/30 flex items-center justify-between gap-4 shadow-lg backdrop-blur-md">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#ff7a00]/20 border border-[#ff7a00]/40 flex items-center justify-center text-[#ff9933] shrink-0 shadow-[0_0_15px_rgba(255,122,0,0.3)]">
-              <Clock className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-white flex items-center gap-2">
-                <span>FamPay Connect is coming soon!</span>
-                <span className="px-2 py-0.5 rounded-full bg-[#ff7a00]/20 text-[#ff9933] text-[10px] font-black uppercase tracking-wider border border-[#ff7a00]/30">
-                  Coming Soon
-                </span>
-              </h3>
-              <p className="text-xs text-[#b89fa5] mt-0.5">
-                Automated FamPay cashier integration is coming soon. Customer payments currently route directly to Admin UPI (<span className="text-[#ff9933] font-mono font-bold">9769516928@fam</span>).
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* PAGE HEADER */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3.5">
@@ -238,9 +227,12 @@ export default function FamPayConnectView({
 
             <button 
               onClick={openAddModal}
-              disabled={true}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[11px] text-[13.5px] font-extrabold text-white/50 bg-slate-800/80 border border-slate-700/60 cursor-not-allowed opacity-60 transition-all duration-200 whitespace-nowrap tracking-tight"
-              title="FamPay Connect is coming soon!"
+              disabled={accounts.length >= 3}
+              className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[11px] text-[13.5px] font-extrabold text-white transition-all duration-200 whitespace-nowrap tracking-tight ${
+                accounts.length >= 3
+                  ? 'opacity-50 cursor-not-allowed bg-slate-800'
+                  : 'bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] shadow-[0_8px_24px_rgba(255,30,75,0.4),inset_0_1px_0_rgba(255,255,255,0.18)] hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(255,30,75,0.55)] active:translate-y-0'
+              }`}
             >
               <Plus className="w-[15px] h-[15px] stroke-[2.8]" />
               Add FamPay Account

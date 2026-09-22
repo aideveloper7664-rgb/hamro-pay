@@ -27,6 +27,7 @@ import DeveloperPortalView from './components/DeveloperPortalView';
 import StorePortalView from './components/StorePortalView';
 import FamPayConnectView from './components/FamPayConnectView';
 import PaytmConnectView from './components/PaytmConnectView';
+import { getActiveCashier } from './services/cashier.service';
 import Modal from './components/Modal';
 import CreatePaymentLinkModal from './components/CreatePaymentLinkModal';
 import NoCashierWarningModal from './components/NoCashierWarningModal';
@@ -475,25 +476,16 @@ export default function App() {
 
   const handleOpenCreateLink = async () => {
     const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-    const token = localStorage.getItem('hamropay_token') || apiToken;
     const apiKey = merchant.api_key;
 
     let hasCashier = false;
-    if (apiKey || token) {
-      try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (apiKey) headers['x-api-key'] = apiKey;
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        const res = await fetch('https://hamropay-backends.onrender.com/api/cashier/active', { headers });
-        const resData = await res.json();
-        const cashier = resData?.cashier || resData?.data;
-        if (res.ok && cashier && (cashier.upi_id || cashier.id)) {
-          hasCashier = true;
-        }
-      } catch {
-        // network error fallback
+    try {
+      const active = await getActiveCashier(apiKey);
+      if (active && (active.upi_id || active.upiId || active.id)) {
+        hasCashier = true;
       }
+    } catch {
+      hasCashier = false;
     }
 
     if (!hasCashier) {
@@ -1067,9 +1059,13 @@ export default function App() {
       <NoCashierWarningModal
         isOpen={isNoCashierModalOpen}
         onClose={() => setIsNoCashierModalOpen(false)}
-        onConnectCashier={() => {
+        onConnectFamPay={() => {
           setIsNoCashierModalOpen(false);
           setCurrentView('fampay');
+        }}
+        onConnectPaytm={() => {
+          setIsNoCashierModalOpen(false);
+          setCurrentView('paytm');
         }}
         onContinueAnyway={() => {
           setIsNoCashierModalOpen(false);

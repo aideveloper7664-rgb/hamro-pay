@@ -5,6 +5,7 @@ interface NoCashierWarningModalProps {
   isOpen: boolean;
   onConnectCashier?: () => void;
   onConnectFamPay?: () => void;
+  onConnectPaytm?: () => void;
   onContinueAnyway: () => void;
   onCancel?: () => void;
   onClose?: () => void;
@@ -14,6 +15,7 @@ export default function NoCashierWarningModal({
   isOpen,
   onConnectCashier,
   onConnectFamPay,
+  onConnectPaytm,
   onContinueAnyway,
   onCancel,
   onClose
@@ -21,7 +23,8 @@ export default function NoCashierWarningModal({
   if (!isOpen) return null;
 
   const handleClose = onClose || onCancel || (() => {});
-  const handleConnect = onConnectCashier || onConnectFamPay || (() => {});
+  const handleConnectFamPay = onConnectFamPay || onConnectCashier || (() => {});
+  const handleConnectPaytm = onConnectPaytm || (() => {});
 
   return (
     <div
@@ -67,7 +70,7 @@ export default function NoCashierWarningModal({
         <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
           <button
             type="button"
-            onClick={handleConnect}
+            onClick={handleConnectFamPay}
             className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-extrabold shadow-md shadow-rose-600/30 hover:shadow-lg hover:shadow-rose-600/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
             <span>Connect FamPay</span>
@@ -76,18 +79,19 @@ export default function NoCashierWarningModal({
 
           <button
             type="button"
-            onClick={onContinueAnyway}
-            className="py-3 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-bold transition cursor-pointer"
+            onClick={handleConnectPaytm}
+            className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-br from-[#00b9f5] to-[#0082c8] text-white text-xs font-extrabold shadow-md shadow-sky-600/30 hover:shadow-lg hover:shadow-sky-600/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
-            Continue Anyway
+            <span>Connect Paytm</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
 
           <button
             type="button"
-            onClick={handleClose}
-            className="py-3 px-3 rounded-xl bg-transparent hover:bg-white/5 text-slate-400 hover:text-white text-xs font-medium transition cursor-pointer"
+            onClick={onContinueAnyway}
+            className="py-3 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-bold transition cursor-pointer"
           >
-            Cancel
+            Continue
           </button>
         </div>
       </div>
