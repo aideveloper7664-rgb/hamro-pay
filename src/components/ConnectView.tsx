@@ -113,11 +113,19 @@ export default function ConnectView({
 
   const handleActionClick = () => {
     if (isFamPay) {
-      showToast('Coming Soon', 'info');
+      if (onViewChange) {
+        onViewChange('fampay');
+      } else {
+        showToast('FamPay connection active.', 'info');
+      }
     } else if (isDeveloper) {
       showToast('Developer API token generated and synchronized.', 'success');
     } else {
-      showToast('Store customizations are simulated locally. Connected database is offline.', 'info');
+      if (onViewChange) {
+        onViewChange('store');
+      } else {
+        showToast('Navigating to Store Portal...', 'info');
+      }
     }
   };
 

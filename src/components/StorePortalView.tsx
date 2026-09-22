@@ -58,7 +58,7 @@ export default function StorePortalView({ showToast }: StorePortalViewProps) {
 
         <h1 className="store-hero-title">
           HamroPay Store Portal <br />
-          <span className="store-gradient-text">Coming Soon</span>
+          <span className="store-gradient-text">Merchant Storefront</span>
         </h1>
 
         <p className="store-hero-sub">
