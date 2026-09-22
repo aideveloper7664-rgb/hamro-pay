@@ -400,26 +400,5 @@
     }
   ],
   "supportTickets": [],
-  "cashiers": [
-    {
-      "id": "fampay-default",
-      "type": "fampay",
-      "upi_id": "merchant@fam",
-      "phone": "9876543210",
-      "gmail_email": "merchant@gmail.com",
-      "is_active": true,
-      "status": "active",
-      "created_at": "2026-09-22T16:27:41.456Z"
-    },
-    {
-      "id": "paytm-default",
-      "type": "paytm",
-      "upi_id": "9876543210@paytm",
-      "phone": "9876543210",
-      "paytm_mid": "HAMRO_PAYTM_PRO",
-      "is_active": true,
-      "status": "active",
-      "created_at": "2026-09-22T16:27:41.456Z"
-    }
-  ]
+  "cashiers": []
 }

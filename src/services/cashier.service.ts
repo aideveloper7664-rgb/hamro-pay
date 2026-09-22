@@ -24,43 +24,23 @@ const getStoredCashiers = (): CashierAccount[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed: CashierAccount[] = JSON.parse(raw);
+      const cleaned = parsed.filter(a => !a.id.includes('-default'));
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     }
   } catch (e) {
     console.warn('Failed to parse cashier storage:', e);
   }
-  // Default active accounts
-  const defaults: CashierAccount[] = [
-    {
-      id: 'fampay-default-1',
-      type: 'fampay',
-      upi_id: 'merchant@fam',
-      phone: '9876543210',
-      gmail_email: 'merchant@gmail.com',
-      is_active: true,
-      status: 'active',
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 'paytm-default-1',
-      type: 'paytm',
-      upi_id: '9876543210@paytm',
-      phone: '9876543210',
-      paytm_mid: 'HAMRO_PAYTM_PRO',
-      is_active: true,
-      status: 'active',
-      created_at: new Date().toISOString()
-    }
-  ];
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
-  } catch (e) {}
-  return defaults;
+  return [];
 };
 
 const saveStoredCashiers = (accounts: CashierAccount[]) => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+    const cleaned = accounts.filter(a => !a.id.includes('-default'));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
   } catch (e) {
     console.warn('Failed to save cashiers to storage:', e);
   }
@@ -74,10 +54,10 @@ export const getCashierList = async (): Promise<CashierAccount[]> => {
     else if (Array.isArray(res?.cashiers)) list = res.cashiers;
     else if (Array.isArray(res?.data)) list = res.data;
 
-    if (list.length > 0) {
-      saveStoredCashiers(list);
-      return list;
-    }
+    // Filter out any default dummy accounts
+    list = list.filter(a => !a.id.includes('-default'));
+    saveStoredCashiers(list);
+    return list;
   } catch (err) {
     console.warn('Remote cashier list fetch failed, falling back to local storage:', err);
   }

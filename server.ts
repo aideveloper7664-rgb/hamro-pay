@@ -638,28 +638,7 @@ app.delete('/api/fampay/accounts/:id', authGateway, (req: any, res) => {
 app.get('/api/cashier/list', (req: any, res) => {
   const db = getDb();
   if (!db.cashiers) {
-    db.cashiers = [
-      {
-        id: 'fampay-default',
-        type: 'fampay',
-        upi_id: 'merchant@fam',
-        phone: '9876543210',
-        gmail_email: 'merchant@gmail.com',
-        is_active: true,
-        status: 'active',
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 'paytm-default',
-        type: 'paytm',
-        upi_id: '9876543210@paytm',
-        phone: '9876543210',
-        paytm_mid: 'HAMRO_PAYTM_PRO',
-        is_active: true,
-        status: 'active',
-        created_at: new Date().toISOString()
-      }
-    ];
+    db.cashiers = [];
     saveDb(db);
   }
   res.json({ success: true, data: db.cashiers, cashiers: db.cashiers });
