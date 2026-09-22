@@ -1048,7 +1048,7 @@ export default function DashboardView({
                 ₹5.00
               </span>
             </div>
-            <div className="stat-label">Zap Cash</div>
+            <div className="stat-label">Hamro Cash</div>
             <div className="stat-value">
               ₹{balance > 0 ? balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
             </div>

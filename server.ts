@@ -5,7 +5,7 @@ import { createServer as createViteServer } from 'vite';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'zappay-super-secret-key-hamropay';
+const JWT_SECRET = process.env.JWT_SECRET || 'hamropay-super-secret-key';
 
 const app = express();
 const PORT = 3000;
