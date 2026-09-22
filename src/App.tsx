@@ -471,8 +471,34 @@ export default function App() {
     setActiveModal('create_link');
   };
 
-  const handleOpenCreateLink = () => {
-    openCreateLinkDirectly();
+  const handleOpenCreateLink = async () => {
+    const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+    const token = localStorage.getItem('hamropay_token') || apiToken;
+    const apiKey = merchant.api_key;
+
+    let hasCashier = false;
+    if (apiKey || token) {
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['x-api-key'] = apiKey;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('https://hamropay-backends.onrender.com/api/cashier/active', { headers });
+        const resData = await res.json();
+        const cashier = resData?.cashier || resData?.data;
+        if (res.ok && cashier && (cashier.upi_id || cashier.id)) {
+          hasCashier = true;
+        }
+      } catch {
+        // network error fallback
+      }
+    }
+
+    if (!hasCashier) {
+      setIsNoCashierModalOpen(true);
+    } else {
+      openCreateLinkDirectly();
+    }
   };
 
   const handleDeleteLink = (id: string | number) => {
