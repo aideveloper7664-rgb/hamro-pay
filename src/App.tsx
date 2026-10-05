@@ -585,9 +585,9 @@ export default function App() {
     setTransactions(prev => [newTx, ...prev]);
 
     if (!isSimulated) {
-      showToast(`Settlement transfer of Rs. ${amount.toLocaleString('en-NP')} successfully synchronized via Vercel.`, 'success');
+      showToast(`Settlement transfer of ₹ ${amount.toLocaleString('en-IN')} successfully synchronized.`, 'success');
     } else {
-      showToast(`Settlement transfer of Rs. ${amount.toLocaleString('en-NP')} is pending.`, 'success');
+      showToast(`Settlement transfer of ₹ ${amount.toLocaleString('en-IN')} is pending.`, 'success');
     }
     setCurrentView('transactions');
   };
@@ -596,7 +596,7 @@ export default function App() {
   const handleConfirmAddFunds = () => {
     const amountNum = parseFloat(modalFundAmount);
     if (isNaN(amountNum) || amountNum < 100) {
-      showToast('Minimum funding threshold is Rs. 100.', 'error');
+      showToast('Minimum funding threshold is ₹ 100.', 'error');
       return;
     }
 
@@ -615,7 +615,7 @@ export default function App() {
     setTransactions(prev => [newTx, ...prev]);
     setActiveModal(null);
     setModalFundAmount('');
-    showToast(`Rs. ${amountNum.toLocaleString('en-NP')} credited to Hamro Cash.`, 'success');
+    showToast(`₹ ${amountNum.toLocaleString('en-IN')} credited to Hamro Cash.`, 'success');
   };
 
   // --- Plan Subscription Switch Action ---
@@ -1180,7 +1180,7 @@ export default function App() {
               <b className="text-rose-600 px-1 font-black">{selectedPendingPlan.id}</b> 
               at a recurring local billing rate of 
               <b className="text-slate-800 px-1">
-                {selectedPendingPlan.price === 0 ? 'Rs. 0' : `Rs. ${selectedPendingPlan.price}/month`}
+                {selectedPendingPlan.price === 0 ? '₹ 0' : `₹ ${selectedPendingPlan.price}/month`}
               </b>.
             </p>
             <div className="flex gap-2.5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs leading-normal text-slate-500 font-semibold">

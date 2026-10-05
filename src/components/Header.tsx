@@ -56,7 +56,7 @@ export default function Header({
         {/* Mobile quick-balance pill */}
         <div className="flex items-center gap-2 px-3 py-1.5 bg-black/40 border border-[rgba(255,45,85,0.2)] rounded-xl text-[11px] font-extrabold text-[#fff2f4] md:hidden">
           <Wallet className="w-3.5 h-3.5 text-[#ff4d6d] shrink-0" />
-          <span>Rs. {balance.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</span>
+          <span>₹ {balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
         </div>
 
         {/* Notifications Icon (Clickable to change view) */}
