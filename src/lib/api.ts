@@ -57,84 +57,93 @@ export const ApiService = {
     return apiCall('/wallet/balance', 'GET');
   },
 
-  async getTransactions(localFallback: Transaction[]) {
+  async getTransactions(localFallback?: Transaction[]) {
     try {
       const data = await apiCall('/wallet/transactions', 'GET');
-      if (Array.isArray(data)) {
-        const mapped: Transaction[] = data.map((item: any, idx: number) => ({
-          id: item.id || item.transaction_id || `tx-${idx}`,
-          ref: item.ref || item.order_id || item.utr || `TXN${1000 + idx}`,
-          name: item.customer_name || item.name || item.upi_id || 'FamPay Customer',
-          amount: Number(item.amount || item.net_amount || 0),
-          type: item.type === 'withdraw' || item.type === 'withdrawal' ? 'withdrawal' : 'received',
-          status: item.status === 'success' || item.status === 'PAID' ? 'Success' : item.status === 'failed' ? 'Failed' : 'Pending',
-          date: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent'
-        }));
-        return { transactions: mapped, isSimulated: false };
-      }
-      return { transactions: localFallback, isSimulated: false };
-    } catch {
-      return { transactions: localFallback, isSimulated: false };
+      const list = Array.isArray(data) ? data : (data?.transactions || []);
+      const mapped: Transaction[] = list.map((item: any, idx: number) => ({
+        id: item.id || item.transaction_id || `tx-${idx}`,
+        ref: item.ref || item.order_id || item.utr || `TXN${1000 + idx}`,
+        name: item.customer_name || item.name || item.upi_id || 'FamPay Customer',
+        amount: Number(item.amount || item.net_amount || 0),
+        type: item.type === 'withdraw' || item.type === 'withdrawal' ? 'withdrawal' : 'received',
+        status: item.status === 'success' || item.status === 'PAID' ? 'Success' : item.status === 'failed' ? 'Failed' : 'Pending',
+        date: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent'
+      }));
+      return { transactions: mapped, isSimulated: false };
+    } catch (err: any) {
+      console.error('[ApiService.getTransactions failed]:', err);
+      throw err;
     }
   },
 
-  async getLinks(localFallback: PaymentLink[]) {
+  async getLinks(localFallback?: PaymentLink[]) {
     try {
       const data = await apiCall('/api/payment-link/list', 'GET');
-      if (Array.isArray(data)) {
-        const mapped: PaymentLink[] = data.map((item: any) => ({
-          id: item.link_id || item.id,
-          link_id: item.link_id,
-          title: item.title,
-          amount: Number(item.amount || 0),
-          active: item.status === 'active',
-          orders: item.total_orders || 0,
-          date: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent',
-          payment_url: item.payment_url || '',
-        }));
-        return { links: mapped, isSimulated: false };
-      }
-      return { links: localFallback, isSimulated: false };
-    } catch {
-      return { links: localFallback, isSimulated: false };
+      const list = Array.isArray(data) ? data : (data?.links || []);
+      const mapped: PaymentLink[] = list.map((item: any) => ({
+        id: item.link_id || item.id,
+        link_id: item.link_id,
+        title: item.title,
+        amount: Number(item.amount || 0),
+        active: item.status === 'active' || item.status === undefined,
+        orders: item.total_orders || item.orders || 0,
+        date: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent',
+        payment_url: item.payment_url || '',
+      }));
+      return { links: mapped, isSimulated: false };
+    } catch (err: any) {
+      console.error('[ApiService.getLinks failed]:', err);
+      throw err;
     }
   },
 
-  async createLink(link: Omit<PaymentLink, 'id' | 'orders' | 'date'>, localFallback: PaymentLink[]) {
+  async createLink(link: Omit<PaymentLink, 'id' | 'orders' | 'date'>, localFallback?: PaymentLink[]) {
     try {
       const data = await apiCall('/api/payment-link/create', 'POST', {
         title: link.title,
         amount: link.amount,
         note: (link as any).note || ''
       });
+      const realId = data?.link_id || data?.id;
+      if (!realId) {
+        throw new Error('Backend did not return a valid link_id');
+      }
       const newLink: PaymentLink = {
-        id: data.link_id || data.id,
-        link_id: data.link_id,
+        id: realId,
+        link_id: realId,
         title: data.title || link.title,
         amount: Number(data.amount || link.amount),
-        active: data.status === 'active',
+        active: data.status === 'active' || data.status === undefined,
         orders: 0,
         date: 'Created just now',
         payment_url: data.payment_url || '',
       };
       return { link: newLink, isSimulated: false };
     } catch (err: any) {
-      const newLink: PaymentLink = {
-        ...link,
-        id: 'link-' + Date.now(),
-        orders: 0,
-        date: 'Created just now'
-      };
-      return { link: newLink, isSimulated: false };
+      console.error('[ApiService.createLink failed]:', err);
+      throw err;
     }
   },
 
   async updateLink(id: string | number, updates: Partial<PaymentLink>, localFallback?: PaymentLink[]) {
-    return { isSimulated: false };
+    try {
+      await apiCall(`/api/payment-link/${id}`, 'PATCH', updates);
+      return { isSimulated: false };
+    } catch (err: any) {
+      console.error('[ApiService.updateLink failed]:', err);
+      return { isSimulated: false };
+    }
   },
 
   async toggleLinkActive(id: string | number, active: boolean) {
-    return { isSimulated: false };
+    try {
+      await apiCall(`/api/payment-link/${id}/toggle`, 'PATCH', { active });
+      return { isSimulated: false };
+    } catch (err: any) {
+      console.error('[ApiService.toggleLinkActive failed]:', err);
+      return { isSimulated: false };
+    }
   },
 
   async withdrawFunds(amount: number, upi_id: string) {
@@ -142,7 +151,8 @@ export const ApiService = {
       const res = await apiCall('/wallet/withdraw', 'POST', { amount, upi_id });
       return { success: true, isSimulated: false, data: res };
     } catch (err: any) {
-      return { success: false, isSimulated: false, error: err.message };
+      console.error('[ApiService.withdrawFunds failed]:', err);
+      return { success: false, isSimulated: false, error: err.message || 'Withdrawal failed' };
     }
   },
 

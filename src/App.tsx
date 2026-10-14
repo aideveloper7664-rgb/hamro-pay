@@ -265,21 +265,23 @@ export default function App() {
         showToast('Syncing workspace with Hamro Pay API...', 'info');
         
         // 1. Payment Links
-        const linksRes = await ApiService.getLinks(paymentLinks);
-        if (!linksRes.isSimulated) {
+        try {
+          const linksRes = await ApiService.getLinks();
           setPaymentLinks(linksRes.links);
-          setApiStatus(prev => ({ ...prev, paymentLinks: { status: 'REAL', route: 'GET /api/payment' } }));
-        } else {
-          setApiStatus(prev => ({ ...prev, paymentLinks: { status: 'SIMULATED', route: 'GET /api/payment', error: 'Service unavailable' } }));
+          setApiStatus(prev => ({ ...prev, paymentLinks: { status: 'REAL', route: 'GET /api/payment-link/list' } }));
+        } catch (err: any) {
+          console.error('[Sync Payment Links Error]:', err);
+          setApiStatus(prev => ({ ...prev, paymentLinks: { status: 'SIMULATED', route: 'GET /api/payment-link/list', error: err.message } }));
         }
 
         // 2. Transactions
-        const txRes = await ApiService.getTransactions(transactions);
-        if (!txRes.isSimulated) {
+        try {
+          const txRes = await ApiService.getTransactions();
           setTransactions(txRes.transactions);
-          setApiStatus(prev => ({ ...prev, transactions: { status: 'REAL', route: 'GET /api/withdrawal' } }));
-        } else {
-          setApiStatus(prev => ({ ...prev, transactions: { status: 'SIMULATED', route: 'GET /api/withdrawal', error: 'Service unavailable' } }));
+          setApiStatus(prev => ({ ...prev, transactions: { status: 'REAL', route: 'GET /wallet/transactions' } }));
+        } catch (err: any) {
+          console.error('[Sync Transactions Error]:', err);
+          setApiStatus(prev => ({ ...prev, transactions: { status: 'SIMULATED', route: 'GET /wallet/transactions', error: err.message } }));
         }
 
         // 3. Notifications
@@ -508,35 +510,41 @@ export default function App() {
 
     if (editingLinkId !== null) {
       // Edit Link mode
-      const { isSimulated } = await ApiService.updateLink(editingLinkId, {
-        title: modalLinkTitle.trim(),
-        amount: amountNum,
-        note: modalLinkNote.trim(),
-        redirectUrl: modalLinkRedirect.trim(),
-        expiry: modalLinkExpiry,
-        usageLimit: modalLinkUsageLimit ? parseInt(modalLinkUsageLimit) : undefined
-      });
+      try {
+        const { isSimulated } = await ApiService.updateLink(editingLinkId, {
+          title: modalLinkTitle.trim(),
+          amount: amountNum,
+          note: modalLinkNote.trim(),
+          redirectUrl: modalLinkRedirect.trim(),
+          expiry: modalLinkExpiry,
+          usageLimit: modalLinkUsageLimit ? parseInt(modalLinkUsageLimit) : undefined
+        });
 
-      setPaymentLinks(prev => prev.map(l => {
-        if (l.id === editingLinkId) {
-          return {
-            ...l,
-            title: modalLinkTitle.trim(),
-            amount: amountNum,
-            note: modalLinkNote.trim(),
-            redirectUrl: modalLinkRedirect.trim(),
-            expiry: modalLinkExpiry,
-            usageLimit: modalLinkUsageLimit ? parseInt(modalLinkUsageLimit) : undefined,
-            date: 'Updated just now'
-          };
+        setPaymentLinks(prev => prev.map(l => {
+          if (l.id === editingLinkId) {
+            return {
+              ...l,
+              title: modalLinkTitle.trim(),
+              amount: amountNum,
+              note: modalLinkNote.trim(),
+              redirectUrl: modalLinkRedirect.trim(),
+              expiry: modalLinkExpiry,
+              usageLimit: modalLinkUsageLimit ? parseInt(modalLinkUsageLimit) : undefined,
+              date: 'Updated just now'
+            };
+          }
+          return l;
+        }));
+
+        if (!isSimulated) {
+          showToast('Payment link updated successfully.', 'success');
+        } else {
+          showToast('Payment link updated successfully.', 'success');
         }
-        return l;
-      }));
-
-      if (!isSimulated) {
-        showToast('Payment link updated successfully on Vercel.', 'success');
-      } else {
-        showToast('Payment link updated successfully.', 'success');
+        setActiveModal(null);
+        setEditingLinkId(null);
+      } catch (err: any) {
+        showToast(`Link update failed: ${err.message || 'Unknown error'}`, 'error');
       }
     } else {
       // Create New Link Mode
@@ -550,46 +558,52 @@ export default function App() {
         usageLimit: modalLinkUsageLimit ? parseInt(modalLinkUsageLimit) : undefined
       };
 
-      const { link, isSimulated } = await ApiService.createLink(newLinkPayload, paymentLinks);
-      
-      setPaymentLinks(prev => [link, ...prev]);
+      try {
+        const { link } = await ApiService.createLink(newLinkPayload);
+        if (!link || (!link.link_id && !link.id)) {
+          throw new Error('No valid link_id returned from server');
+        }
 
-      if (!isSimulated) {
-        showToast('Payment link generated & published on Vercel.', 'success');
-      } else {
-        showToast('Payment link generated.', 'success');
+        setPaymentLinks(prev => [link, ...prev]);
+        showToast('Payment link generated successfully.', 'success');
+        setActiveModal(null);
+        setEditingLinkId(null);
+      } catch (err: any) {
+        console.error('Link create failed:', err);
+        showToast(`Link create failed: ${err.message || 'Unknown error'}`, 'error');
       }
     }
-
-    setActiveModal(null);
-    setEditingLinkId(null);
   };
 
   // --- Payout / Withdrawal Action ---
   const handleWithdrawalSubmit = async (amount: number, upi: string) => {
-    setBalance(prev => prev - amount);
-    setPendingWithdrawals(prev => prev + amount);
+    try {
+      const res = await ApiService.withdrawFunds(amount, upi);
+      if (!res.success) {
+        showToast(`Withdrawal failed: ${res.error || 'Server error'}`, 'error');
+        return;
+      }
 
-    const { isSimulated } = await ApiService.withdrawFunds(amount, upi);
+      setBalance(prev => prev - amount);
+      setPendingWithdrawals(prev => prev + amount);
 
-    const newTx: Transaction = {
-      id: 'tx-' + Date.now(),
-      type: 'withdrawal',
-      ref: 'WD-' + Math.floor(100000 + Math.random() * 899999),
-      name: `UPI · ${upi}`,
-      amount,
-      status: 'Pending',
-      date: 'Just now'
-    };
+      const newTx: Transaction = {
+        id: 'tx-' + Date.now(),
+        type: 'withdrawal',
+        ref: 'WD-' + Math.floor(100000 + Math.random() * 899999),
+        name: `UPI · ${upi}`,
+        amount,
+        status: 'Pending',
+        date: 'Just now'
+      };
 
-    setTransactions(prev => [newTx, ...prev]);
-
-    if (!isSimulated) {
-      showToast(`Settlement transfer of ₹ ${amount.toLocaleString('en-IN')} successfully synchronized.`, 'success');
-    } else {
-      showToast(`Settlement transfer of ₹ ${amount.toLocaleString('en-IN')} is pending.`, 'success');
+      setTransactions(prev => [newTx, ...prev]);
+      showToast(`Settlement transfer of ₹ ${amount.toLocaleString('en-IN')} successfully requested.`, 'success');
+      setCurrentView('transactions');
+    } catch (err: any) {
+      console.error('Withdrawal error:', err);
+      showToast(`Withdrawal failed: ${err.message || 'Unknown error'}`, 'error');
     }
-    setCurrentView('transactions');
   };
 
   // --- Add Wallet Funds Actions ---
@@ -979,35 +993,41 @@ export default function App() {
 
           if (editingLinkId !== null) {
             // Edit Link mode
-            const { isSimulated } = await ApiService.updateLink(editingLinkId, {
-              title: data.title,
-              amount: amountNum,
-              note: data.note,
-              redirectUrl: data.redirectUrl,
-              expiry: data.expiry,
-              usageLimit: data.usageLimit
-            });
+            try {
+              const { isSimulated } = await ApiService.updateLink(editingLinkId, {
+                title: data.title,
+                amount: amountNum,
+                note: data.note,
+                redirectUrl: data.redirectUrl,
+                expiry: data.expiry,
+                usageLimit: data.usageLimit
+              });
 
-            setPaymentLinks(prev => prev.map(l => {
-              if (l.id === editingLinkId) {
-                return {
-                  ...l,
-                  title: data.title,
-                  amount: amountNum,
-                  note: data.note,
-                  redirectUrl: data.redirectUrl,
-                  expiry: data.expiry,
-                  usageLimit: data.usageLimit,
-                  date: 'Updated just now'
-                };
+              setPaymentLinks(prev => prev.map(l => {
+                if (l.id === editingLinkId) {
+                  return {
+                    ...l,
+                    title: data.title,
+                    amount: amountNum,
+                    note: data.note,
+                    redirectUrl: data.redirectUrl,
+                    expiry: data.expiry,
+                    usageLimit: data.usageLimit,
+                    date: 'Updated just now'
+                  };
+                }
+                return l;
+              }));
+
+              if (!isSimulated) {
+                showToast('Payment link updated successfully.', 'success');
+              } else {
+                showToast('Payment link updated successfully.', 'success');
               }
-              return l;
-            }));
-
-            if (!isSimulated) {
-              showToast('Payment link updated successfully on Vercel.', 'success');
-            } else {
-              showToast('Payment link updated successfully.', 'success');
+              setActiveModal(null);
+              setEditingLinkId(null);
+            } catch (err: any) {
+              showToast(`Link update failed: ${err.message || 'Unknown error'}`, 'error');
             }
           } else {
             // Create New Link Mode
@@ -1021,19 +1041,22 @@ export default function App() {
               usageLimit: data.usageLimit
             };
 
-            const { link, isSimulated } = await ApiService.createLink(newLinkPayload, paymentLinks);
-            
-            setPaymentLinks(prev => [link, ...prev]);
+            try {
+              const { link } = await ApiService.createLink(newLinkPayload);
+              if (!link || (!link.link_id && !link.id)) {
+                throw new Error('No valid link_id returned from server');
+              }
 
-            if (!isSimulated) {
-              showToast('Payment link generated & published on Vercel.', 'success');
-            } else {
-              showToast('Payment link generated.', 'success');
+              setPaymentLinks(prev => [link, ...prev]);
+              showToast('Payment link generated successfully.', 'success');
+              setActiveModal(null);
+              setEditingLinkId(null);
+            } catch (err: any) {
+              console.error('Link create failed:', err);
+              showToast(`Link create failed: ${err.message || 'Unknown error'}`, 'error');
+              throw err;
             }
           }
-
-          setActiveModal(null);
-          setEditingLinkId(null);
         }}
         initialData={
           editingLinkId !== null 

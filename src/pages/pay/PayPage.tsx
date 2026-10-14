@@ -1,15 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 const API_URL = 'https://hamropay-backends.onrender.com';
-const DEFAULT_UPI_ID = '9769516928@fam';
-const DEFAULT_MERCHANT = 'MOHD MUKHTAR';
 const TOTAL_SECONDS = 8 * 60;
+
+// FIXME: confirm link_id prefix with backend (e.g. lnk_, link_, or other format)
+export const isPaymentLinkId = (idStr: string): boolean => {
+  if (!idStr) return false;
+  return idStr.startsWith('lnk_') || idStr.startsWith('link_') || idStr.startsWith('pl_');
+};
 
 const PayPage: React.FC = () => {
   const [id, setId] = useState<string>('');
   const [data, setData] = useState<{ title?: string; amount?: number; merchant_name?: string; [key: string]: any } | null>(null);
   const [isLink, setIsLink] = useState<boolean>(false);
-  const [activeUpi, setActiveUpi] = useState<string>(DEFAULT_UPI_ID);
+  const [activeUpi, setActiveUpi] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Timer
   const [remaining, setRemaining] = useState<number>(TOTAL_SECONDS);
@@ -65,32 +71,55 @@ const PayPage: React.FC = () => {
 
   // Fetch Payment Link or Order data
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setIsLoading(false);
+      setErrorMessage('This payment link is invalid or expired');
+      return;
+    }
 
-    const linkMode = id.startsWith('lnk_');
+    const linkMode = isPaymentLinkId(id);
     setIsLink(linkMode);
 
     const fetchUrl = linkMode
       ? `${API_URL}/api/payment-link/${id}`
       : `${API_URL}/order/status/${id}`;
 
+    setIsLoading(true);
+    setErrorMessage(null);
+
     fetch(fetchUrl)
-      .then((res) => res.json())
-      .then((resData) => {
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`Payment link not found (${res.status})`);
+        }
+        return res.json();
+      })
+      .then(async (resData) => {
         let paymentData: any = null;
         if (resData?.success && resData?.data) {
           paymentData = resData.data;
         } else if (resData?.data) {
           paymentData = resData.data;
-        } else if (resData?.amount) {
+        } else if (resData?.amount !== undefined) {
           paymentData = resData;
         }
 
-        if (paymentData) {
-          setData(paymentData);
+        if (!paymentData || paymentData.amount === undefined || paymentData.amount === null) {
+          throw new Error('Payment data is empty or invalid');
+        }
 
-          // Check if merchant has active cashier: GET /api/cashier/active
-          // Headers: x-api-key (use merchant's api_key from order data)
+        setData(paymentData);
+
+        // Check if link is inactive or deactivated
+        if (paymentData.status === 'inactive' || paymentData.active === false || paymentData.status === 'deactivated') {
+          setIsLoading(false);
+          return;
+        }
+
+        // Check active cashier / UPI ID
+        let resolvedUpi = paymentData.upi_id || paymentData.upiId || paymentData.cashier_upi || '';
+
+        if (!resolvedUpi) {
           const merchantKey = paymentData.merchant_api_key 
             || paymentData.api_key 
             || paymentData.merchant?.api_key 
@@ -98,39 +127,43 @@ const PayPage: React.FC = () => {
             || (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('hamropay_merchant') || '{}').api_key) : '');
 
           if (merchantKey) {
-            fetch(`${API_URL}/api/cashier/active`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': merchantKey,
-              },
-            })
-              .then((res) => res.json())
-              .then((cashierRes) => {
-                const cashier = cashierRes?.cashier || cashierRes?.data || cashierRes;
-                const upi = cashier?.upi_id || cashier?.upiId;
-                if (upi) {
-                  setActiveUpi(upi);
-                } else {
-                  setActiveUpi(DEFAULT_UPI_ID);
-                }
-              })
-              .catch((err) => {
-                console.error('Error fetching active cashier:', err);
-                setActiveUpi(DEFAULT_UPI_ID);
+            try {
+              const cashierRes = await fetch(`${API_URL}/api/cashier/active`, {
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': merchantKey,
+                },
               });
-          } else {
-            setActiveUpi(DEFAULT_UPI_ID);
+              if (cashierRes.ok) {
+                const cashierJson = await cashierRes.json();
+                const cashier = cashierJson?.cashier || cashierJson?.data || cashierJson;
+                resolvedUpi = cashier?.upi_id || cashier?.upiId || '';
+              }
+            } catch (err) {
+              console.error('Error fetching active cashier:', err);
+            }
           }
         }
+
+        if (!resolvedUpi) {
+          throw new Error('No active UPI ID or cashier connected for this merchant');
+        }
+
+        setActiveUpi(resolvedUpi);
+        setIsLoading(false);
       })
       .catch((err) => {
         console.error('Error fetching payment data:', err);
+        setErrorMessage('This payment link is invalid or expired');
+        setData(null);
+        setActiveUpi('');
+        setIsLoading(false);
       });
   }, [id]);
 
   // Countdown timer
   useEffect(() => {
-    if (isExpired || isSuccess) return;
+    if (isExpired || isSuccess || isLoading || errorMessage) return;
 
     const interval = setInterval(() => {
       setRemaining((prev) => {
@@ -144,11 +177,11 @@ const PayPage: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isExpired, isSuccess]);
+  }, [isExpired, isSuccess, isLoading, errorMessage]);
 
-  const amount = data?.amount || 99;
-  const title = data?.title || 'demo';
-  const merchantName = data?.merchant_name || DEFAULT_MERCHANT;
+  const amount = data?.amount || 0;
+  const title = data?.title || 'Payment Request';
+  const merchantName = data?.merchant_name || data?.merchant?.name || 'Merchant';
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -166,7 +199,7 @@ const PayPage: React.FC = () => {
     showToast('New payment session started', 'info');
   };
 
-  const qrDataUrl = `upi://pay?pa=${activeUpi}&pn=MOHD MUKHTAR&am=${amount}&cu=INR`;
+  const qrDataUrl = `upi://pay?pa=${activeUpi}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`;
   const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=${encodeURIComponent(qrDataUrl)}&t=${qrTimestamp}`;
 
   const handleDownloadQr = async () => {
@@ -210,7 +243,7 @@ const PayPage: React.FC = () => {
       let endpoint = '';
       let bodyData: any = {};
 
-      if (isLink || id.startsWith('lnk_')) {
+      if (isLink || isPaymentLinkId(id)) {
         endpoint = `${API_URL}/api/payment-link/${id}/verify`;
         bodyData = { utr: utr.trim(), amount };
       } else {
@@ -925,6 +958,17 @@ const PayPage: React.FC = () => {
         }
         .toast-icon svg { width: 12px; height: 12px; }
 
+        .skeleton-box {
+          background: linear-gradient(90deg, rgba(255,45,85,0.06) 25%, rgba(255,45,85,0.16) 50%, rgba(255,45,85,0.06) 75%);
+          background-size: 200% 100%;
+          animation: skeletonShimmer 1.6s ease-in-out infinite;
+          border-radius: 8px;
+        }
+        @keyframes skeletonShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+
         @media (max-width: 420px) {
           .pay-card { padding: 12px 14px 10px; }
           .amount-value { font-size: 24px; }
@@ -982,6 +1026,64 @@ const PayPage: React.FC = () => {
               }}
             >
               Back to Home
+            </button>
+          </div>
+        ) : isLoading ? (
+          /* LOADING SKELETON */
+          <div className="pay-card" style={{ padding: '28px 18px', textAlign: 'center' }}>
+            <div className="skeleton-box" style={{ width: '130px', height: '18px', margin: '0 auto 10px' }} />
+            <div className="skeleton-box" style={{ width: '80px', height: '12px', margin: '0 auto 20px' }} />
+            
+            <div className="skeleton-box" style={{ width: '100%', height: '48px', borderRadius: '12px', marginBottom: '10px' }} />
+            <div className="skeleton-box" style={{ width: '100%', height: '65px', borderRadius: '12px', marginBottom: '10px' }} />
+            <div className="skeleton-box" style={{ width: '100%', height: '40px', borderRadius: '10px', marginBottom: '12px' }} />
+            <div className="skeleton-box" style={{ width: '130px', height: '130px', margin: '0 auto 12px', borderRadius: '12px' }} />
+            <div className="skeleton-box" style={{ width: '100%', height: '90px', borderRadius: '12px' }} />
+          </div>
+        ) : errorMessage || !data || !activeUpi ? (
+          /* ERROR SCREEN: INVALID OR EXPIRED LINK */
+          <div className="pay-card" style={{ textAlign: 'center', padding: '36px 20px' }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              margin: '0 auto 16px',
+              display: 'grid',
+              placeItems: 'center',
+              background: 'rgba(255,30,75,0.14)',
+              border: '1.5px solid rgba(255,30,75,0.4)',
+              color: '#ff4d6d',
+              boxShadow: '0 0 24px rgba(255,30,75,0.25)'
+            }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: '26px', height: '26px' }}>
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </div>
+            <div style={{ fontSize: '17px', fontWeight: '900', color: '#fff', marginBottom: '8px', letterSpacing: '-0.3px' }}>
+              This payment link is invalid or expired
+            </div>
+            <p style={{ fontSize: '11.5px', color: 'var(--muted)', lineHeight: '1.55', maxWidth: '300px', margin: '0 auto 22px' }}>
+              The payment link or order could not be loaded or is no longer available. Please request a new payment link from the merchant.
+            </p>
+            <button
+              className="refresh-btn"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  window.history.back();
+                } else if (typeof window !== 'undefined') {
+                  window.location.href = '/';
+                }
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: '#fff',
+                margin: '0 auto'
+              }}
+            >
+              Return Home
             </button>
           </div>
         ) : data && (data.status === 'inactive' || data.active === false || data.status === 'deactivated') ? (

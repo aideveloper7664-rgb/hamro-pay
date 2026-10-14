@@ -22,21 +22,51 @@ export const apiCall = async (
   const apiKey = extraHeaders?.['x-api-key'] || getApiKey();
   const token = getToken();
 
+  if (!apiKey) {
+    throw new Error('API key missing, please log in again');
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(apiKey ? { 'x-api-key': apiKey } : {}),
+    'x-api-key': apiKey,
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...extraHeaders,
   };
 
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
+  const isCreateCall = path.includes('create') || path.includes('payment-link');
+  if (isCreateCall) {
+    console.log(`[API Call Request] ${method} ${path}:`, {
+      payload: body,
+      headers: { ...headers, 'x-api-key': apiKey ? `${apiKey.substring(0, 4)}***` : 'missing' },
+    });
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err: any) {
+    console.error(`[API Network Error] ${method} ${path}:`, err);
+    throw new Error('Server unreachable, try again in 30 seconds');
+  }
+
+  let data: any = {};
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+
+  if (isCreateCall) {
+    console.log(`[API Call Response] ${method} ${path} (${res.status}):`, data);
+  }
+
   if (!res.ok || (data && data.success === false)) {
-    throw new Error(data?.message || data?.error || `API Error (${res.status})`);
+    const errorMsg = data?.message || data?.error || res.statusText || 'API Error';
+    throw new Error(`API Error (${res.status}): ${errorMsg}`);
   }
   return data.data !== undefined ? data.data : data;
 };
@@ -47,14 +77,28 @@ export const publicApiCall = async (
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
   body?: object
 ) => {
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err: any) {
+    console.error(`[Public API Network Error] ${method} ${path}:`, err);
+    throw new Error('Server unreachable, try again in 30 seconds');
+  }
+
+  let data: any = {};
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+
   if (!res.ok || (data && data.success === false)) {
-    throw new Error(data?.message || data?.error || 'API Error');
+    const errorMsg = data?.message || data?.error || res.statusText || 'API Error';
+    throw new Error(`API Error (${res.status}): ${errorMsg}`);
   }
   return data.data !== undefined ? data.data : data;
 };

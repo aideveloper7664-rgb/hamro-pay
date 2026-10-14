@@ -11,7 +11,7 @@ interface CreatePaymentLinkModalProps {
     redirectUrl: string;
     expiry: string;
     usageLimit?: number;
-  }) => void;
+  }) => Promise<void> | void;
   initialData?: {
     title: string;
     amount: number;
@@ -72,7 +72,7 @@ export default function CreatePaymentLinkModal({
     setAmount(String(val));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const num = parseFloat(amount);
     if (!title.trim() || isNaN(num) || num <= 0) {
       showToast('Please specify a valid title and amount.', 'error');
@@ -80,8 +80,8 @@ export default function CreatePaymentLinkModal({
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      onSubmit({
+    try {
+      await onSubmit({
         title: title.trim(),
         amount: num,
         note: note.trim(),
@@ -89,8 +89,11 @@ export default function CreatePaymentLinkModal({
         expiry,
         usageLimit: usageLimit ? parseInt(usageLimit) : undefined
       });
+    } catch {
+      // Error is surfaced via showToast in parent onSubmit; modal stays open
+    } finally {
       setIsSubmitting(false);
-    }, 400);
+    }
   };
 
   return (
@@ -311,10 +314,10 @@ export default function CreatePaymentLinkModal({
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="py-3 px-4 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-extrabold shadow-[0_10px_26px_rgba(255,30,75,0.4)] hover:shadow-[0_14px_34px_rgba(255,30,75,0.6)] active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-75"
+              className="py-3 px-4 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-extrabold shadow-[0_10px_26px_rgba(255,30,75,0.4)] hover:shadow-[0_14px_34px_rgba(255,30,75,0.6)] active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <LinkIcon className="w-4 h-4" />
-              {isSubmitting ? 'Generating...' : isEditing ? 'Save Changes' : 'Generate Payment Link'}
+              {isSubmitting ? (isEditing ? 'Saving...' : 'Creating Link...') : isEditing ? 'Save Changes' : 'Generate Payment Link'}
             </button>
           </div>
         </div>
