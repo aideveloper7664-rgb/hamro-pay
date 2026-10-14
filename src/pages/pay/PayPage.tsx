@@ -1,20 +1,44 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 const API_URL = 'https://hamropay-backends.onrender.com';
 const TOTAL_SECONDS = 8 * 60;
 
+// Helper to identify payment link IDs vs order IDs
 // FIXME: confirm link_id prefix with backend (e.g. lnk_, link_, or other format)
 export const isPaymentLinkId = (idStr: string): boolean => {
   if (!idStr) return false;
   return idStr.startsWith('lnk_') || idStr.startsWith('link_') || idStr.startsWith('pl_');
 };
 
-const PayPage: React.FC = () => {
+export const isOrderId = (idStr: string): boolean => {
+  if (!idStr) return false;
+  return idStr.startsWith('ORD_') || idStr.startsWith('ord_');
+};
+
+interface PayPageProps {
+  onBackToDashboard?: () => void;
+}
+
+type ErrorKind = '404' | '409' | 'network' | 'no_upi' | 'order_unsupported' | 'inactive' | 'generic';
+
+const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [id, setId] = useState<string>('');
-  const [data, setData] = useState<{ title?: string; amount?: number; merchant_name?: string; [key: string]: any } | null>(null);
-  const [isLink, setIsLink] = useState<boolean>(false);
+  const [data, setData] = useState<{
+    link_id?: string;
+    title?: string;
+    amount?: number;
+    note?: string;
+    merchant_name?: string;
+    upi_id?: string;
+    cashier_type?: string;
+    status?: string;
+    active?: boolean;
+    [key: string]: any;
+  } | null>(null);
+
   const [activeUpi, setActiveUpi] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Timer
@@ -23,8 +47,10 @@ const PayPage: React.FC = () => {
 
   // UTR & Verification State
   const [utr, setUtr] = useState<string>('');
+  const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
+  const [orderResult, setOrderResult] = useState<any>(null);
   const [isShaking, setIsShaking] = useState<boolean>(false);
 
   // Toast
@@ -33,7 +59,7 @@ const PayPage: React.FC = () => {
   const [toastType, setToastType] = useState<'info' | 'success' | 'error'>('info');
   const toastTimerRef = useRef<any>(null);
 
-  // QR Image Timestamp
+  // QR Image Timestamp & Download State
   const [qrTimestamp, setQrTimestamp] = useState<number>(Date.now());
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
@@ -47,7 +73,15 @@ const PayPage: React.FC = () => {
     }, 2800);
   };
 
-  // Get ID on mount
+  const handleGoHome = () => {
+    if (onBackToDashboard) {
+      onBackToDashboard();
+    } else if (typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
+  };
+
+  // Extract ID on mount
   useEffect(() => {
     let extractedId = '';
     if (typeof window !== 'undefined') {
@@ -66,104 +100,112 @@ const PayPage: React.FC = () => {
         extractedId = searchParams.get('id') || searchParams.get('link_id') || searchParams.get('order_id') || '';
       }
     }
-    setId(extractedId);
+    setId(extractedId.trim());
   }, []);
 
-  // Fetch Payment Link or Order data
-  useEffect(() => {
+  // Fetch Public Payment Link
+  const loadPaymentData = useCallback(async () => {
     if (!id) {
       setIsLoading(false);
-      setErrorMessage('This payment link is invalid or expired');
+      setErrorKind('404');
+      setErrorMessage('This payment link is invalid or has been removed');
       return;
     }
 
-    const linkMode = isPaymentLinkId(id);
-    setIsLink(linkMode);
-
-    const fetchUrl = linkMode
-      ? `${API_URL}/api/payment-link/${id}`
-      : `${API_URL}/order/status/${id}`;
+    // Direct Order ID checkout is currently unsupported on public page
+    // TODO: Order verification route /order/verify is merchant-authenticated; customer payment must use payment links (/api/payment-link/:linkId)
+    if (isOrderId(id)) {
+      setIsLoading(false);
+      setErrorKind('order_unsupported');
+      setErrorMessage('Please use a payment link');
+      return;
+    }
 
     setIsLoading(true);
+    setErrorKind(null);
     setErrorMessage(null);
+    setVerifyError(null);
 
-    fetch(fetchUrl)
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error(`Payment link not found (${res.status})`);
-        }
-        return res.json();
-      })
-      .then(async (resData) => {
-        let paymentData: any = null;
-        if (resData?.success && resData?.data) {
-          paymentData = resData.data;
-        } else if (resData?.data) {
-          paymentData = resData.data;
-        } else if (resData?.amount !== undefined) {
-          paymentData = resData;
-        }
+    try {
+      const res = await fetch(`${API_URL}/api/payment-link/${encodeURIComponent(id)}`);
 
-        if (!paymentData || paymentData.amount === undefined || paymentData.amount === null) {
-          throw new Error('Payment data is empty or invalid');
-        }
+      if (res.status === 404) {
+        setErrorKind('404');
+        setErrorMessage('This payment link is invalid or has been removed');
+        setIsLoading(false);
+        return;
+      }
 
+      if (res.status === 409) {
+        setErrorKind('409');
+        setErrorMessage('This merchant cannot accept payments right now');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!res.ok) {
+        let msg = `Payment error (${res.status})`;
+        try {
+          const errData = await res.json();
+          if (errData?.message) msg = errData.message;
+        } catch {}
+        setErrorKind('generic');
+        setErrorMessage(msg);
+        setIsLoading(false);
+        return;
+      }
+
+      const resData = await res.json();
+      const paymentData = resData?.data || resData;
+
+      if (!paymentData || paymentData.amount === undefined || paymentData.amount === null) {
+        setErrorKind('404');
+        setErrorMessage('This payment link is invalid or has been removed');
+        setIsLoading(false);
+        return;
+      }
+
+      // Check if link is deactivated
+      if (paymentData.status === 'inactive' || paymentData.active === false || paymentData.status === 'deactivated') {
+        setErrorKind('inactive');
+        setErrorMessage('This payment link is no longer active');
         setData(paymentData);
-
-        // Check if link is inactive or deactivated
-        if (paymentData.status === 'inactive' || paymentData.active === false || paymentData.status === 'deactivated') {
-          setIsLoading(false);
-          return;
-        }
-
-        // Check active cashier / UPI ID
-        let resolvedUpi = paymentData.upi_id || paymentData.upiId || paymentData.cashier_upi || '';
-
-        if (!resolvedUpi) {
-          const merchantKey = paymentData.merchant_api_key 
-            || paymentData.api_key 
-            || paymentData.merchant?.api_key 
-            || paymentData.apiKey
-            || (typeof window !== 'undefined' ? (JSON.parse(localStorage.getItem('hamropay_merchant') || '{}').api_key) : '');
-
-          if (merchantKey) {
-            try {
-              const cashierRes = await fetch(`${API_URL}/api/cashier/active`, {
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-api-key': merchantKey,
-                },
-              });
-              if (cashierRes.ok) {
-                const cashierJson = await cashierRes.json();
-                const cashier = cashierJson?.cashier || cashierJson?.data || cashierJson;
-                resolvedUpi = cashier?.upi_id || cashier?.upiId || '';
-              }
-            } catch (err) {
-              console.error('Error fetching active cashier:', err);
-            }
-          }
-        }
-
-        if (!resolvedUpi) {
-          throw new Error('No active UPI ID or cashier connected for this merchant');
-        }
-
-        setActiveUpi(resolvedUpi);
         setIsLoading(false);
-      })
-      .catch((err) => {
-        console.error('Error fetching payment data:', err);
-        setErrorMessage('This payment link is invalid or expired');
-        setData(null);
-        setActiveUpi('');
+        return;
+      }
+
+      // Check UPI ID directly from response (no local fallback, no merchant API key lookup)
+      const upi = paymentData.upi_id || paymentData.upiId || paymentData.cashier_upi || '';
+      if (!upi) {
+        setErrorKind('no_upi');
+        setErrorMessage('Payment unavailable');
+        setData(paymentData);
         setIsLoading(false);
-      });
+        return;
+      }
+
+      setData(paymentData);
+      setActiveUpi(upi);
+      setErrorKind(null);
+      setErrorMessage(null);
+      setIsLoading(false);
+    } catch (err: any) {
+      console.error('Fetch payment link network error:', err);
+      setErrorKind('network');
+      setErrorMessage('Could not load payment, please retry');
+      setIsLoading(false);
+    }
   }, [id]);
 
-  // Countdown timer
   useEffect(() => {
-    if (isExpired || isSuccess || isLoading || errorMessage) return;
+    if (id) {
+      loadPaymentData();
+    }
+  }, [id, loadPaymentData]);
+
+  // Countdown Timer
+  useEffect(() => {
+    if (isExpired || isSuccess || isLoading || errorKind !== null) return;
 
     const interval = setInterval(() => {
       setRemaining((prev) => {
@@ -177,11 +219,11 @@ const PayPage: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isExpired, isSuccess, isLoading, errorMessage]);
+  }, [isExpired, isSuccess, isLoading, errorKind]);
 
-  const amount = data?.amount || 0;
+  const amount = data?.amount !== undefined ? Number(data.amount) : 0;
   const title = data?.title || 'Payment Request';
-  const merchantName = data?.merchant_name || data?.merchant?.name || 'Merchant';
+  const merchantName = data?.merchant_name || 'Merchant';
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -191,18 +233,26 @@ const PayPage: React.FC = () => {
 
   const isWarning = remaining <= 60 && remaining > 0;
 
-  const handleReset = () => {
+  const handleResetSession = () => {
     setRemaining(TOTAL_SECONDS);
     setIsExpired(false);
     setUtr('');
+    setVerifyError(null);
     setQrTimestamp(Date.now());
     showToast('New payment session started', 'info');
   };
 
-  const qrDataUrl = `upi://pay?pa=${activeUpi}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`;
-  const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=${encodeURIComponent(qrDataUrl)}&t=${qrTimestamp}`;
+  // UPI deep link string
+  const upiPayUrl = activeUpi
+    ? `upi://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`
+    : '';
+
+  const qrImageSrc = upiPayUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=${encodeURIComponent(upiPayUrl)}&t=${qrTimestamp}`
+    : '';
 
   const handleDownloadQr = async () => {
+    if (!qrImageSrc) return;
     setIsDownloading(true);
     try {
       const response = await fetch(qrImageSrc, { mode: 'cors' });
@@ -225,55 +275,10 @@ const PayPage: React.FC = () => {
   };
 
   const handleUtrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/[^0-9]/g, '');
-    if (val.length <= 20) {
+    const val = e.target.value.replace(/\D/g, '');
+    if (val.length <= 12) {
       setUtr(val);
-    }
-  };
-
-  const handleVerify = async () => {
-    if (!utr || utr.trim().length < 8) {
-      triggerShake();
-      showToast('Enter valid UTR number (min 8 digits)', 'error');
-      return;
-    }
-
-    setIsVerifying(true);
-    try {
-      let endpoint = '';
-      let bodyData: any = {};
-
-      if (isLink || isPaymentLinkId(id)) {
-        endpoint = `${API_URL}/api/payment-link/${id}/verify`;
-        bodyData = { utr: utr.trim(), amount };
-      } else {
-        endpoint = `${API_URL}/order/verify`;
-        bodyData = { order_id: id, utr: utr.trim() };
-      }
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(bodyData),
-      });
-
-      const resData = await res.json();
-
-      if (res.ok && resData?.success !== false) {
-        setIsSuccess(true);
-        showToast('Payment verified successfully!', 'success');
-      } else {
-        triggerShake();
-        showToast(resData?.message || 'Verification failed. Check UTR.', 'error');
-      }
-    } catch (err) {
-      console.error('Verify error:', err);
-      triggerShake();
-      showToast('Verification error. Please check your UTR.', 'error');
-    } finally {
-      setIsVerifying(false);
+      if (verifyError) setVerifyError(null);
     }
   };
 
@@ -283,11 +288,67 @@ const PayPage: React.FC = () => {
   };
 
   const copyToClipboard = (text: string, label: string) => {
-    if (navigator.clipboard) {
+    if (!text) return;
+    if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(text);
       showToast(`${label} copied to clipboard!`, 'info');
+    } else {
+      showToast(`${text}`, 'info');
     }
   };
+
+  // Verify UTR
+  const handleVerify = async () => {
+    if (isVerifying || isExpired) return;
+
+    const cleanUtr = utr.trim();
+    if (!cleanUtr || cleanUtr.length !== 12 || !/^\d{12}$/.test(cleanUtr)) {
+      triggerShake();
+      setVerifyError('Please enter a valid 12-digit numeric UPI Ref / UTR number.');
+      showToast('UTR must be exactly 12 digits', 'error');
+      return;
+    }
+
+    setIsVerifying(true);
+    setVerifyError(null);
+
+    try {
+      // POST /api/payment-link/:linkId/verify with body { utr } (amount is omitted per backend contract)
+      const res = await fetch(`${API_URL}/api/payment-link/${encodeURIComponent(id)}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ utr: cleanUtr }),
+      });
+
+      let resData: any = {};
+      try {
+        resData = await res.json();
+      } catch {
+        resData = {};
+      }
+
+      if (res.ok && resData?.success !== false) {
+        setOrderResult(resData?.data || resData);
+        setIsSuccess(true);
+        showToast('Payment verified successfully!', 'success');
+      } else {
+        triggerShake();
+        const msg = resData?.message || resData?.error || 'Verification failed. Please check your UTR.';
+        setVerifyError(msg);
+        showToast(msg, 'error');
+      }
+    } catch (err: any) {
+      console.error('Verify error:', err);
+      triggerShake();
+      const msg = 'Network error during verification. Please try again.';
+      setVerifyError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const isUtrValid = utr.trim().length === 12;
 
   return (
     <div className="pay-page-wrapper">
@@ -309,18 +370,20 @@ const PayPage: React.FC = () => {
 
         .pay-page-wrapper {
           font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-          background:
+          background-color: #070102;
+          background-image:
             radial-gradient(circle at 85% 15%, rgba(255,30,75,0.14), transparent 32%),
             radial-gradient(circle at 15% 30%, rgba(180,10,40,0.12), transparent 28%),
             linear-gradient(180deg, #070102 0%, #0d0305 45%, #120306 100%);
-          background-attachment: fixed;
           color: var(--text);
           -webkit-font-smoothing: antialiased;
           min-height: 100vh;
           width: 100%;
-          padding: 14px;
-          display: grid;
-          place-items: center;
+          padding: 20px 14px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
           overflow-x: hidden;
           overflow-y: auto;
         }
@@ -334,21 +397,21 @@ const PayPage: React.FC = () => {
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin: auto 0;
-          padding: 4px 0;
+          margin: 0 auto;
+          padding: 0;
         }
 
         /* CARD */
         .pay-card {
           width: 100%;
-          padding: 14px 16px 12px;
-          border-radius: 16px;
-          background: linear-gradient(165deg, rgba(28,7,12,0.92), rgba(14,3,7,0.98));
+          padding: 18px 16px 16px;
+          border-radius: 18px;
+          background: linear-gradient(165deg, rgba(28,7,12,0.95), rgba(14,3,7,0.98));
           border: 1px solid var(--card-border);
           box-shadow:
-            0 20px 60px rgba(0,0,0,0.6),
-            0 0 50px rgba(255,30,75,0.10),
-            inset 0 1px 0 rgba(255,255,255,0.05);
+            0 20px 60px rgba(0,0,0,0.7),
+            0 0 50px rgba(255,30,75,0.12),
+            inset 0 1px 0 rgba(255,255,255,0.06);
           position: relative;
           overflow: hidden;
         }
@@ -356,33 +419,41 @@ const PayPage: React.FC = () => {
         .pay-card::before {
           content: "";
           position: absolute; top: 0; left: 0; right: 0; height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(255,30,75,0.7), transparent);
-          background-size: 200% 100%;
-          animation: shine 5s linear infinite;
+          background: linear-gradient(90deg, transparent, rgba(255,45,85,0.6), transparent);
         }
 
-        @keyframes shine {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-
-        /* HEADER */
         .card-head {
           text-align: center;
-          margin-bottom: 10px;
+          margin-bottom: 12px;
         }
-        .card-title {
-          font-size: 15px;
-          font-weight: 900;
-          letter-spacing: -0.3px;
-          color: #fff;
-          margin-bottom: 2px;
-        }
-        .card-sub {
+
+        .card-brand {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: rgba(255,30,75,0.08);
+          border: 1px solid rgba(255,30,75,0.22);
+          margin-bottom: 8px;
           font-size: 10.5px;
-          color: var(--muted);
-          font-weight: 600;
+          font-weight: 800;
+          color: #ff8ca3;
           letter-spacing: 0.2px;
+        }
+
+        .card-title {
+          font-size: 15.5px;
+          font-weight: 900;
+          color: #fff;
+          letter-spacing: -0.3px;
+        }
+
+        .card-sub {
+          font-size: 11.5px;
+          color: var(--muted);
+          margin-top: 2px;
+          word-break: break-word;
         }
 
         /* TIMER */
@@ -390,122 +461,83 @@ const PayPage: React.FC = () => {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 9px 12px;
+          padding: 8px 12px;
           border-radius: 12px;
-          background: linear-gradient(135deg, rgba(255,184,52,0.10), rgba(255,184,52,0.02));
-          border: 1px solid rgba(255,184,52,0.35);
-          margin-bottom: 9px;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.07);
+          margin-bottom: 10px;
           transition: all 0.3s ease;
         }
+
         .timer-card.warning {
-          background: linear-gradient(135deg, rgba(255,30,75,0.14), rgba(255,30,75,0.04));
-          border-color: rgba(255,30,75,0.5);
-          animation: timerPulse 1.5s ease-in-out infinite;
+          border-color: rgba(255,184,52,0.35);
+          background: rgba(255,184,52,0.07);
         }
-        @keyframes timerPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(255,30,75,0); }
-          50% { box-shadow: 0 0 0 6px rgba(255,30,75,0.10); }
-        }
+
         .timer-icon {
-          width: 30px; height: 30px; border-radius: 9px;
+          width: 26px; height: 26px; border-radius: 8px;
           display: grid; place-items: center;
-          background: rgba(255,184,52,0.16);
-          border: 1px solid rgba(255,184,52,0.35);
-          color: #ffb834;
+          background: rgba(255,45,85,0.12);
+          color: var(--red-light);
           flex-shrink: 0;
-          transition: all 0.3s ease;
         }
         .timer-card.warning .timer-icon {
-          background: rgba(255,30,75,0.16);
-          border-color: rgba(255,30,75,0.35);
-          color: #ff4d6d;
+          background: rgba(255,184,52,0.15);
+          color: var(--gold);
         }
-        .timer-icon svg { width: 15px; height: 15px; }
+        .timer-icon svg { width: 14px; height: 14px; }
+
         .timer-body { flex: 1; min-width: 0; }
-        .timer-label {
-          font-size: 9px;
-          letter-spacing: 1.2px;
-          font-weight: 800;
-          text-transform: uppercase;
-          color: rgba(255,184,52,0.85);
-          margin-bottom: 2px;
-          transition: color 0.3s ease;
-        }
-        .timer-card.warning .timer-label { color: rgba(255,77,109,0.9); }
+        .timer-label { font-size: 10px; font-weight: 700; color: var(--muted-dim); text-transform: uppercase; letter-spacing: 0.5px; }
         .timer-value {
-          font-size: 17px;
+          font-size: 16px;
           font-weight: 900;
-          letter-spacing: -0.3px;
           color: #fff;
-          font-family: 'SF Mono', 'Courier New', ui-monospace, monospace;
-          line-height: 1;
-          text-shadow: 0 0 16px rgba(255,184,52,0.4);
-          transition: text-shadow 0.3s ease;
+          font-variant-numeric: tabular-nums;
+          letter-spacing: -0.2px;
         }
-        .timer-card.warning .timer-value { text-shadow: 0 0 16px rgba(255,30,75,0.6); }
+        .timer-card.warning .timer-value { color: var(--gold); }
+
         .timer-badge {
-          font-size: 9px;
+          font-size: 9.5px;
           font-weight: 800;
-          padding: 3px 8px;
-          border-radius: 999px;
-          background: rgba(255,184,52,0.14);
-          border: 1px solid rgba(255,184,52,0.4);
-          color: #ffb834;
-          letter-spacing: 0.3px;
+          padding: 2px 7px;
+          border-radius: 6px;
+          background: rgba(43,242,154,0.12);
+          color: var(--green);
+          border: 1px solid rgba(43,242,154,0.25);
           text-transform: uppercase;
-          flex-shrink: 0;
-          transition: all 0.3s ease;
+          letter-spacing: 0.4px;
         }
         .timer-card.warning .timer-badge {
-          background: rgba(255,30,75,0.14);
-          border-color: rgba(255,30,75,0.4);
-          color: #ff4d6d;
+          background: rgba(255,184,52,0.12);
+          color: var(--gold);
+          border-color: rgba(255,184,52,0.3);
         }
 
         /* AMOUNT */
         .amount-card {
-          padding: 10px 14px;
+          padding: 10px 12px;
           border-radius: 12px;
-          background: linear-gradient(135deg, rgba(255,30,75,0.08), rgba(255,30,75,0.02));
-          border: 1px solid rgba(255,45,85,0.22);
+          background: linear-gradient(135deg, rgba(255,30,75,0.14), rgba(180,10,40,0.08));
+          border: 1px solid rgba(255,45,85,0.28);
           text-align: center;
-          margin-bottom: 9px;
-          position: relative;
-          overflow: hidden;
-        }
-        .amount-card::before {
-          content: "";
-          position: absolute; inset: 0;
-          background-image:
-            repeating-linear-gradient(115deg,
-              rgba(255,255,255,0.014) 0px,
-              rgba(255,255,255,0.014) 1px,
-              transparent 1px,
-              transparent 10px);
-          pointer-events: none;
+          margin-bottom: 10px;
         }
         .amount-value {
-          font-size: 26px;
+          font-size: 27px;
           font-weight: 900;
-          letter-spacing: -1px;
+          color: #fff;
+          letter-spacing: -0.8px;
           line-height: 1.1;
-          background: linear-gradient(135deg, #fff 0%, #ffd9e0 40%, #ff4d6d 100%);
-          -webkit-background-clip: text;
-          background-clip: text;
-          -webkit-text-fill-color: transparent;
-          color: transparent;
-          margin-bottom: 2px;
-          position: relative;
-          z-index: 1;
-          filter: drop-shadow(0 3px 10px rgba(255,30,75,0.3));
         }
         .amount-sub {
-          font-size: 10px;
-          color: var(--muted);
-          font-weight: 600;
-          letter-spacing: 0.2px;
-          position: relative;
-          z-index: 1;
+          font-size: 10.5px;
+          font-weight: 700;
+          color: #ff8ca3;
+          margin-top: 2px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
 
         /* UPI INFO */
@@ -513,40 +545,43 @@ const PayPage: React.FC = () => {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 8px 12px;
-          border-radius: 10px;
-          background: rgba(91,141,255,0.06);
-          border: 1px solid rgba(91,141,255,0.22);
-          margin-bottom: 9px;
+          padding: 8px 11px;
+          border-radius: 11px;
+          background: rgba(0,0,0,0.35);
+          border: 1px solid rgba(255,255,255,0.07);
+          margin-bottom: 10px;
+          gap: 8px;
         }
-        .upi-info-details {
-          display: flex;
-          flex-direction: column;
-          gap: 1px;
-        }
+        .upi-info-details { min-width: 0; flex: 1; }
         .upi-id-text {
-          font-size: 12px;
+          font-size: 12.5px;
           font-weight: 800;
-          color: #9ab4ff;
-          font-family: 'SF Mono', 'Courier New', monospace;
+          color: #fff;
+          font-family: monospace;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .upi-merchant-text {
           font-size: 10px;
           color: var(--muted);
-          font-weight: 600;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .copy-upi-btn {
-          font-size: 10px;
+          padding: 5px 9px;
+          border-radius: 7px;
+          background: rgba(255,45,85,0.14);
+          border: 1px solid rgba(255,45,85,0.3);
+          color: #ff8ca3;
+          font-size: 10.5px;
           font-weight: 800;
-          padding: 4px 8px;
-          border-radius: 6px;
-          background: rgba(91,141,255,0.15);
-          color: #9ab4ff;
-          border: 1px solid rgba(91,141,255,0.3);
-          transition: all 0.2s ease;
+          white-space: nowrap;
+          transition: all 0.2s;
         }
         .copy-upi-btn:hover {
-          background: rgba(91,141,255,0.3);
+          background: rgba(255,45,85,0.22);
           color: #fff;
         }
 
@@ -555,328 +590,362 @@ const PayPage: React.FC = () => {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 7px;
-          padding: 10px 12px;
-          border-radius: 12px;
-          background: rgba(12,2,6,0.6);
-          border: 1px solid rgba(255,45,85,0.16);
-          margin-bottom: 9px;
+          padding: 10px 0 12px;
+          border-bottom: 1px solid rgba(255,255,255,0.07);
+          margin-bottom: 12px;
         }
         .qr-wrap {
-          position: relative;
-          padding: 8px;
-          border-radius: 11px;
+          padding: 10px;
+          border-radius: 16px;
           background: #fff;
-          box-shadow: 0 6px 20px rgba(0,0,0,0.5), 0 0 24px rgba(255,30,75,0.15);
+          box-shadow: 0 12px 36px rgba(0,0,0,0.5), 0 0 30px rgba(255,30,75,0.18);
+          margin-bottom: 8px;
         }
-        .qr-wrap img { display: block; width: 120px; height: 120px; border-radius: 4px; }
-        .qr-wrap::before,
-        .qr-wrap::after {
-          content: "";
-          position: absolute;
-          width: 16px; height: 16px;
-          border: 2.5px solid var(--red-primary);
-          pointer-events: none;
+        .qr-wrap img {
+          width: 125px;
+          height: 125px;
+          display: block;
+          image-rendering: pixelated;
         }
-        .qr-wrap::before { top: -4px; left: -4px; border-right: none; border-bottom: none; border-top-left-radius: 5px; }
-        .qr-wrap::after { bottom: -4px; right: -4px; border-left: none; border-top: none; border-bottom-right-radius: 5px; }
         .qr-hint {
-          font-size: 10px;
+          font-size: 10.5px;
           color: var(--muted);
-          font-weight: 600;
           text-align: center;
-          letter-spacing: 0.2px;
           line-height: 1.35;
+          margin-bottom: 8px;
         }
-        .qr-hint strong { color: #ff94a7; font-weight: 800; }
+        .qr-hint strong { color: #fff; }
 
-        .download-btn {
-          display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-          padding: 7px 13px;
+        .app-intents-row {
+          width: 100%;
+          display: flex;
+          gap: 6px;
+          margin-bottom: 8px;
+        }
+        .intent-btn {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          padding: 7px 6px;
           border-radius: 9px;
-          font-size: 11px;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.12);
+          font-size: 10.5px;
           font-weight: 800;
           color: #fff;
-          background: linear-gradient(135deg, #ff1e4b 0%, #d8002f 100%);
-          box-shadow: 0 6px 18px rgba(255,30,75,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
-          transition: all 0.22s ease;
-          position: relative;
-          overflow: hidden;
+          text-decoration: none;
+          transition: all 0.2s;
+          text-align: center;
         }
-        .download-btn::before {
-          content: "";
-          position: absolute; inset: 0;
-          background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.22) 50%, transparent 65%);
-          transform: translateX(-100%);
-          transition: transform 0.7s ease;
+        .intent-btn:hover {
+          background: rgba(255,255,255,0.12);
+          border-color: rgba(255,255,255,0.25);
+        }
+
+        .pay-intent-primary {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 9px 12px;
+          border-radius: 11px;
+          background: linear-gradient(135deg, #ff1e4b 0%, #b80028 100%);
+          border: 1px solid rgba(255,45,85,0.4);
+          box-shadow: 0 6px 20px rgba(255,30,75,0.3);
+          font-size: 12px;
+          font-weight: 900;
+          color: #fff;
+          text-decoration: none;
+          margin-bottom: 8px;
+          transition: all 0.2s;
+        }
+        .pay-intent-primary:hover {
+          box-shadow: 0 8px 24px rgba(255,30,75,0.5);
+          transform: translateY(-1px);
+        }
+
+        .download-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 10.5px;
+          font-weight: 700;
+          color: var(--muted);
+          padding: 4px 9px;
+          border-radius: 7px;
+          border: 1px dashed rgba(255,255,255,0.14);
+          transition: all 0.2s;
         }
         .download-btn:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 10px 24px rgba(255,30,75,0.55);
+          color: #fff;
+          border-color: rgba(255,255,255,0.3);
         }
-        .download-btn:hover::before { transform: translateX(100%); }
         .download-btn svg { width: 12px; height: 12px; }
 
         /* UTR SECTION */
         .utr-section {
-          border-radius: 12px;
-          background: rgba(12,2,6,0.6);
-          border: 1px solid rgba(255,45,85,0.16);
-          margin-bottom: 9px;
-          padding: 12px;
-          transition: border-color 0.25s ease;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
         }
-        .utr-section:hover { border-color: rgba(255,60,95,0.35); }
-
         .utr-header {
           display: flex;
           align-items: center;
-          gap: 10px;
-          margin-bottom: 11px;
+          gap: 7px;
         }
         .utr-header-icon {
-          width: 32px; height: 32px; border-radius: 9px;
+          width: 22px; height: 22px; border-radius: 7px;
           display: grid; place-items: center;
-          flex-shrink: 0;
-          background: linear-gradient(135deg, rgba(91,141,255,0.18), rgba(91,141,255,0.06));
-          border: 1px solid rgba(91,141,255,0.35);
-          color: #9ab4ff;
+          background: rgba(43,242,154,0.12);
+          color: var(--green);
         }
-        .utr-header-icon svg { width: 15px; height: 15px; }
-        .utr-header-text { flex: 1; min-width: 0; }
-        .utr-header-title {
-          font-size: 12.5px;
-          font-weight: 900;
-          color: #fff;
-          letter-spacing: -0.2px;
-          line-height: 1.2;
-        }
-        .utr-header-sub {
-          font-size: 10px;
-          color: var(--muted);
-          font-weight: 600;
-          margin-top: 2px;
-          letter-spacing: 0.1px;
-        }
+        .utr-header-icon svg { width: 12px; height: 12px; }
+        .utr-header-title { font-size: 11.5px; font-weight: 800; color: #fff; }
+        .utr-header-sub { font-size: 9.5px; color: var(--muted-dim); }
 
         .utr-input-wrap {
           position: relative;
           display: flex;
           align-items: center;
-          margin-bottom: 9px;
         }
         .utr-input-icon {
-          position: absolute;
-          left: 12px;
-          top: 50%;
-          transform: translateY(-50%);
+          position: absolute; left: 12px;
           color: var(--muted-dim);
           pointer-events: none;
-          transition: color 0.22s ease;
-          display: grid;
-          place-items: center;
+          display: grid; place-items: center;
         }
-        .utr-input-icon svg { width: 15px; height: 15px; display: block; }
-        .utr-input-wrap:focus-within .utr-input-icon { color: #ff5274; }
-
+        .utr-input-icon svg { width: 14px; height: 14px; }
         .utr-input {
           width: 100%;
-          padding: 11px 12px 11px 38px;
-          border-radius: 10px;
-          background: rgba(12,2,6,0.85);
-          border: 1px solid rgba(255,45,85,0.22);
+          padding: 10px 12px 10px 36px;
+          border-radius: 11px;
+          background: rgba(0,0,0,0.45);
+          border: 1.5px solid rgba(255,255,255,0.12);
+          font-size: 13.5px;
+          font-weight: 800;
+          letter-spacing: 0.8px;
           color: #fff;
-          font-size: 13px;
-          font-weight: 600;
-          letter-spacing: 0.6px;
+          font-family: monospace;
           outline: none;
-          transition: all 0.22s ease;
-          font-family: 'SF Mono', 'Courier New', ui-monospace, monospace;
+          transition: all 0.2s;
         }
-        .utr-input::placeholder {
-          color: rgba(184,159,165,0.45);
-          font-weight: 500;
-          font-family: Inter, system-ui, sans-serif;
-          letter-spacing: 0;
-        }
-        .utr-input:hover { border-color: rgba(255,60,95,0.4); }
         .utr-input:focus {
-          border-color: rgba(255,60,95,0.7);
-          background: rgba(20,4,9,0.9);
-          box-shadow:
-            0 0 0 3px rgba(255,30,75,0.12),
-            0 0 18px rgba(255,30,75,0.15);
+          border-color: var(--red-primary);
+          box-shadow: 0 0 16px rgba(255,30,75,0.3);
+          background: rgba(10,2,5,0.7);
         }
-
-        @keyframes inputShakeKeyframes {
+        .utr-input.shake {
+          animation: shakeAnim 0.4s ease-in-out;
+          border-color: #ff4d6d;
+        }
+        @keyframes shakeAnim {
           0%, 100% { transform: translateX(0); }
           20%, 60% { transform: translateX(-6px); }
           40%, 80% { transform: translateX(6px); }
         }
-        .utr-input.shake {
-          animation: inputShakeKeyframes 0.4s ease;
-          border-color: #ff1e4b !important;
-          box-shadow: 0 0 0 3px rgba(255,30,75,0.25) !important;
-        }
 
         .utr-verify-btn {
           width: 100%;
-          display: inline-flex;
+          padding: 11px 16px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, #2bf29a 0%, #10b673 100%);
+          box-shadow: 0 8px 24px rgba(43,242,154,0.35);
+          color: #051a0f;
+          font-size: 12.5px;
+          font-weight: 900;
+          letter-spacing: -0.2px;
+          display: flex;
           align-items: center;
           justify-content: center;
-          gap: 7px;
-          padding: 12px 16px;
-          border-radius: 11px;
-          font-size: 13px;
-          font-weight: 900;
-          letter-spacing: -0.1px;
-          color: #fff;
-          background: linear-gradient(135deg, #ff1e4b 0%, #d8002f 100%);
-          box-shadow:
-            0 10px 26px rgba(255,30,75,0.4),
-            inset 0 1px 0 rgba(255,255,255,0.2);
-          transition: all 0.25s ease;
-          position: relative;
-          overflow: hidden;
-          cursor: pointer;
+          gap: 6px;
+          transition: all 0.2s;
         }
-        .utr-verify-btn::before {
-          content: "";
-          position: absolute; inset: 0;
-          background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.25) 50%, transparent 65%);
-          transform: translateX(-100%);
-          transition: transform 0.7s ease;
-        }
-        .utr-verify-btn:hover {
+        .utr-verify-btn:hover:not(:disabled) {
+          box-shadow: 0 10px 28px rgba(43,242,154,0.5);
           transform: translateY(-1px);
-          box-shadow: 0 14px 34px rgba(255,30,75,0.6);
         }
-        .utr-verify-btn:hover::before { transform: translateX(100%); }
-        .utr-verify-btn:active { transform: translateY(0); }
         .utr-verify-btn:disabled {
-          opacity: 0.7;
+          opacity: 0.45;
           cursor: not-allowed;
-          transform: none;
+          filter: grayscale(0.5);
         }
-        .utr-verify-btn svg { width: 15px; height: 15px; }
+
+        .utr-alert {
+          padding: 8px 10px;
+          border-radius: 9px;
+          background: rgba(255,30,75,0.12);
+          border: 1px solid rgba(255,30,75,0.3);
+          font-size: 10.5px;
+          font-weight: 700;
+          color: #ff8ca3;
+          line-height: 1.4;
+          display: flex;
+          align-items: flex-start;
+          gap: 6px;
+        }
+        .utr-alert svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; color: #ff4d6d; }
 
         .utr-help {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 5px;
           font-size: 10px;
-          color: var(--muted);
-          font-weight: 600;
-          letter-spacing: 0.1px;
-          line-height: 1.4;
-          margin-top: 9px;
-        }
-        .utr-help svg { width: 12px; height: 12px; color: #5b8dff; flex-shrink: 0; }
-
-        /* EXPIRED OVERLAY */
-        .expired-overlay {
-          position: absolute;
-          inset: 0;
-          z-index: 20;
-          display: none;
-          flex-direction: column;
-          align-items: center;
+          color: var(--muted-dim);
           justify-content: center;
-          gap: 12px;
-          padding: 24px;
-          text-align: center;
-          background: rgba(11,2,4,0.94);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          border-radius: 16px;
+          margin-top: 2px;
         }
-        .expired-overlay.show { display: flex; animation: fadeIn 0.4s ease both; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .expired-icon {
-          width: 60px; height: 60px; border-radius: 50%;
-          display: grid; place-items: center;
-          background: rgba(255,30,75,0.14);
-          border: 1.5px solid rgba(255,30,75,0.4);
-          color: #ff4d6d;
-          box-shadow: 0 0 32px rgba(255,30,75,0.35);
-        }
-        .expired-icon svg { width: 28px; height: 28px; }
-        .expired-title { font-size: 15px; font-weight: 900; color: #fff; letter-spacing: -0.3px; }
-        .expired-sub { font-size: 11.5px; color: var(--muted); line-height: 1.5; max-width: 260px; }
-        .refresh-btn {
-          margin-top: 6px;
-          display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-          padding: 10px 18px;
-          border-radius: 11px;
-          font-size: 12.5px; font-weight: 900;
-          color: #fff;
-          background: linear-gradient(135deg, #ff1e4b 0%, #d8002f 100%);
-          box-shadow: 0 10px 26px rgba(255,30,75,0.4);
-          transition: all 0.22s ease;
-        }
-        .refresh-btn:hover { transform: translateY(-1px); box-shadow: 0 14px 34px rgba(255,30,75,0.6); }
-        .refresh-btn svg { width: 14px; height: 14px; }
+        .utr-help svg { width: 11px; height: 11px; }
 
-        /* SUCCESS SCREEN */
+        /* SUCCESS STATE */
         .success-card {
           width: 100%;
-          padding: 24px 20px;
-          border-radius: 16px;
-          background: linear-gradient(165deg, rgba(10,32,18,0.95), rgba(4,18,10,0.98));
+          padding: 24px 18px 20px;
+          border-radius: 18px;
+          background: linear-gradient(165deg, rgba(10,26,16,0.95), rgba(4,14,8,0.98));
           border: 1px solid rgba(43,242,154,0.35);
-          box-shadow:
-            0 20px 60px rgba(0,0,0,0.6),
-            0 0 50px rgba(43,242,154,0.18);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 50px rgba(43,242,154,0.18);
           text-align: center;
-          animation: fadeIn 0.4s ease both;
         }
         .success-icon {
-          width: 64px; height: 64px; border-radius: 50%;
+          width: 58px; height: 58px; border-radius: 50%;
+          margin: 0 auto 14px;
           display: grid; place-items: center;
           background: rgba(43,242,154,0.16);
-          border: 2px solid rgba(43,242,154,0.5);
-          color: #2bf29a;
-          margin-bottom: 14px;
-          box-shadow: 0 0 32px rgba(43,242,154,0.35);
+          border: 1.5px solid rgba(43,242,154,0.4);
+          color: var(--green);
+          box-shadow: 0 0 28px rgba(43,242,154,0.3);
         }
-        .success-icon svg { width: 32px; height: 32px; }
+        .success-icon svg { width: 30px; height: 30px; }
         .success-title {
-          font-size: 18px;
-          font-weight: 900;
-          color: #fff;
-          letter-spacing: -0.3px;
-          margin-bottom: 4px;
+          font-size: 18px; font-weight: 900; color: #fff; letter-spacing: -0.3px; margin-bottom: 4px;
         }
-        .success-sub {
-          font-size: 12px;
-          color: rgba(255,255,255,0.7);
-          margin-bottom: 18px;
-        }
+        .success-sub { font-size: 11.5px; color: #9feac5; margin-bottom: 16px; }
+
         .success-details {
-          width: 100%;
-          background: rgba(0,0,0,0.35);
-          border: 1px solid rgba(43,242,154,0.22);
+          padding: 12px;
           border-radius: 12px;
-          padding: 12px 14px;
-          margin-bottom: 18px;
+          background: rgba(0,0,0,0.45);
+          border: 1px solid rgba(43,242,154,0.18);
+          margin-bottom: 16px;
           display: flex;
           flex-direction: column;
           gap: 8px;
           text-align: left;
         }
         .success-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          font-size: 11px;
-          color: var(--muted);
+          display: flex; justify-content: space-between; align-items: center;
+          font-size: 11.5px;
         }
-        .success-row strong {
-          color: #fff;
+        .success-row span { color: var(--muted); }
+        .success-row strong { color: #fff; font-weight: 800; font-family: monospace; }
+
+        /* ERROR CARD */
+        .error-card {
+          width: 100%;
+          padding: 30px 18px 24px;
+          border-radius: 18px;
+          background: linear-gradient(165deg, rgba(28,7,12,0.95), rgba(14,3,7,0.98));
+          border: 1px solid rgba(255,45,85,0.3);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 50px rgba(255,30,75,0.15);
+          text-align: center;
+        }
+        .error-icon {
+          width: 54px; height: 54px; border-radius: 50%;
+          margin: 0 auto 14px;
+          display: grid; place-items: center;
+          background: rgba(255,30,75,0.14);
+          border: 1.5px solid rgba(255,30,75,0.4);
+          color: #ff4d6d;
+          box-shadow: 0 0 24px rgba(255,30,75,0.25);
+        }
+        .error-icon svg { width: 26px; height: 26px; }
+        .error-title { font-size: 16.5px; font-weight: 900; color: #fff; margin-bottom: 6px; letter-spacing: -0.3px; }
+        .error-sub { font-size: 11.5px; color: var(--muted); line-height: 1.5; max-width: 300px; margin: 0 auto 18px; }
+
+        .action-btn-row {
+          display: flex;
+          gap: 8px;
+          justify-content: center;
+        }
+        .btn-clean {
+          padding: 9px 18px;
+          border-radius: 10px;
+          font-size: 12px;
           font-weight: 800;
+          transition: all 0.2s;
+        }
+        .btn-retry {
+          background: linear-gradient(135deg, #ff1e4b 0%, #b80028 100%);
+          border: 1px solid rgba(255,45,85,0.4);
+          color: #fff;
+          box-shadow: 0 6px 18px rgba(255,30,75,0.3);
+        }
+        .btn-secondary {
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.16);
+          color: #fff;
+        }
+
+        /* EXPIRED OVERLAY */
+        .expired-overlay {
+          position: absolute;
+          inset: 0;
+          background: rgba(7,1,2,0.92);
+          backdrop-filter: blur(6px);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          text-align: center;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.3s ease;
+          z-index: 20;
+        }
+        .expired-overlay.show {
+          opacity: 1;
+          pointer-events: auto;
+        }
+        .expired-icon {
+          width: 48px; height: 48px; border-radius: 50%;
+          background: rgba(255,184,52,0.15);
+          border: 1.5px solid rgba(255,184,52,0.35);
+          color: var(--gold);
+          display: grid; place-items: center;
+          margin-bottom: 12px;
+        }
+        .expired-icon svg { width: 22px; height: 22px; }
+        .expired-title { font-size: 16px; font-weight: 900; color: #fff; margin-bottom: 6px; }
+        .expired-sub { font-size: 11px; color: var(--muted); line-height: 1.45; margin-bottom: 16px; max-width: 260px; }
+        .refresh-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 9px 18px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, #ff1e4b, #b80028);
+          border: 1px solid rgba(255,45,85,0.4);
+          color: #fff;
+          font-size: 12px;
+          font-weight: 800;
+          box-shadow: 0 6px 20px rgba(255,30,75,0.35);
+        }
+        .refresh-btn svg { width: 14px; height: 14px; }
+
+        /* SKELETON */
+        .skeleton-box {
+          background: linear-gradient(90deg, rgba(255,45,85,0.06) 25%, rgba(255,45,85,0.16) 50%, rgba(255,45,85,0.06) 75%);
+          background-size: 200% 100%;
+          animation: skeletonShimmer 1.6s ease-in-out infinite;
+          border-radius: 8px;
+        }
+        @keyframes skeletonShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
         }
 
         /* TRUST + POWERED */
@@ -956,21 +1025,9 @@ const PayPage: React.FC = () => {
           color: #ff4d6d;
           border-color: rgba(255,30,75,0.3);
         }
-        .toast-icon svg { width: 12px; height: 12px; }
-
-        .skeleton-box {
-          background: linear-gradient(90deg, rgba(255,45,85,0.06) 25%, rgba(255,45,85,0.16) 50%, rgba(255,45,85,0.06) 75%);
-          background-size: 200% 100%;
-          animation: skeletonShimmer 1.6s ease-in-out infinite;
-          border-radius: 8px;
-        }
-        @keyframes skeletonShimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
 
         @media (max-width: 420px) {
-          .pay-card { padding: 12px 14px 10px; }
+          .pay-card { padding: 14px 14px 12px; }
           .amount-value { font-size: 24px; }
           .qr-wrap img { width: 110px; height: 110px; }
           .timer-value { font-size: 15px; }
@@ -980,8 +1037,8 @@ const PayPage: React.FC = () => {
 
       <div className="page-stack">
 
+        {/* 1. SUCCESS SCREEN */}
         {isSuccess ? (
-          /* GREEN SUCCESS SCREEN */
           <div className="success-card">
             <div className="success-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
@@ -994,42 +1051,43 @@ const PayPage: React.FC = () => {
             <div className="success-details">
               <div className="success-row">
                 <span>Amount Paid</span>
-                <strong style={{ color: '#2bf29a', fontSize: '14px' }}>₹{amount}</strong>
+                <strong style={{ color: '#2bf29a', fontSize: '13.5px' }}>₹{amount}</strong>
               </div>
               <div className="success-row">
                 <span>UTR Reference</span>
                 <strong>{utr}</strong>
               </div>
+              {orderResult?.order_id && (
+                <div className="success-row">
+                  <span>Order ID</span>
+                  <strong>{orderResult.order_id}</strong>
+                </div>
+              )}
               <div className="success-row">
                 <span>Merchant</span>
                 <strong>{merchantName}</strong>
               </div>
               <div className="success-row">
-                <span>Description</span>
+                <span>Title</span>
                 <strong>{title}</strong>
               </div>
             </div>
 
             <button
               className="refresh-btn"
-              onClick={() => {
-                if (typeof window !== 'undefined' && window.history.length > 1) {
-                  window.history.back();
-                } else if (typeof window !== 'undefined') {
-                  window.location.href = '/';
-                }
-              }}
+              onClick={handleGoHome}
               style={{
                 background: 'linear-gradient(135deg, #2bf29a 0%, #10b673 100%)',
                 boxShadow: '0 10px 26px rgba(43,242,154,0.35)',
-                color: '#07180e'
+                color: '#07180e',
+                margin: '0 auto'
               }}
             >
-              Back to Home
+              Done
             </button>
           </div>
         ) : isLoading ? (
-          /* LOADING SKELETON */
+          /* 2. LOADING SKELETON */
           <div className="pay-card" style={{ padding: '28px 18px', textAlign: 'center' }}>
             <div className="skeleton-box" style={{ width: '130px', height: '18px', margin: '0 auto 10px' }} />
             <div className="skeleton-box" style={{ width: '80px', height: '12px', margin: '0 auto 20px' }} />
@@ -1040,92 +1098,60 @@ const PayPage: React.FC = () => {
             <div className="skeleton-box" style={{ width: '130px', height: '130px', margin: '0 auto 12px', borderRadius: '12px' }} />
             <div className="skeleton-box" style={{ width: '100%', height: '90px', borderRadius: '12px' }} />
           </div>
-        ) : errorMessage || !data || !activeUpi ? (
-          /* ERROR SCREEN: INVALID OR EXPIRED LINK */
-          <div className="pay-card" style={{ textAlign: 'center', padding: '36px 20px' }}>
-            <div style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              margin: '0 auto 16px',
-              display: 'grid',
-              placeItems: 'center',
-              background: 'rgba(255,30,75,0.14)',
-              border: '1.5px solid rgba(255,30,75,0.4)',
-              color: '#ff4d6d',
-              boxShadow: '0 0 24px rgba(255,30,75,0.25)'
-            }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: '26px', height: '26px' }}>
+        ) : errorKind !== null ? (
+          /* 3. ERROR SCREEN (404, 409, NETWORK, NO_UPI, ORDER_UNSUPPORTED, INACTIVE) */
+          <div className="error-card">
+            <div className="error-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="15" y1="9" x2="9" y2="15" />
                 <line x1="9" y1="9" x2="15" y2="15" />
               </svg>
             </div>
-            <div style={{ fontSize: '17px', fontWeight: '900', color: '#fff', marginBottom: '8px', letterSpacing: '-0.3px' }}>
-              This payment link is invalid or expired
+            <div className="error-title">
+              {errorKind === '404' && 'Payment Link Not Found'}
+              {errorKind === '409' && 'Merchant Unavailable'}
+              {errorKind === 'network' && 'Connection Error'}
+              {errorKind === 'no_upi' && 'Payment Unavailable'}
+              {errorKind === 'order_unsupported' && 'Payment Link Required'}
+              {errorKind === 'inactive' && 'Link Deactivated'}
+              {errorKind === 'generic' && 'Unable to Load Payment'}
             </div>
-            <p style={{ fontSize: '11.5px', color: 'var(--muted)', lineHeight: '1.55', maxWidth: '300px', margin: '0 auto 22px' }}>
-              The payment link or order could not be loaded or is no longer available. Please request a new payment link from the merchant.
-            </p>
-            <button
-              className="refresh-btn"
-              onClick={() => {
-                if (typeof window !== 'undefined' && window.history.length > 1) {
-                  window.history.back();
-                } else if (typeof window !== 'undefined') {
-                  window.location.href = '/';
-                }
-              }}
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                color: '#fff',
-                margin: '0 auto'
-              }}
-            >
-              Return Home
-            </button>
-          </div>
-        ) : data && (data.status === 'inactive' || data.active === false || data.status === 'deactivated') ? (
-          /* INACTIVE PAYMENT LINK CARD */
-          <div className="pay-card" style={{ textAlign: 'center', padding: '36px 20px' }}>
-            <div style={{ fontSize: '42px', marginBottom: '12px' }}>❌</div>
-            <div style={{ fontSize: '18px', fontWeight: '900', color: '#fff', marginBottom: '8px' }}>
-              This payment link is no longer active
+            <p className="error-sub">{errorMessage}</p>
+
+            <div className="action-btn-row">
+              {errorKind === 'network' && (
+                <button
+                  type="button"
+                  className="btn-clean btn-retry"
+                  onClick={loadPaymentData}
+                >
+                  Retry Payment
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-clean btn-secondary"
+                onClick={handleGoHome}
+              >
+                Return Home
+              </button>
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: '1.5', marginBottom: '20px' }}>
-              The merchant has deactivated or removed this payment link. Please contact the merchant to generate a new active link.
-            </p>
-            <button
-              className="refresh-btn"
-              onClick={() => {
-                if (typeof window !== 'undefined' && window.history.length > 1) {
-                  window.history.back();
-                } else if (typeof window !== 'undefined') {
-                  window.location.href = '/';
-                }
-              }}
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                color: '#fff',
-                margin: '0 auto'
-              }}
-            >
-              Return Home
-            </button>
           </div>
         ) : (
-          /* MAIN PAYMENT CARD */
+          /* 4. ACTIVE PAYMENT CARD */
           <div className="pay-card">
 
             {/* Header */}
             <div className="card-head">
-              <div className="card-title">Complete Payment</div>
-              <div className="card-sub">{title}</div>
+              <div className="card-brand">
+                <span>Direct Cashier Checkout</span>
+              </div>
+              <div className="card-title">{title}</div>
+              {data?.note && <div className="card-sub">{data.note}</div>}
             </div>
 
-            {/* Timer */}
+            {/* Countdown Timer */}
             <div className={`timer-card ${isWarning ? 'warning' : ''}`}>
               <div className="timer-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -1134,7 +1160,7 @@ const PayPage: React.FC = () => {
                 </svg>
               </div>
               <div className="timer-body">
-                <div className="timer-label">Payment Expires In</div>
+                <div className="timer-label">Payment Session Expires In</div>
                 <div className="timer-value">{formatTime(remaining)}</div>
               </div>
               <span className="timer-badge">
@@ -1145,16 +1171,17 @@ const PayPage: React.FC = () => {
             {/* Amount */}
             <div className="amount-card">
               <div className="amount-value">₹{amount}</div>
-              <div className="amount-sub">Pay this amount via UPI</div>
+              <div className="amount-sub">Amount to Pay</div>
             </div>
 
-            {/* UPI & Merchant Info */}
+            {/* UPI ID & Merchant details */}
             <div className="upi-info-box">
               <div className="upi-info-details">
                 <div className="upi-id-text">{activeUpi}</div>
                 <div className="upi-merchant-text">{merchantName}</div>
               </div>
               <button
+                type="button"
                 className="copy-upi-btn"
                 onClick={() => copyToClipboard(activeUpi, 'UPI ID')}
                 title="Copy UPI ID"
@@ -1168,15 +1195,60 @@ const PayPage: React.FC = () => {
               <div className="qr-wrap">
                 <img
                   src={qrImageSrc}
-                  alt="Scan this QR code to pay"
+                  alt="Scan QR code to pay"
                   crossOrigin="anonymous"
                 />
               </div>
+
+              {/* Direct UPI Intent Button */}
+              {upiPayUrl && (
+                <a
+                  href={upiPayUrl}
+                  className="pay-intent-primary"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="5" y="2" width="14" height="20" rx="2" />
+                    <path d="M12 18h.01" />
+                  </svg>
+                  <span>Pay via UPI App</span>
+                </a>
+              )}
+
+              {/* Specific app intents for mobile devices */}
+              {activeUpi && (
+                <div className="app-intents-row">
+                  <a
+                    href={`fam://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
+                    className="intent-btn"
+                    title="Pay with FamPay"
+                  >
+                    FamPay
+                  </a>
+                  <a
+                    href={`gpay://upi/pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
+                    className="intent-btn"
+                    title="Pay with GPay"
+                  >
+                    GPay
+                  </a>
+                  <a
+                    href={`phonepe://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
+                    className="intent-btn"
+                    title="Pay with PhonePe"
+                  >
+                    PhonePe
+                  </a>
+                </div>
+              )}
+
               <div className="qr-hint">
-                Scan with any UPI app<br />
-                or <strong>long-press to save</strong>
+                Scan with any UPI app or click button above
               </div>
+
               <button
+                type="button"
                 className="download-btn"
                 onClick={handleDownloadQr}
                 disabled={isDownloading}
@@ -1185,11 +1257,11 @@ const PayPage: React.FC = () => {
                   <path d="M12 3v12M7 10l5 5 5-5" />
                   <path d="M5 21h14" />
                 </svg>
-                {isDownloading ? 'Downloading...' : 'Download QR'}
+                {isDownloading ? 'Saving...' : 'Download QR'}
               </button>
             </div>
 
-            {/* Enter UTR Reference Code */}
+            {/* UTR Verification Section */}
             <div className="utr-section">
               <div className="utr-header">
                 <div className="utr-header-icon">
@@ -1198,9 +1270,9 @@ const PayPage: React.FC = () => {
                     <path d="M9 8h6M9 12h6M9 16h4" />
                   </svg>
                 </div>
-                <div className="utr-header-text">
-                  <div className="utr-header-title">Enter UTR Reference Code</div>
-                  <div className="utr-header-sub">To confirm your payment</div>
+                <div>
+                  <div className="utr-header-title">Enter 12-Digit UTR Number</div>
+                  <div className="utr-header-sub">Submit your 12-digit UPI reference code to verify</div>
                 </div>
               </div>
 
@@ -1219,20 +1291,43 @@ const PayPage: React.FC = () => {
                   placeholder="e.g. 623851978381"
                   inputMode="numeric"
                   autoComplete="off"
-                  maxLength={20}
+                  maxLength={12}
                   disabled={isExpired || isVerifying}
                 />
               </div>
 
+              {verifyError && (
+                <div className="utr-alert">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <span>{verifyError}</span>
+                </div>
+              )}
+
               <button
+                type="button"
                 className="utr-verify-btn"
                 onClick={handleVerify}
-                disabled={isExpired || isVerifying}
+                disabled={isExpired || isVerifying || !isUtrValid}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-                <span>{isVerifying ? 'Verifying...' : 'Verify Payment'}</span>
+                {isVerifying ? (
+                  <>
+                    <svg className="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                    <span>Verifying UTR...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                    <span>Verify Payment</span>
+                  </>
+                )}
               </button>
 
               <div className="utr-help">
@@ -1240,7 +1335,7 @@ const PayPage: React.FC = () => {
                   <circle cx="12" cy="12" r="9" />
                   <path d="M12 16v-4M12 8h.01" />
                 </svg>
-                Find UTR in your bank app transaction history
+                Find 12-digit Ref / UTR number in your UPI transaction receipt
               </div>
             </div>
 
@@ -1252,21 +1347,21 @@ const PayPage: React.FC = () => {
                   <path d="M12 7v5l3 2" />
                 </svg>
               </div>
-              <div className="expired-title">Payment Time Expired</div>
-              <div className="expired-sub">This payment session has timed out after 8 minutes. Please refresh to generate a new QR code.</div>
-              <button className="refresh-btn" onClick={handleReset}>
+              <div className="expired-title">Payment Session Expired</div>
+              <div className="expired-sub">This payment session has timed out after 8 minutes. Refresh to begin a new session.</div>
+              <button type="button" className="refresh-btn" onClick={handleResetSession}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5" />
                   <path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" />
                 </svg>
-                Refresh Payment
+                Refresh Session
               </button>
             </div>
 
           </div>
         )}
 
-        {/* Trust + Powered */}
+        {/* Security badges */}
         <div className="trust-row">
           <div className="trust-item">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1280,21 +1375,21 @@ const PayPage: React.FC = () => {
               <rect x="4" y="11" width="16" height="10" rx="2" />
               <path d="M8 11V7a4 4 0 0 1 8 0v4" />
             </svg>
-            <span>SSL</span>
+            <span>SSL 256-BIT</span>
           </div>
           <div className="trust-item">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="9" />
               <path d="m9 12 2 2 4-4" />
             </svg>
-            <span>Verified</span>
+            <span>VERIFIED</span>
           </div>
           <div className="trust-item">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="6" y="2" width="12" height="20" rx="2" />
               <path d="M12 18h.01" />
             </svg>
-            <span>UPI</span>
+            <span>UPI AUTO</span>
           </div>
         </div>
 
@@ -1307,7 +1402,7 @@ const PayPage: React.FC = () => {
 
       </div>
 
-      {/* Toast */}
+      {/* Toast Notification */}
       <div className={`toast ${toastShow ? 'show' : ''} ${toastType === 'error' ? 'toast-error' : toastType === 'success' ? 'toast-success' : ''}`}>
         <div className="toast-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">

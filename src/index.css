@@ -29,6 +29,14 @@ body,
   height: 0 !important;
 }
 
+html, body {
+  background-color: #070102;
+  color: #fff2f4;
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
 /* ============================================
    HAMROPAY DARK CRIMSON SIDEBAR STYLES
    ============================================ */

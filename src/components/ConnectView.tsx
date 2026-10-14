@@ -2,11 +2,10 @@ import { useState, useEffect } from 'react';
 import { CreditCard, Code, ShoppingBag, ShieldCheck, Cpu, CheckCircle2, AlertTriangle, Link as LinkIcon, Lock, Database, ArrowRight, Activity, Terminal } from 'lucide-react';
 import { getStatus } from '../services/fampay.service';
 import FamPayConnectView from './FamPayConnectView';
-import PaytmConnectView from './PaytmConnectView';
 import StorePortalView from './StorePortalView';
 
 interface ConnectViewProps {
-  viewId: 'fampay' | 'paytm' | 'developer' | 'store' | string;
+  viewId: 'fampay' | 'developer' | 'store' | string;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   isApiSimulated: boolean;
   apiBaseUrl: string;
@@ -28,22 +27,11 @@ export default function ConnectView({
   onViewChange,
   unreadNotifications
 }: ConnectViewProps) {
-  const isFamPay = viewId === 'fampay';
+  const isFamPay = viewId === 'fampay' || viewId === 'paytm';
 
   if (isFamPay) {
     return (
       <FamPayConnectView
-        showToast={showToast}
-        onOpenSidebar={onOpenSidebar}
-        onViewChange={onViewChange}
-        unreadNotifications={unreadNotifications}
-      />
-    );
-  }
-
-  if (viewId === 'paytm') {
-    return (
-      <PaytmConnectView
         showToast={showToast}
         onOpenSidebar={onOpenSidebar}
         onViewChange={onViewChange}

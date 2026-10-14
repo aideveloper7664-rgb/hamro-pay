@@ -30,7 +30,6 @@ export default function Sidebar({
 
   // Collapsible groups state - default collapsed so subsections do not open automatically
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    cashier: currentView === 'fampay' || currentView === 'paytm',
     dev: currentView === 'developer',
     store: currentView === 'store',
   });
@@ -191,106 +190,33 @@ export default function Sidebar({
               <span className="flex-1 min-w-0 truncate">Payment Links</span>
             </div>
 
-            {/* Cashier Connect Group */}
-            <div className={`hp-nav-group flex flex-col ${expandedGroups.cashier ? 'expanded' : ''}`}>
-              <div
-                className={`hp-nav-item ${expandedGroups.cashier ? 'expanded' : ''}`}
-                onClick={() => {
-                  toggleGroup('cashier');
-                  if (currentView !== 'fampay' && currentView !== 'paytm') {
-                    handleNavClick('fampay');
-                  }
+            {/* FamPay Connect (Cashier Gateway) */}
+            <div
+              className={`hp-nav-item ${currentView === 'fampay' ? 'active' : ''}`}
+              onClick={() => handleNavClick('fampay')}
+            >
+              <span
+                className="hp-nav-icon"
+                style={{
+                  background: 'linear-gradient(135deg, #ff7a00, #e06300)',
+                  boxShadow: '0 4px 14px rgba(255,122,0,0.35)',
                 }}
               >
-                <span
-                  className="hp-nav-icon"
-                  style={{
-                    background: 'linear-gradient(135deg, #ffb834, #e89a15)',
-                    boxShadow: '0 4px 14px rgba(255,184,52,0.35)',
-                  }}
-                >
-                  <svg
-                    className="w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="3" y="6" width="13" height="12" rx="2" />
-                    <path d="m22 8-6 4 6 4V8Z" />
-                  </svg>
-                </span>
-                <span className="flex-1 min-w-0 truncate">Cashier Connect</span>
-                <span className="hp-new-badge">New</span>
                 <svg
-                  className={`w-3.5 h-3.5 hp-chevron transition-transform duration-200 ${expandedGroups.cashier ? 'rotate-180' : ''}`}
+                  className="w-4 h-4"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2.4"
+                  strokeWidth="2.2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <path d="m6 9 6 6 6-6" />
+                  <rect x="5" y="3" width="14" height="18" rx="2" />
+                  <path d="M12 18h.01" />
                 </svg>
-              </div>
-              <div className="hp-sub-wrap">
-                <div className="hp-sub-inner">
-                  <div className="hp-sub-list">
-                    {/* FamPay */}
-                    <div
-                      className={`hp-sub-item ${currentView === 'fampay' ? 'active' : ''}`}
-                      onClick={() => handleNavClick('fampay')}
-                    >
-                      <span
-                        className="hp-sub-icon"
-                        style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)' }}
-                      >
-                        <svg
-                          className="w-3.5 h-3.5"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <rect x="5" y="3" width="14" height="18" rx="2" />
-                          <path d="M12 18h.01" />
-                        </svg>
-                      </span>
-                      <span className="flex-1 min-w-0 truncate">FamPay</span>
-                    </div>
-
-                    {/* Paytm */}
-                    <div
-                      className={`hp-sub-item ${currentView === 'paytm' ? 'active' : ''}`}
-                      onClick={() => handleNavClick('paytm')}
-                    >
-                      <span
-                        className="hp-sub-icon"
-                        style={{ background: 'linear-gradient(135deg, #00b9f5, #0072bc)' }}
-                      >
-                        <svg
-                          className="w-3.5 h-3.5"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <rect x="2" y="5" width="20" height="14" rx="2" />
-                          <line x1="2" y1="10" x2="22" y2="10" />
-                        </svg>
-                      </span>
-                      <span className="flex-1 min-w-0 truncate">Paytm</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              </span>
+              <span className="flex-1 min-w-0 truncate">FamPay Connect</span>
+              <span className="hp-new-badge">Cashier</span>
             </div>
 
             {/* Developer Portal Group */}

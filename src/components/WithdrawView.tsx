@@ -292,7 +292,7 @@ export default function WithdrawView({
                       <input
                         id="withdrawUpi"
                         type="text"
-                        placeholder="merchant@okhdfcbank or 98XXXXXXXX@paytm"
+                        placeholder="merchant@okhdfcbank or 98XXXXXXXX@fam"
                         value={upiId}
                         onChange={(e) => setUpiId(e.target.value)}
                         className="hp-w-input-field mono"

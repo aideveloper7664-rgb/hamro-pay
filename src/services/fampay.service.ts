@@ -72,33 +72,12 @@ export const addFamPayAccount = async (data: {
     if (res.ok && res.data && res.data.success) {
       await fetchFamPayAccounts();
       return { success: true, account: res.data.account, message: res.data.message };
-    } else if (res.data && res.data.message) {
-      return { success: false, message: res.data.message };
     }
+    return { success: false, message: res.data?.message || 'Failed to add FamPay account' };
   } catch (err: any) {
-    console.warn('API add account error, performing offline creation:', err);
+    console.error('API add account error:', err);
+    return { success: false, message: err.message || 'Failed to add FamPay account' };
   }
-
-  // Local fallback creation
-  const localAccounts = getLocalFamPayAccounts();
-  if (localAccounts.length >= 3) {
-    return { success: false, message: 'Maximum 3 FamPay accounts allowed.' };
-  }
-
-  const newAcc: FamPayAccount = {
-    id: 'fampay-' + Date.now(),
-    phone: data.phone.trim(),
-    upiId: data.upiId.trim(),
-    gmail: data.gmail.trim(),
-    name: data.name?.trim() || 'FamPay Account',
-    isGmailVerified: false,
-    isActive: false,
-    createdAt: new Date().toISOString()
-  };
-
-  const updated = [...localAccounts, newAcc];
-  saveLocalFamPayAccounts(updated);
-  return { success: true, account: newAcc, message: 'FamPay account added locally. Please verify Gmail.' };
 };
 
 export const activateFamPayAccount = async (id: string): Promise<{ success: boolean; message?: string }> => {

@@ -62,9 +62,8 @@ export default function FamPayConnectView({
       // Filter for FamPay accounts
       const fampayAccounts = rawList.filter(acc => {
         if (acc.type) return acc.type.toLowerCase() === 'fampay';
-        if (acc.paytm_mid) return false;
         const upi = (acc.upi_id || acc.upiId || '').toLowerCase();
-        return upi.includes('@fam') || !upi.includes('@paytm');
+        return upi.includes('@fam') || (!acc.type && upi);
       });
 
       setAccounts(fampayAccounts);

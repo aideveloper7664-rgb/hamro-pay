@@ -26,7 +26,6 @@ import ConnectView from './components/ConnectView';
 import DeveloperPortalView from './components/DeveloperPortalView';
 import StorePortalView from './components/StorePortalView';
 import FamPayConnectView from './components/FamPayConnectView';
-import PaytmConnectView from './components/PaytmConnectView';
 import { getActiveCashier } from './services/cashier.service';
 import Modal from './components/Modal';
 import CreatePaymentLinkModal from './components/CreatePaymentLinkModal';
@@ -478,22 +477,18 @@ export default function App() {
 
   const handleOpenCreateLink = async () => {
     const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-    const apiKey = merchant.api_key;
+    const apiKey = merchant.api_key || localStorage.getItem('hamropay_api_key') || '';
 
-    let hasCashier = false;
     try {
       const active = await getActiveCashier(apiKey);
-      if (active && (active.upi_id || active.upiId || active.id)) {
-        hasCashier = true;
+      if (!active || !(active.upi_id || active.upiId || active.id)) {
+        setIsNoCashierModalOpen(true);
+      } else {
+        openCreateLinkDirectly();
       }
-    } catch {
-      hasCashier = false;
-    }
-
-    if (!hasCashier) {
-      setIsNoCashierModalOpen(true);
-    } else {
-      openCreateLinkDirectly();
+    } catch (err: any) {
+      console.error('Active cashier check error:', err);
+      showToast('Could not verify payment account, try again', 'error');
     }
   };
 
@@ -560,7 +555,8 @@ export default function App() {
 
       try {
         const { link } = await ApiService.createLink(newLinkPayload);
-        if (!link || (!link.link_id && !link.id)) {
+        const realId = link?.link_id || link?.id;
+        if (!link || !realId) {
           throw new Error('No valid link_id returned from server');
         }
 
@@ -570,7 +566,24 @@ export default function App() {
         setEditingLinkId(null);
       } catch (err: any) {
         console.error('Link create failed:', err);
-        showToast(`Link create failed: ${err.message || 'Unknown error'}`, 'error');
+        const errMsg = err?.message || 'Unknown error';
+        if (
+          errMsg.toLowerCase().includes('connect fampay') || 
+          errMsg.toLowerCase().includes('connect paytm') || 
+          errMsg.toLowerCase().includes('payment account first')
+        ) {
+          setActiveModal(null);
+          setIsNoCashierModalOpen(true);
+        } else if (
+          errMsg.toLowerCase().includes('insufficient hamro credits') || 
+          errMsg.toLowerCase().includes('insufficient credits')
+        ) {
+          showToast('Insufficient Hamro Credits: Please top up your wallet credits', 'error');
+          setActiveModal(null);
+          setCurrentView('wallet');
+        } else {
+          showToast(`Link create failed: ${errMsg}`, 'error');
+        }
       }
     }
   };
@@ -818,19 +831,10 @@ export default function App() {
           />
         );
 
+      case 'paytm':
       case 'fampay':
         return (
           <FamPayConnectView
-            showToast={showToast}
-            onOpenSidebar={() => setIsSidebarOpen(true)}
-            onViewChange={setCurrentView}
-            unreadNotifications={unreadNotificationsCount}
-          />
-        );
-
-      case 'paytm':
-        return (
-          <PaytmConnectView
             showToast={showToast}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}
@@ -879,7 +883,7 @@ export default function App() {
   const isPayView = typeof window !== 'undefined' && window.location.pathname.includes('/pay/');
   if (isPayView) {
     return (
-      <div className="min-h-screen bg-slate-50 font-sans">
+      <div className="min-h-screen bg-[#070102] text-[#fff2f4] font-sans">
         <PayPage onBackToDashboard={() => {
           window.history.pushState({}, '', '/');
           window.location.reload();
@@ -1043,7 +1047,8 @@ export default function App() {
 
             try {
               const { link } = await ApiService.createLink(newLinkPayload);
-              if (!link || (!link.link_id && !link.id)) {
+              const realId = link?.link_id || link?.id;
+              if (!link || !realId) {
                 throw new Error('No valid link_id returned from server');
               }
 
@@ -1053,7 +1058,24 @@ export default function App() {
               setEditingLinkId(null);
             } catch (err: any) {
               console.error('Link create failed:', err);
-              showToast(`Link create failed: ${err.message || 'Unknown error'}`, 'error');
+              const errMsg = err?.message || 'Unknown error';
+              if (
+                errMsg.toLowerCase().includes('connect fampay') || 
+                errMsg.toLowerCase().includes('connect paytm') || 
+                errMsg.toLowerCase().includes('payment account first')
+              ) {
+                setActiveModal(null);
+                setIsNoCashierModalOpen(true);
+              } else if (
+                errMsg.toLowerCase().includes('insufficient hamro credits') || 
+                errMsg.toLowerCase().includes('insufficient credits')
+              ) {
+                showToast('Insufficient Hamro Credits: Please top up your wallet credits', 'error');
+                setActiveModal(null);
+                setCurrentView('wallet');
+              } else {
+                showToast(`Link create failed: ${errMsg}`, 'error');
+              }
               throw err;
             }
           }
@@ -1085,14 +1107,6 @@ export default function App() {
         onConnectFamPay={() => {
           setIsNoCashierModalOpen(false);
           setCurrentView('fampay');
-        }}
-        onConnectPaytm={() => {
-          setIsNoCashierModalOpen(false);
-          setCurrentView('paytm');
-        }}
-        onContinueAnyway={() => {
-          setIsNoCashierModalOpen(false);
-          openCreateLinkDirectly();
         }}
       />
 

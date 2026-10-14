@@ -88,7 +88,7 @@ export default function AuthScreen({
         <div className="relative z-10 my-auto max-w-md space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-950/60 backdrop-blur-md border border-rose-500/20 text-xs font-bold text-rose-200">
             <Zap className="w-3.5 h-3.5 text-rose-400 fill-current" />
-            <span>Instant FamPay &amp; Paytm Settlements</span>
+            <span>Instant FamPay Settlements</span>
           </div>
 
           <h1 className="text-4xl xl:text-5xl font-black tracking-tight leading-[1.1]">

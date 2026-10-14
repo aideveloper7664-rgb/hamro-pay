@@ -12,6 +12,27 @@ const getApiKey = (): string => {
 };
 const getToken = (): string => localStorage.getItem('hamropay_token') || '';
 
+const sanitizeForLog = (obj: any): any => {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeForLog);
+  const copy: Record<string, any> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (
+      key.toLowerCase().includes('password') || 
+      key === 'gmail_app_password' || 
+      key === 'api_key' || 
+      key === 'token'
+    ) {
+      copy[key] = '***';
+    } else if (typeof val === 'object' && val !== null) {
+      copy[key] = sanitizeForLog(val);
+    } else {
+      copy[key] = val;
+    }
+  }
+  return copy;
+};
+
 // For merchant API calls (uses x-api-key)
 export const apiCall = async (
   path: string,
@@ -33,11 +54,15 @@ export const apiCall = async (
     ...extraHeaders,
   };
 
-  const isCreateCall = path.includes('create') || path.includes('payment-link');
-  if (isCreateCall) {
+  const isDebugCall = path.includes('create') || path.includes('payment-link') || path.includes('cashier');
+  if (isDebugCall) {
     console.log(`[API Call Request] ${method} ${path}:`, {
-      payload: body,
-      headers: { ...headers, 'x-api-key': apiKey ? `${apiKey.substring(0, 4)}***` : 'missing' },
+      payload: sanitizeForLog(body),
+      headers: { 
+        ...headers, 
+        'x-api-key': apiKey ? `${apiKey.substring(0, 4)}***` : 'missing',
+        ...(headers['Authorization'] ? { 'Authorization': 'Bearer ***' } : {})
+      },
     });
   }
 
@@ -60,8 +85,8 @@ export const apiCall = async (
     data = {};
   }
 
-  if (isCreateCall) {
-    console.log(`[API Call Response] ${method} ${path} (${res.status}):`, data);
+  if (isDebugCall) {
+    console.log(`[API Call Response] ${method} ${path} (${res.status}):`, sanitizeForLog(data));
   }
 
   if (!res.ok || (data && data.success === false)) {

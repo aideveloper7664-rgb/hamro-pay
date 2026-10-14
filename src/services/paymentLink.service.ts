@@ -10,5 +10,9 @@ export const getLinks = async () => apiCall('/api/payment-link/list');
 export const deleteLink = async (linkId: string) =>
   apiCall(`/api/payment-link/${linkId}`, 'DELETE');
 
-export const getLinkPaymentUrl = (linkId: string) =>
-  `${FRONTEND_URL}/pay/${linkId}`;
+export const getLinkPaymentUrl = (linkId: string) => {
+  const base = typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost:5173')
+    ? window.location.origin
+    : (FRONTEND_URL);
+  return `${base}/pay/${linkId}`;
+};
