@@ -5,6 +5,7 @@ export interface PaymentLink {
   amount: number;
   orders: number;
   active: boolean;
+  is_test?: boolean;
   date: string;
   note?: string;
   payment_url?: string;

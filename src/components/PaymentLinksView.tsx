@@ -6,6 +6,8 @@ import { deleteLink, getLinkPaymentUrl } from '../services/paymentLink.service';
 interface PaymentLinksViewProps {
   paymentLinks: PaymentLink[];
   onToggleActive: (id: string | number) => void;
+  onToggleTestMode?: (id: string | number, nextIsTest: boolean) => Promise<void> | void;
+  togglingLinkId?: string | number | null;
   onEditLink: (id: string | number) => void;
   onDeleteLink?: (id: string | number) => void;
   onCreateNewLink: () => void;
@@ -18,6 +20,8 @@ interface PaymentLinksViewProps {
 export default function PaymentLinksView({
   paymentLinks,
   onToggleActive,
+  onToggleTestMode,
+  togglingLinkId,
   onEditLink,
   onDeleteLink,
   onCreateNewLink,
@@ -31,10 +35,32 @@ export default function PaymentLinksView({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
 
+  const [confirmLiveModal, setConfirmLiveModal] = useState<{ id: string | number; nextIsTest: boolean } | null>(null);
+
   const totalLinks = paymentLinks.length;
   const activeLinks = paymentLinks.filter(l => l.active).length;
-  const totalCollected = paymentLinks.reduce((sum, l) => sum + l.amount * l.orders, 0);
+  // Test links ke stats ('collected') me kuch add mat karo (backend bhi nahi karta)
+  const totalCollected = paymentLinks.reduce((sum, l) => sum + (l.is_test ? 0 : l.amount * l.orders), 0);
   const expiredLinks = paymentLinks.filter(l => (l as any).expiry && new Date((l as any).expiry).getTime() < Date.now()).length;
+
+  const handleTestModeToggleClick = (link: PaymentLink) => {
+    const nextIsTest = !link.is_test;
+    // Live link ko test me badalte/test ko live karte waqt confirm dialog
+    if (!nextIsTest) {
+      setConfirmLiveModal({ id: link.id, nextIsTest: false });
+    } else {
+      if (onToggleTestMode) {
+        onToggleTestMode(link.id, true);
+      }
+    }
+  };
+
+  const handleConfirmLiveModal = () => {
+    if (confirmLiveModal && onToggleTestMode) {
+      onToggleTestMode(confirmLiveModal.id, confirmLiveModal.nextIsTest);
+    }
+    setConfirmLiveModal(null);
+  };
 
   const filteredLinks = paymentLinks.filter(link => {
     const matchesSearch = link.title.toLowerCase().includes(searchTerm.toLowerCase());
@@ -218,7 +244,7 @@ export default function PaymentLinksView({
       <div className="space-y-3.5">
         {filteredLinks.length > 0 ? (
           filteredLinks.map(link => {
-            const calculatedTotal = link.amount * link.orders;
+            const calculatedTotal = link.is_test ? 0 : link.amount * link.orders;
             return (
               <article
                 key={link.id}
@@ -234,6 +260,11 @@ export default function PaymentLinksView({
                   <div>
                     <h3 className="text-sm font-black text-white flex items-center gap-2">
                       {link.title}
+                      {link.is_test && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-[9px] font-black text-amber-400 uppercase tracking-wider">
+                          TEST
+                        </span>
+                      )}
                       {!link.active && (
                         <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-extrabold text-[#b89fa5] uppercase tracking-wider">
                           Paused
@@ -256,10 +287,12 @@ export default function PaymentLinksView({
                 <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-0 pt-3 md:pt-0 border-[rgba(255,45,85,0.1)]">
                   <div className="flex items-center gap-6 text-xs text-[#b89fa5] font-semibold mr-2">
                     <div className="text-left md:text-right">
-                      <b className="block text-sm font-black text-white leading-none">
+                      <b className={`block text-sm font-black leading-none ${link.is_test ? 'text-amber-400' : 'text-white'}`}>
                         ₹{calculatedTotal.toLocaleString('en-IN')}
                       </b>
-                      <span className="text-[10px] text-[#83686e] font-bold uppercase tracking-wider block mt-1">Collected</span>
+                      <span className="text-[10px] text-[#83686e] font-bold uppercase tracking-wider block mt-1">
+                        {link.is_test ? 'Test Mode' : 'Collected'}
+                      </span>
                     </div>
                     <div className="text-left md:text-right">
                       <b className="block text-sm font-black text-white leading-none">{link.orders}</b>
@@ -269,13 +302,34 @@ export default function PaymentLinksView({
 
                   {/* Actions Row */}
                   <div className="flex items-center gap-2">
+                    {/* Test Mode Toggle Switch */}
+                    <div className="flex items-center gap-1.5 mr-1" title={link.is_test ? "Switch to Live Mode" : "Switch to Test Mode"}>
+                      <button
+                        onClick={() => handleTestModeToggleClick(link)}
+                        disabled={togglingLinkId === link.id}
+                        className={`w-9 h-5 rounded-full p-0.5 transition-all outline-none relative cursor-pointer disabled:opacity-50 ${
+                          link.is_test ? 'bg-amber-500' : 'bg-white/15'
+                        }`}
+                        aria-label="Toggle link test mode"
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white shadow-xs transition-all transform ${
+                          link.is_test ? 'translate-x-4' : 'translate-x-0'
+                        }`} />
+                      </button>
+                      <span className={`text-[10px] font-extrabold uppercase tracking-wider ${link.is_test ? 'text-amber-400' : 'text-[#83686e]'}`}>
+                        Test
+                      </span>
+                    </div>
+
                     {/* Active Toggle Switch */}
                     <button
                       onClick={() => onToggleActive(link.id)}
-                      className={`w-10 h-6 rounded-full p-0.5 transition-all outline-none relative cursor-pointer ${
+                      disabled={togglingLinkId === link.id}
+                      className={`w-10 h-6 rounded-full p-0.5 transition-all outline-none relative cursor-pointer disabled:opacity-50 ${
                         link.active ? 'bg-[#ff1e4b]' : 'bg-white/15'
                       }`}
                       aria-label="Toggle link active state"
+                      title={link.active ? "Pause link" : "Activate link"}
                     >
                       <div className={`w-5 h-5 rounded-full bg-white shadow-xs transition-all transform ${
                         link.active ? 'translate-x-4' : 'translate-x-0'
@@ -359,6 +413,45 @@ export default function PaymentLinksView({
           </div>
         )}
       </div>
+
+      {/* Confirm Live Dialog Modal */}
+      {confirmLiveModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#040102]/85 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={() => setConfirmLiveModal(null)}
+        >
+          <div
+            className="relative w-full max-w-[420px] rounded-[22px] bg-gradient-to-br from-[rgba(26,6,12,0.98)] to-[rgba(12,2,6,0.99)] border border-amber-500/35 p-6 space-y-4 shadow-[0_40px_90px_rgba(0,0,0,0.85)] text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/35 grid place-items-center text-amber-400 shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-black text-white">Switch to Live Mode?</h3>
+            </div>
+            <p className="text-xs text-[#d8c5ca] leading-relaxed">
+              Live karne par customer ke asli payments is link par lagenge. Continue?
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmLiveModal(null)}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmLiveModal}
+                className="px-4 py-2 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black shadow-md shadow-rose-600/30 hover:shadow-lg transition cursor-pointer"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       </div>
     </div>

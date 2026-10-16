@@ -8,6 +8,7 @@ interface CreatePaymentLinkModalProps {
     title: string;
     amount: number;
     note: string;
+    is_test?: boolean;
     redirectUrl: string;
     expiry: string;
     usageLimit?: number;
@@ -16,6 +17,7 @@ interface CreatePaymentLinkModalProps {
     title: string;
     amount: number;
     note?: string;
+    is_test?: boolean;
     redirectUrl?: string;
     expiry?: string;
     usageLimit?: number;
@@ -37,6 +39,7 @@ export default function CreatePaymentLinkModal({
   const [amount, setAmount] = useState(initialData ? String(initialData.amount) : '');
   const [title, setTitle] = useState(initialData ? initialData.title : '');
   const [note, setNote] = useState(initialData ? initialData.note || '' : '');
+  const [isTestMode, setIsTestMode] = useState(initialData?.is_test || false);
   const [redirectUrl, setRedirectUrl] = useState(initialData ? initialData.redirectUrl || '' : '');
   const [expiry, setExpiry] = useState(initialData ? initialData.expiry || '7d' : '7d');
   const [usageLimit, setUsageLimit] = useState(initialData?.usageLimit ? String(initialData.usageLimit) : '');
@@ -48,6 +51,7 @@ export default function CreatePaymentLinkModal({
       setAmount(initialData ? String(initialData.amount) : '');
       setTitle(initialData ? initialData.title : '');
       setNote(initialData ? initialData.note || '' : '');
+      setIsTestMode(Boolean(initialData?.is_test));
       setRedirectUrl(initialData ? initialData.redirectUrl || '' : '');
       setExpiry(initialData ? initialData.expiry || '7d' : '7d');
       setUsageLimit(initialData?.usageLimit ? String(initialData.usageLimit) : '');
@@ -85,6 +89,7 @@ export default function CreatePaymentLinkModal({
         title: title.trim(),
         amount: num,
         note: note.trim(),
+        is_test: isTestMode,
         redirectUrl: redirectUrl.trim(),
         expiry,
         usageLimit: usageLimit ? parseInt(usageLimit) : undefined
@@ -208,6 +213,33 @@ export default function CreatePaymentLinkModal({
               onChange={(e) => setNote(e.target.value)}
               className="w-full px-4 py-3 rounded-xl bg-[rgba(12,2,6,0.75)] border border-[rgba(255,45,85,0.18)] text-white text-sm font-semibold focus:border-[rgba(255,60,95,0.7)] focus:bg-[rgba(20,4,9,0.9)] focus:outline-none focus:ring-4 focus:ring-[rgba(255,30,75,0.12)] transition-all placeholder:text-[rgba(184,159,165,0.5)] resize-none"
             />
+          </div>
+
+          {/* Test Mode Toggle */}
+          <div className="p-3.5 rounded-xl bg-gradient-to-br from-[rgba(255,184,52,0.08)] to-[rgba(255,184,52,0.02)] border border-amber-500/25 flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-amber-200">Test mode</span>
+                <span className="px-1.5 py-0.5 rounded text-[9.5px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider">
+                  Sandbox
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                Test links par koi asli paisa nahi lagta. Success ke liye UTR 000000000000 use karo.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsTestMode(!isTestMode)}
+              className={`w-11 h-6 rounded-full p-0.5 transition-all outline-none relative cursor-pointer shrink-0 mt-0.5 ${
+                isTestMode ? 'bg-amber-500' : 'bg-white/15'
+              }`}
+              aria-label="Toggle Test Mode"
+            >
+              <div className={`w-5 h-5 rounded-full bg-white shadow-xs transition-all transform ${
+                isTestMode ? 'translate-x-5' : 'translate-x-0'
+              }`} />
+            </button>
           </div>
 
           {/* Advanced Options Card */}

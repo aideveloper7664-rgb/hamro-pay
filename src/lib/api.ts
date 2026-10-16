@@ -86,7 +86,9 @@ export const ApiService = {
         link_id: item.link_id,
         title: item.title,
         amount: Number(item.amount || 0),
-        active: item.status === 'active' || item.status === undefined,
+        active: item.status === 'active',
+        is_test: !!item.is_test,
+        note: item.note || '',
         orders: item.total_orders || item.orders || 0,
         date: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent',
         payment_url: item.payment_url || '',
@@ -98,12 +100,13 @@ export const ApiService = {
     }
   },
 
-  async createLink(link: Omit<PaymentLink, 'id' | 'orders' | 'date'>, localFallback?: PaymentLink[]) {
+  async createLink(link: Omit<PaymentLink, 'id' | 'orders' | 'date'>, _localFallback?: PaymentLink[]) {
     try {
       const data = await apiCall('/api/payment-link/create', 'POST', {
         title: link.title,
         amount: link.amount,
-        note: (link as any).note || ''
+        note: (link as any).note || '',
+        is_test: !!link.is_test,
       });
       const realId = data?.link_id || data?.id;
       if (!realId) {
@@ -114,7 +117,9 @@ export const ApiService = {
         link_id: realId,
         title: data.title || link.title,
         amount: Number(data.amount || link.amount),
-        active: data.status === 'active' || data.status === undefined,
+        active: data.status === 'active',
+        is_test: !!data.is_test,
+        note: data.note || (link as any).note || '',
         orders: 0,
         date: 'Created just now',
         payment_url: data.payment_url || '',
@@ -126,24 +131,24 @@ export const ApiService = {
     }
   },
 
-  async updateLink(id: string | number, updates: Partial<PaymentLink>, localFallback?: PaymentLink[]) {
-    try {
-      await apiCall(`/api/payment-link/${id}`, 'PATCH', updates);
-      return { isSimulated: false };
-    } catch (err: any) {
-      console.error('[ApiService.updateLink failed]:', err);
-      return { isSimulated: false };
-    }
+  async updateLink(id: string | number, updates: Partial<PaymentLink>, _localFallback?: PaymentLink[]) {
+    const payload: Record<string, any> = {};
+    if (updates.title !== undefined) payload.title = updates.title;
+    if (updates.amount !== undefined) payload.amount = updates.amount;
+    if (updates.note !== undefined) payload.note = updates.note;
+    if (updates.is_test !== undefined) payload.is_test = updates.is_test;
+    if (updates.active !== undefined) payload.status = updates.active ? 'active' : 'inactive';
+    if ((updates as any).status !== undefined) payload.status = (updates as any).status;
+
+    const data = await apiCall(`/api/payment-link/${id}`, 'PATCH', payload);
+    return { success: true, data, isSimulated: false };
   },
 
   async toggleLinkActive(id: string | number, active: boolean) {
-    try {
-      await apiCall(`/api/payment-link/${id}/toggle`, 'PATCH', { active });
-      return { isSimulated: false };
-    } catch (err: any) {
-      console.error('[ApiService.toggleLinkActive failed]:', err);
-      return { isSimulated: false };
-    }
+    const data = await apiCall(`/api/payment-link/${id}`, 'PATCH', {
+      status: active ? 'active' : 'inactive'
+    });
+    return { success: true, data, isSimulated: false };
   },
 
   async withdrawFunds(amount: number, upi_id: string) {

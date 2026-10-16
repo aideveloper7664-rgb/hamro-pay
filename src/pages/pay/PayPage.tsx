@@ -44,6 +44,8 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   // Timer
   const [remaining, setRemaining] = useState<number>(TOTAL_SECONDS);
   const [isExpired, setIsExpired] = useState<boolean>(false);
+  const [isCancelled, setIsCancelled] = useState<boolean>(false);
+  const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
 
   // UTR & Verification State
   const [utr, setUtr] = useState<string>('');
@@ -129,6 +131,13 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     try {
       const res = await fetch(`${API_URL}/api/payment-link/${encodeURIComponent(id)}`);
 
+      if (res.status === 403) {
+        setErrorKind('inactive');
+        setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
+        setIsLoading(false);
+        return;
+      }
+
       if (res.status === 404) {
         setErrorKind('404');
         setErrorMessage('This payment link is invalid or has been removed');
@@ -147,6 +156,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         let msg = `Payment error (${res.status})`;
         try {
           const errData = await res.json();
+          if (errData?.code === 'LINK_DISABLED') {
+            setErrorKind('inactive');
+            setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
+            setIsLoading(false);
+            return;
+          }
           if (errData?.message) msg = errData.message;
         } catch {}
         setErrorKind('generic');
@@ -156,6 +171,13 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       }
 
       const resData = await res.json();
+      if (resData?.code === 'LINK_DISABLED') {
+        setErrorKind('inactive');
+        setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
+        setIsLoading(false);
+        return;
+      }
+
       const paymentData = resData?.data || resData;
 
       if (!paymentData || paymentData.amount === undefined || paymentData.amount === null) {
@@ -165,10 +187,10 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         return;
       }
 
-      // Check if link is deactivated
+      // Check if link is deactivated / disabled
       if (paymentData.status === 'inactive' || paymentData.active === false || paymentData.status === 'deactivated') {
         setErrorKind('inactive');
-        setErrorMessage('This payment link is no longer active');
+        setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
         setData(paymentData);
         setIsLoading(false);
         return;
@@ -176,7 +198,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
       // Check UPI ID directly from response (no local fallback, no merchant API key lookup)
       const upi = paymentData.upi_id || paymentData.upiId || paymentData.cashier_upi || '';
-      if (!upi) {
+      if (!upi && !paymentData.is_test) {
         setErrorKind('no_upi');
         setErrorMessage('Payment unavailable');
         setData(paymentData);
@@ -205,7 +227,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
   // Countdown Timer
   useEffect(() => {
-    if (isExpired || isSuccess || isLoading || errorKind !== null) return;
+    if (isExpired || isSuccess || isLoading || errorKind !== null || isCancelled) return;
 
     const interval = setInterval(() => {
       setRemaining((prev) => {
@@ -219,11 +241,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isExpired, isSuccess, isLoading, errorKind]);
+  }, [isExpired, isSuccess, isLoading, errorKind, isCancelled]);
 
   const amount = data?.amount !== undefined ? Number(data.amount) : 0;
   const title = data?.title || 'Payment Request';
   const merchantName = data?.merchant_name || 'Merchant';
+  const isTestMode = Boolean(data?.is_test);
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -236,6 +259,8 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const handleResetSession = () => {
     setRemaining(TOTAL_SECONDS);
     setIsExpired(false);
+    setIsCancelled(false);
+    setShowCancelModal(false);
     setUtr('');
     setVerifyError(null);
     setQrTimestamp(Date.now());
@@ -327,10 +352,21 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         resData = {};
       }
 
+      if (res.status === 403 || resData?.code === 'LINK_DISABLED') {
+        setErrorKind('inactive');
+        setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
+        setIsVerifying(false);
+        return;
+      }
+
       if (res.ok && resData?.success !== false) {
         setOrderResult(resData?.data || resData);
         setIsSuccess(true);
-        showToast('Payment verified successfully!', 'success');
+        if (resData?.test_mode || resData?.data?.test || isTestMode) {
+          showToast('Test payment verified!', 'success');
+        } else {
+          showToast('Payment verified successfully!', 'success');
+        }
       } else {
         triggerShake();
         const msg = resData?.message || resData?.error || 'Verification failed. Please check your UTR.';
@@ -1037,8 +1073,40 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
       <div className="page-stack">
 
-        {/* 1. SUCCESS SCREEN */}
-        {isSuccess ? (
+        {/* 0. CANCELLED SCREEN */}
+        {isCancelled ? (
+          <div className="error-card" style={{ borderColor: 'rgba(255,184,52,0.35)' }}>
+            <div className="error-icon" style={{ background: 'rgba(255,184,52,0.12)', color: '#ffb834', borderColor: 'rgba(255,184,52,0.35)' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </div>
+            <div className="error-title">Payment Cancelled</div>
+            <p className="error-sub" style={{ maxWidth: '340px' }}>
+              Payment cancelled by user. Agar aapka paisa kat gaya hai to apne bank statement se UTR lekar merchant ko bhejein.
+            </p>
+
+            <div className="action-btn-row">
+              <button
+                type="button"
+                className="btn-clean btn-retry"
+                onClick={handleResetSession}
+              >
+                Try again
+              </button>
+              <button
+                type="button"
+                className="btn-clean btn-secondary"
+                onClick={handleGoHome}
+              >
+                Return Home
+              </button>
+            </div>
+          </div>
+        ) : isSuccess ? (
+          /* 1. SUCCESS SCREEN */
           <div className="success-card">
             <div className="success-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
@@ -1047,6 +1115,23 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             </div>
             <div className="success-title">Payment Verified!</div>
             <div className="success-sub">Your transaction has been confirmed successfully</div>
+
+            {/* Test Payment Label */}
+            {(isTestMode || orderResult?.test || orderResult?.test_mode) && (
+              <div style={{
+                margin: '10px auto 14px',
+                padding: '6px 14px',
+                borderRadius: '10px',
+                background: 'rgba(255,184,52,0.15)',
+                border: '1px solid rgba(255,184,52,0.35)',
+                color: '#ffb834',
+                fontSize: '11.5px',
+                fontWeight: 800,
+                textAlign: 'center'
+              }}>
+                Test payment successful (no real money moved)
+              </div>
+            )}
 
             <div className="success-details">
               <div className="success-row">
@@ -1114,7 +1199,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
               {errorKind === 'network' && 'Connection Error'}
               {errorKind === 'no_upi' && 'Payment Unavailable'}
               {errorKind === 'order_unsupported' && 'Payment Link Required'}
-              {errorKind === 'inactive' && 'Link Deactivated'}
+              {errorKind === 'inactive' && 'Payment Link Disabled'}
               {errorKind === 'generic' && 'Unable to Load Payment'}
             </div>
             <p className="error-sub">{errorMessage}</p>
@@ -1151,6 +1236,24 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
               {data?.note && <div className="card-sub">{data.note}</div>}
             </div>
 
+            {/* Test Mode Banner */}
+            {isTestMode && (
+              <div style={{
+                padding: '12px 14px',
+                borderRadius: '14px',
+                background: 'rgba(255,184,52,0.12)',
+                border: '1px solid rgba(255,184,52,0.35)',
+                color: '#ffb834',
+                fontSize: '12px',
+                fontWeight: 700,
+                textAlign: 'center',
+                lineHeight: '1.45',
+                marginBottom: '14px'
+              }}>
+                TEST MODE: no real money. Enter UTR 000000000000 to simulate a successful payment.
+              </div>
+            )}
+
             {/* Countdown Timer */}
             <div className={`timer-card ${isWarning ? 'warning' : ''}`}>
               <div className="timer-icon">
@@ -1174,92 +1277,97 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
               <div className="amount-sub">Amount to Pay</div>
             </div>
 
-            {/* UPI ID & Merchant details */}
-            <div className="upi-info-box">
-              <div className="upi-info-details">
-                <div className="upi-id-text">{activeUpi}</div>
-                <div className="upi-merchant-text">{merchantName}</div>
-              </div>
-              <button
-                type="button"
-                className="copy-upi-btn"
-                onClick={() => copyToClipboard(activeUpi, 'UPI ID')}
-                title="Copy UPI ID"
-              >
-                Copy ID
-              </button>
-            </div>
-
-            {/* QR Section */}
-            <div className="qr-section">
-              <div className="qr-wrap">
-                <img
-                  src={qrImageSrc}
-                  alt="Scan QR code to pay"
-                  crossOrigin="anonymous"
-                />
-              </div>
-
-              {/* Direct UPI Intent Button */}
-              {upiPayUrl && (
-                <a
-                  href={upiPayUrl}
-                  className="pay-intent-primary"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="5" y="2" width="14" height="20" rx="2" />
-                    <path d="M12 18h.01" />
-                  </svg>
-                  <span>Pay via UPI App</span>
-                </a>
-              )}
-
-              {/* Specific app intents for mobile devices */}
-              {activeUpi && (
-                <div className="app-intents-row">
-                  <a
-                    href={`fam://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
-                    className="intent-btn"
-                    title="Pay with FamPay"
+            {/* UPI & QR Section (Hidden in Test Mode so user does not accidentally send real money) */}
+            {!isTestMode && (
+              <>
+                {/* UPI ID & Merchant details */}
+                <div className="upi-info-box">
+                  <div className="upi-info-details">
+                    <div className="upi-id-text">{activeUpi}</div>
+                    <div className="upi-merchant-text">{merchantName}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="copy-upi-btn"
+                    onClick={() => copyToClipboard(activeUpi, 'UPI ID')}
+                    title="Copy UPI ID"
                   >
-                    FamPay
-                  </a>
-                  <a
-                    href={`gpay://upi/pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
-                    className="intent-btn"
-                    title="Pay with GPay"
-                  >
-                    GPay
-                  </a>
-                  <a
-                    href={`phonepe://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
-                    className="intent-btn"
-                    title="Pay with PhonePe"
-                  >
-                    PhonePe
-                  </a>
+                    Copy ID
+                  </button>
                 </div>
-              )}
 
-              <div className="qr-hint">
-                Scan with any UPI app or click button above
-              </div>
+                {/* QR Section */}
+                <div className="qr-section">
+                  <div className="qr-wrap">
+                    <img
+                      src={qrImageSrc}
+                      alt="Scan QR code to pay"
+                      crossOrigin="anonymous"
+                    />
+                  </div>
 
-              <button
-                type="button"
-                className="download-btn"
-                onClick={handleDownloadQr}
-                disabled={isDownloading}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3v12M7 10l5 5 5-5" />
-                  <path d="M5 21h14" />
-                </svg>
-                {isDownloading ? 'Saving...' : 'Download QR'}
-              </button>
-            </div>
+                  {/* Direct UPI Intent Button */}
+                  {upiPayUrl && (
+                    <a
+                      href={upiPayUrl}
+                      className="pay-intent-primary"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="5" y="2" width="14" height="20" rx="2" />
+                        <path d="M12 18h.01" />
+                      </svg>
+                      <span>Pay via UPI App</span>
+                    </a>
+                  )}
+
+                  {/* Specific app intents for mobile devices */}
+                  {activeUpi && (
+                    <div className="app-intents-row">
+                      <a
+                        href={`fam://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
+                        className="intent-btn"
+                        title="Pay with FamPay"
+                      >
+                        FamPay
+                      </a>
+                      <a
+                        href={`gpay://upi/pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
+                        className="intent-btn"
+                        title="Pay with GPay"
+                      >
+                        GPay
+                      </a>
+                      <a
+                        href={`phonepe://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
+                        className="intent-btn"
+                        title="Pay with PhonePe"
+                      >
+                        PhonePe
+                      </a>
+                    </div>
+                  )}
+
+                  <div className="qr-hint">
+                    Scan with any UPI app or click button above
+                  </div>
+
+                  <button
+                    type="button"
+                    className="download-btn"
+                    onClick={handleDownloadQr}
+                    disabled={isDownloading}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3v12M7 10l5 5 5-5" />
+                      <path d="M5 21h14" />
+                    </svg>
+                    {isDownloading ? 'Saving...' : 'Download QR'}
+                  </button>
+                </div>
+              </>
+            )}
 
             {/* UTR Verification Section */}
             <div className="utr-section">
@@ -1295,6 +1403,30 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   disabled={isExpired || isVerifying}
                 />
               </div>
+
+              {isTestMode && (
+                <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUtr('000000000000');
+                      if (verifyError) setVerifyError(null);
+                    }}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '8px',
+                      background: 'rgba(255,184,52,0.18)',
+                      border: '1px solid rgba(255,184,52,0.4)',
+                      color: '#ffb834',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Fill test UTR
+                  </button>
+                </div>
+              )}
 
               {verifyError && (
                 <div className="utr-alert">
@@ -1338,6 +1470,32 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                 Find 12-digit Ref / UTR number in your UPI transaction receipt
               </div>
             </div>
+
+            {/* Cancel payment secondary action */}
+            {!isExpired && !isSuccess && !isCancelled && (
+              <div style={{ textAlign: 'center', marginTop: '14px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCancelModal(true)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#83686e',
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    textDecoration: 'underline',
+                    transition: 'color 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ff4d6d')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#83686e')}
+                >
+                  Cancel payment
+                </button>
+              </div>
+            )}
 
             {/* Expired Overlay */}
             <div className={`expired-overlay ${isExpired ? 'show' : ''}`}>
@@ -1401,6 +1559,84 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         </div>
 
       </div>
+
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            background: 'rgba(4, 1, 2, 0.85)',
+            backdropFilter: 'blur(8px)'
+          }}
+          onClick={() => setShowCancelModal(false)}
+        >
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              maxWidth: '420px',
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, rgba(28, 6, 12, 0.98), rgba(14, 2, 6, 0.99))',
+              border: '1px solid rgba(255, 45, 85, 0.3)',
+              padding: '24px',
+              boxShadow: '0 40px 90px rgba(0,0,0,0.85)',
+              color: '#fff2f4'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: '15px', fontWeight: 900, marginBottom: '8px', color: '#fff' }}>
+              Cancel this payment?
+            </div>
+            <p style={{ fontSize: '12px', color: '#d4c2c7', lineHeight: '1.6', marginBottom: '20px' }}>
+              Cancel this payment? Agar aap paisa bhej chuke hain to apna UTR sambhal ke rakhein aur merchant se sampark karein.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '10px',
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Keep paying
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setIsCancelled(true);
+                }}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #ff1e4b, #d8002f)',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 6px 16px rgba(255,30,75,0.35)'
+                }}
+              >
+                Yes, cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       <div className={`toast ${toastShow ? 'show' : ''} ${toastType === 'error' ? 'toast-error' : toastType === 'success' ? 'toast-success' : ''}`}>

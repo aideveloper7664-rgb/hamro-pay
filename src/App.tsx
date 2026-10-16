@@ -426,25 +426,57 @@ export default function App() {
 
   const unreadNotificationsCount = notifications.filter(n => n.unread).length;
 
+  const [togglingLinkId, setTogglingLinkId] = useState<string | number | null>(null);
+
   // --- Payment Link Builder Actions ---
   const handleToggleLinkActive = async (id: string | number) => {
     const link = paymentLinks.find(l => l.id === id);
-    if (!link) return;
+    if (!link || togglingLinkId === id) return;
 
     const nextState = !link.active;
-    const { isSimulated } = await ApiService.toggleLinkActive(id, nextState);
+    const linkIdentifier = String(link.link_id || link.id);
 
-    setPaymentLinks(prev => prev.map(l => {
-      if (l.id === id) {
-        return { ...l, active: nextState };
-      }
-      return l;
-    }));
+    setTogglingLinkId(id);
+    try {
+      await ApiService.toggleLinkActive(linkIdentifier, nextState);
+      setPaymentLinks(prev => prev.map(l => {
+        if (l.id === id) {
+          return { ...l, active: nextState };
+        }
+        return l;
+      }));
+      showToast(nextState ? 'Payment link enabled' : 'Payment link disabled', 'success');
+    } catch (err: any) {
+      console.error('Toggle link active error:', err);
+      const errMsg = err?.message || 'Failed to update link status';
+      showToast(errMsg, 'error');
+    } finally {
+      setTogglingLinkId(null);
+    }
+  };
 
-    if (!isSimulated) {
-      showToast(`Payment link ${nextState ? 'activated' : 'paused'} on Vercel API.`, 'info');
-    } else {
-      showToast(`Payment checkout link is now ${nextState ? 'active' : 'paused'} (locally synced).`, 'info');
+  const handleToggleLinkTestMode = async (id: string | number, nextIsTest: boolean) => {
+    const link = paymentLinks.find(l => l.id === id);
+    if (!link || togglingLinkId === id) return;
+
+    const linkIdentifier = String(link.link_id || link.id);
+
+    setTogglingLinkId(id);
+    try {
+      await ApiService.updateLink(linkIdentifier, { is_test: nextIsTest });
+      setPaymentLinks(prev => prev.map(l => {
+        if (l.id === id) {
+          return { ...l, is_test: nextIsTest };
+        }
+        return l;
+      }));
+      showToast(nextIsTest ? 'Test mode enabled' : 'Live mode enabled', 'success');
+    } catch (err: any) {
+      console.error('Toggle link test mode error:', err);
+      const errMsg = err?.message || 'Failed to update test mode';
+      showToast(errMsg, 'error');
+    } finally {
+      setTogglingLinkId(null);
     }
   };
 
@@ -743,6 +775,8 @@ export default function App() {
           <PaymentLinksView
             paymentLinks={paymentLinks}
             onToggleActive={handleToggleLinkActive}
+            onToggleTestMode={handleToggleLinkTestMode}
+            togglingLinkId={togglingLinkId}
             onEditLink={handleOpenEditLink}
             onDeleteLink={handleDeleteLink}
             onCreateNewLink={handleOpenCreateLink}
@@ -998,10 +1032,13 @@ export default function App() {
           if (editingLinkId !== null) {
             // Edit Link mode
             try {
-              const { isSimulated } = await ApiService.updateLink(editingLinkId, {
+              const editLink = paymentLinks.find(l => l.id === editingLinkId);
+              const linkIdentifier = String(editLink?.link_id || editingLinkId);
+              await ApiService.updateLink(linkIdentifier, {
                 title: data.title,
                 amount: amountNum,
                 note: data.note,
+                is_test: data.is_test,
                 redirectUrl: data.redirectUrl,
                 expiry: data.expiry,
                 usageLimit: data.usageLimit
@@ -1014,6 +1051,7 @@ export default function App() {
                     title: data.title,
                     amount: amountNum,
                     note: data.note,
+                    is_test: data.is_test,
                     redirectUrl: data.redirectUrl,
                     expiry: data.expiry,
                     usageLimit: data.usageLimit,
@@ -1023,15 +1061,12 @@ export default function App() {
                 return l;
               }));
 
-              if (!isSimulated) {
-                showToast('Payment link updated successfully.', 'success');
-              } else {
-                showToast('Payment link updated successfully.', 'success');
-              }
+              showToast('Payment link updated successfully.', 'success');
               setActiveModal(null);
               setEditingLinkId(null);
             } catch (err: any) {
               showToast(`Link update failed: ${err.message || 'Unknown error'}`, 'error');
+              throw err;
             }
           } else {
             // Create New Link Mode
@@ -1039,6 +1074,7 @@ export default function App() {
               title: data.title,
               amount: amountNum,
               active: true,
+              is_test: !!data.is_test,
               note: data.note,
               redirectUrl: data.redirectUrl,
               expiry: data.expiry,
@@ -1088,6 +1124,7 @@ export default function App() {
                   title: l.title,
                   amount: l.amount,
                   note: l.note,
+                  is_test: l.is_test,
                   redirectUrl: l.redirectUrl,
                   expiry: l.expiry,
                   usageLimit: l.usageLimit
