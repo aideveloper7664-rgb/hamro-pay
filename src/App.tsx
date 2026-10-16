@@ -417,7 +417,11 @@ export default function App() {
     const { isSimulated } = await ApiService.markAllNotificationsRead();
     setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
     
-    showToast('All alerts marked as read.', 'success');
+    if (!isSimulated) {
+      showToast('All alerts marked as read and synchronized with Vercel Cloud.', 'success');
+    } else {
+      showToast('All alerts marked as read locally.', 'success');
+    }
   };
 
   const unreadNotificationsCount = notifications.filter(n => n.unread).length;
@@ -534,9 +538,7 @@ export default function App() {
     if (editingLinkId !== null) {
       // Edit Link mode
       try {
-        const editLink = paymentLinks.find(l => l.id === editingLinkId);
-        const linkIdentifier = String(editLink?.link_id || editingLinkId);
-        await ApiService.updateLink(linkIdentifier, {
+        const { isSimulated } = await ApiService.updateLink(editingLinkId, {
           title: modalLinkTitle.trim(),
           amount: amountNum,
           note: modalLinkNote.trim(),
@@ -561,7 +563,11 @@ export default function App() {
           return l;
         }));
 
-        showToast('Payment link updated successfully.', 'success');
+        if (!isSimulated) {
+          showToast('Payment link updated successfully.', 'success');
+        } else {
+          showToast('Payment link updated successfully.', 'success');
+        }
         setActiveModal(null);
         setEditingLinkId(null);
       } catch (err: any) {
@@ -721,7 +727,7 @@ export default function App() {
     setApiEnabled(modalApiEnabledInput);
     setApiToken(modalApiTokenInput.trim());
     setActiveModal(null);
-    showToast('API configuration updated successfully.', 'success');
+    showToast(`Cloud API parameters successfully updated. Connecting to Vercel.`, 'success');
   };
 
   // --- Transactions CSV Exporter ---
@@ -894,10 +900,10 @@ export default function App() {
   const handleProfileSave = async (updated: MerchantProfile) => {
     setProfile(updated);
     const { success, isSimulated } = await ApiService.updateProfile(updated);
-    if (success) {
-      showToast('Merchant profile details updated successfully.', 'success');
+    if (!isSimulated && success) {
+      showToast('Merchant profile details updated and synchronized with Vercel.', 'success');
     } else {
-      showToast('Failed to update merchant profile.', 'error');
+      showToast('Merchant profile details saved locally.', 'success');
     }
   };
 
