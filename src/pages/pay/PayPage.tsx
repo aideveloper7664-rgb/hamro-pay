@@ -83,6 +83,16 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     }
   };
 
+  const handleGoBack = () => {
+    if (typeof window !== 'undefined') {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.close();
+      }
+    }
+  };
+
   // Extract ID on mount
   useEffect(() => {
     let extractedId = '';
@@ -324,7 +334,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
   // Verify UTR
   const handleVerify = async () => {
-    if (isVerifying || isExpired) return;
+    if (isVerifying || isExpired || isCancelled) return;
 
     const cleanUtr = utr.trim();
     if (!cleanUtr || cleanUtr.length !== 12 || !/^\d{12}$/.test(cleanUtr)) {
@@ -369,7 +379,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         }
       } else {
         triggerShake();
-        const msg = resData?.message || resData?.error || 'Verification failed. Please check your UTR.';
+        const msg = resData?.message || resData?.error || (isTestMode ? 'Test mode: enter UTR 000000000000 to simulate a successful payment.' : 'Verification failed. Please check your UTR.');
         setVerifyError(msg);
         showToast(msg, 'error');
       }
@@ -1083,9 +1093,9 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                 <line x1="9" y1="9" x2="15" y2="15" />
               </svg>
             </div>
-            <div className="error-title">Payment Cancelled</div>
+            <div className="error-title">Payment cancelled</div>
             <p className="error-sub" style={{ maxWidth: '340px' }}>
-              Payment cancelled by user. Agar aapka paisa kat gaya hai to apne bank statement se UTR lekar merchant ko bhejein.
+              No payment was recorded. You can close this page.
             </p>
 
             <div className="action-btn-row">
@@ -1094,14 +1104,14 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                 className="btn-clean btn-retry"
                 onClick={handleResetSession}
               >
-                Try again
+                Pay again
               </button>
               <button
                 type="button"
                 className="btn-clean btn-secondary"
-                onClick={handleGoHome}
+                onClick={handleGoBack}
               >
-                Return Home
+                Go back
               </button>
             </div>
           </div>

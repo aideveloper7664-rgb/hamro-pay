@@ -2,7 +2,7 @@ import { apiCall } from './api';
 
 const FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL || 'https://hamro-pay-kilj.vercel.app';
 
-export const createLink = async (data: { title: string; amount: number; note?: string }) =>
+export const createLink = async (data: { title: string; amount: number; note?: string; is_test?: boolean }) =>
   apiCall('/api/payment-link/create', 'POST', data);
 
 export const getLinks = async () => apiCall('/api/payment-link/list');
