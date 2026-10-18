@@ -85,3 +85,42 @@ export const getActiveCashier = async (apiKey?: string): Promise<CashierAccount 
     throw err;
   }
 };
+
+export interface CashierTransaction {
+  reference: string;
+  alt_reference?: string;
+  message_id?: string;
+  amount: number;
+  sender: string;
+  purpose: string | null;
+  date: string;
+}
+
+export interface CashierStats {
+  shown: number;
+  total_amount: number;
+  balance: number | null;
+  last_synced: string;
+  window_days?: number;
+}
+
+export interface CashierHistoryData {
+  transactions: CashierTransaction[];
+  stats: CashierStats;
+}
+
+export const getCashierHistory = async (refresh: boolean = false): Promise<CashierHistoryData> => {
+  const res = await apiCall(`/api/cashier/history${refresh ? '?refresh=1' : ''}`, 'GET');
+  const payload = (res?.data !== undefined ? res.data : res) || {};
+  return {
+    transactions: Array.isArray(payload.transactions) ? payload.transactions : [],
+    stats: payload.stats || {
+      shown: 0,
+      total_amount: 0,
+      balance: null,
+      last_synced: new Date().toISOString(),
+      window_days: 30
+    }
+  };
+};
+

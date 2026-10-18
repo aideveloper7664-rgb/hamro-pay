@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Smartphone, Plus, CheckCircle2, AlertCircle, Trash2, 
   ShieldCheck, ArrowRight, ArrowLeft, X, Mail, Check, Play, RefreshCw, 
-  Lock, Eye, EyeOff, Radio, ToggleLeft, ToggleRight
+  Lock, Eye, EyeOff, Radio, ToggleLeft, ToggleRight, Copy, ChevronDown
 } from 'lucide-react';
 import { 
-  CashierAccount, 
+  CashierAccount,
+  CashierTransaction,
+  CashierStats,
+  CashierHistoryData,
   getCashierList, 
   addFamPayAccount, 
   toggleCashier, 
-  deleteCashier 
+  deleteCashier,
+  getCashierHistory
 } from '../services/cashier.service';
 
 interface FamPayConnectViewProps {
@@ -42,6 +46,13 @@ export default function FamPayConnectView({
   const [gmailAppPassword, setGmailAppPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Live Email History State
+  const [historyData, setHistoryData] = useState<CashierHistoryData | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [historyError, setHistoryError] = useState<{ code?: string; message: string; status?: number } | null>(null);
+  const [visibleRows, setVisibleRows] = useState<number>(20);
 
   // Load accounts on mount
   const loadAccounts = async () => {
@@ -78,6 +89,134 @@ export default function FamPayConnectView({
   useEffect(() => {
     loadAccounts();
   }, []);
+
+  const activeAccount = accounts.find(acc => Boolean(acc.is_active ?? acc.isActive));
+
+  const formatTxDate = (isoStr: string) => {
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return isoStr || '—';
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const seconds = String(d.getSeconds()).padStart(2, '0');
+      return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+    } catch {
+      return isoStr || '—';
+    }
+  };
+
+  const formatSyncTime = (isoStr?: string) => {
+    if (!isoStr) return '—';
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    } catch {
+      return '—';
+    }
+  };
+
+  const activeAccountRef = useRef(activeAccount);
+  activeAccountRef.current = activeAccount;
+  const historyDataRef = useRef(historyData);
+  historyDataRef.current = historyData;
+
+  const fetchHistory = useCallback(async (refresh: boolean = false) => {
+    const currentActive = activeAccountRef.current;
+    if (!currentActive) {
+      setHistoryData(null);
+      setHistoryError(null);
+      return;
+    }
+
+    if (refresh) {
+      setIsSyncing(true);
+    } else if (!historyDataRef.current) {
+      setIsHistoryLoading(true);
+    }
+
+    try {
+      const res = await getCashierHistory(refresh);
+      setHistoryData(res);
+      setHistoryError(null);
+      if (refresh) {
+        showToast('Gmail email history synchronized', 'success');
+      }
+    } catch (err: any) {
+      const errCode = err?.code;
+      const errMsg = err?.message || 'Failed to fetch email history';
+      setHistoryError({
+        code: errCode,
+        message: errMsg,
+        status: err?.status
+      });
+      if (refresh) {
+        showToast(errMsg, 'error');
+      }
+    } finally {
+      setIsHistoryLoading(false);
+      setIsSyncing(false);
+    }
+  }, [showToast]);
+
+  // Load history whenever active account changes
+  useEffect(() => {
+    if (activeAccount) {
+      fetchHistory(false);
+    } else {
+      setHistoryData(null);
+      setHistoryError(null);
+    }
+  }, [activeAccount?.id, activeAccount?._id, activeAccount?.is_active, activeAccount?.isActive, fetchHistory]);
+
+  // 60-second background auto-refresh when tab is visible
+  useEffect(() => {
+    if (!activeAccount) return;
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchHistory(false);
+      }
+    }, 60000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchHistory(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [activeAccount, fetchHistory]);
+
+  const handleReconnect = () => {
+    if (activeAccount) {
+      setUpiId(activeAccount.upi_id || activeAccount.upiId || '');
+      setPhone(activeAccount.phone || '');
+      setGmailEmail(activeAccount.gmail_email || activeAccount.gmail || activeAccount.email || '');
+      setGmailAppPassword('');
+      setStep(2);
+      setIsAddModalOpen(true);
+    } else {
+      openAddModal();
+    }
+  };
+
+  const copyReference = (ref: string) => {
+    if (!ref || ref === '—') return;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(ref);
+      showToast('Copied', 'info');
+    } else {
+      showToast('Copied', 'info');
+    }
+  };
 
   const openAddModal = () => {
     if (accounts.length >= 3) {
@@ -416,6 +555,253 @@ export default function FamPayConnectView({
             </a>
           </div>
         </div>
+
+        {/* LIVE EMAIL HISTORY SECTION */}
+        {activeAccount ? (
+          <div className="mt-6 p-4 sm:p-6 rounded-[18px] bg-gradient-to-b from-[rgba(24,6,10,0.82)] to-[rgba(12,2,6,0.95)] border border-[rgba(255,45,85,0.18)]">
+            {/* CARD HEADER */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[rgba(255,45,85,0.12)] mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#a80024] flex items-center justify-center text-white shadow-[0_0_16px_rgba(255,30,75,0.4)] shrink-0">
+                  <Mail className="w-4 h-4 stroke-[2.2]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base sm:text-lg font-black tracking-tight text-[#fff2f4]">
+                      Live Email History
+                    </h2>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#2bf29a]/15 text-[#2bf29a] text-[10.5px] font-black border border-[#2bf29a]/30 tracking-wide uppercase">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#2bf29a] animate-pulse" />
+                      Live
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#b89fa5] mt-0.5">
+                    Transactions from your active account's Gmail ({activeAccount.gmail_email || activeAccount.gmail || activeAccount.email || activeAccount.upi_id})
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => fetchHistory(true)}
+                  disabled={isSyncing}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[rgba(255,45,85,0.1)] border border-[rgba(255,45,85,0.25)] text-[#fff2f4] text-xs font-extrabold hover:bg-[rgba(255,45,85,0.2)] active:scale-95 disabled:opacity-60 transition-all shadow-[0_2px_10px_rgba(255,30,75,0.1)]"
+                  title="Sync transactions from Gmail"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-[#ff4d6d] ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ERROR BANNER (shown above data without wiping existing records) */}
+            {historyError && (
+              <div className="mb-5">
+                {historyError.code === 'GMAIL_AUTH' ? (
+                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-start sm:items-center gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+                      <span>Gmail login failed. Re-connect this account with a fresh App Password and make sure IMAP is enabled.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleReconnect}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-extrabold text-xs whitespace-nowrap border border-amber-500/40 transition-all active:scale-95 shrink-0"
+                    >
+                      Reconnect
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-start sm:items-center gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
+                      <span>{historyError.message || 'Could not sync email history right now'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fetchHistory(true)}
+                      disabled={isSyncing}
+                      className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-extrabold text-xs whitespace-nowrap border border-rose-500/40 transition-all active:scale-95 shrink-0"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 4 STAT CARDS */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+              <div className="p-3.5 rounded-xl bg-black/45 border border-[rgba(255,45,85,0.12)]">
+                <span className="text-[10px] uppercase font-bold text-[#83686e] tracking-wider block mb-1">
+                  FamPay Balance
+                </span>
+                <span 
+                  className="text-base sm:text-lg font-black text-[#fff2f4] block"
+                  title={historyData?.stats?.balance === null || historyData?.stats?.balance === undefined ? "Balance not found in emails" : undefined}
+                >
+                  {historyData?.stats?.balance !== null && historyData?.stats?.balance !== undefined
+                    ? `₹${Number(historyData.stats.balance).toLocaleString('en-IN')}`
+                    : '—'}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-black/45 border border-[rgba(255,45,85,0.12)]">
+                <span className="text-[10px] uppercase font-bold text-[#83686e] tracking-wider block mb-1">
+                  Shown Txns
+                </span>
+                <span className="text-base sm:text-lg font-black text-[#fff2f4] block font-mono">
+                  {historyData?.stats?.shown ?? 0}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-black/45 border border-[rgba(255,45,85,0.12)]">
+                <span className="text-[10px] uppercase font-bold text-[#83686e] tracking-wider block mb-1">
+                  Total Amount
+                </span>
+                <span className="text-base sm:text-lg font-black text-[#2bf29a] block">
+                  ₹{(historyData?.stats?.total_amount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-black/45 border border-[rgba(255,45,85,0.12)]">
+                <span className="text-[10px] uppercase font-bold text-[#83686e] tracking-wider block mb-1">
+                  Last Synced
+                </span>
+                <span className="text-xs sm:text-sm font-extrabold text-[#fff2f4] block font-mono mt-0.5">
+                  {formatSyncTime(historyData?.stats?.last_synced)}
+                </span>
+              </div>
+            </div>
+
+            {/* TRANSACTIONS SECTION */}
+            {isHistoryLoading && !historyData ? (
+              /* SKELETON LOADER */
+              <div className="space-y-2.5 py-4">
+                {[1, 2, 3, 4].map(idx => (
+                  <div key={idx} className="h-12 rounded-xl bg-white/[0.03] animate-pulse border border-white/5" />
+                ))}
+              </div>
+            ) : !historyData || historyData.transactions.length === 0 ? (
+              /* EMPTY STATE */
+              <div className="py-12 text-center text-[#b89fa5] flex flex-col items-center justify-center gap-2">
+                <Mail className="w-8 h-8 text-[rgba(255,45,85,0.35)] stroke-[1.5]" />
+                <p className="text-xs font-bold text-[#b89fa5]">
+                  No FamPay payment emails in the last 30 days.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* DESKTOP TABLE */}
+                <div className="hidden sm:block overflow-x-auto rounded-xl border border-[rgba(255,45,85,0.12)]">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-black/60 border-b border-[rgba(255,45,85,0.12)] text-[#83686e] text-[10px] uppercase font-extrabold tracking-wider">
+                        <th className="py-3 px-4">Sender</th>
+                        <th className="py-3 px-4">Amount</th>
+                        <th className="py-3 px-4">Reference</th>
+                        <th className="py-3 px-4">Purpose</th>
+                        <th className="py-3 px-4">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[rgba(255,45,85,0.07)]">
+                      {historyData.transactions.slice(0, visibleRows).map((tx, idx) => {
+                        const amt = Number(tx.amount || 0);
+                        const isDecimal = amt % 1 !== 0;
+                        const amtStr = isDecimal ? amt.toFixed(2) : amt.toString();
+                        return (
+                          <tr key={tx.reference || tx.message_id || idx} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3 px-4 font-semibold text-[#fff2f4] whitespace-nowrap">
+                              {tx.sender || 'NA'}
+                            </td>
+                            <td className="py-3 px-4 font-black text-[#2bf29a] whitespace-nowrap">
+                              ₹{amtStr}
+                            </td>
+                            <td className="py-3 px-4 font-mono text-xs text-[#b89fa5] whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => copyReference(tx.reference || tx.alt_reference || '')}
+                                className="inline-flex items-center gap-1.5 hover:text-white transition-colors group cursor-pointer"
+                                title="Click to copy reference"
+                              >
+                                <span>{tx.reference || tx.alt_reference || '—'}</span>
+                                <Copy className="w-3 h-3 text-[#ff4d6d]/60 group-hover:text-[#ff4d6d]" />
+                              </button>
+                            </td>
+                            <td className="py-3 px-4 text-[#b89fa5] whitespace-nowrap">
+                              {tx.purpose || '—'}
+                            </td>
+                            <td className="py-3 px-4 font-mono text-[11px] text-[#83686e] whitespace-nowrap">
+                              {formatTxDate(tx.date)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* MOBILE CARDS */}
+                <div className="sm:hidden space-y-2.5">
+                  {historyData.transactions.slice(0, visibleRows).map((tx, idx) => {
+                    const amt = Number(tx.amount || 0);
+                    const isDecimal = amt % 1 !== 0;
+                    const amtStr = isDecimal ? amt.toFixed(2) : amt.toString();
+                    return (
+                      <div key={tx.reference || tx.message_id || idx} className="p-3.5 rounded-xl bg-black/40 border border-[rgba(255,45,85,0.12)] space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-[#fff2f4] truncate">
+                            {tx.sender || 'NA'}
+                          </span>
+                          <span className="text-xs font-black text-[#2bf29a] shrink-0">
+                            ₹{amtStr}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-[#b89fa5]">
+                          <button
+                            type="button"
+                            onClick={() => copyReference(tx.reference || tx.alt_reference || '')}
+                            className="font-mono text-xs inline-flex items-center gap-1.5 hover:text-white"
+                          >
+                            <span>{tx.reference || tx.alt_reference || '—'}</span>
+                            <Copy className="w-3 h-3 text-[#ff4d6d]" />
+                          </button>
+                          <span className="text-[10.5px] font-mono text-[#83686e]">
+                            {formatTxDate(tx.date)}
+                          </span>
+                        </div>
+                        {tx.purpose && (
+                          <div className="text-[10.5px] text-[#83686e]">
+                            Purpose: <span className="text-[#b89fa5]">{tx.purpose}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* SHOW MORE BUTTON */}
+                {historyData.transactions.length > visibleRows && (
+                  <div className="mt-4 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleRows(prev => prev + 20)}
+                      className="px-4 py-2 rounded-xl bg-black/50 border border-[rgba(255,45,85,0.2)] text-xs font-bold text-[#ff8ca3] hover:text-white hover:border-[rgba(255,45,85,0.4)] transition-all"
+                    >
+                      Show more ({visibleRows} of {historyData.transactions.length})
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ) : (
+          /* Notice when no FamPay cashier active */
+          <div className="mt-6 p-4 rounded-xl bg-black/30 border border-white/5 text-center text-xs text-[#83686e]">
+            Email history is available for FamPay accounts. Please activate a FamPay cashier account above.
+          </div>
+        )}
       </main>
 
       {/* 2-STEP ADD FAMPAY ACCOUNT MODAL */}

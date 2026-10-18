@@ -19,7 +19,7 @@ interface PayPageProps {
   onBackToDashboard?: () => void;
 }
 
-type ErrorKind = '404' | '409' | 'network' | 'no_upi' | 'order_unsupported' | 'inactive' | 'generic';
+type ErrorKind = '404' | '409' | '429' | 'network' | 'no_upi' | 'order_unsupported' | 'inactive' | 'generic';
 
 const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [id, setId] = useState<string>('');
@@ -33,6 +33,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     cashier_type?: string;
     status?: string;
     active?: boolean;
+    is_test?: boolean;
     [key: string]: any;
   } | null>(null);
 
@@ -40,6 +41,23 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Session & Polling State
+  const [sessionId, setSessionId] = useState<string>('');
+  const [sessionData, setSessionData] = useState<any>(null);
+  const [payAmount, setPayAmount] = useState<number>(0);
+  const [baseAmount, setBaseAmount] = useState<number>(0);
+  const [sessionQrCode, setSessionQrCode] = useState<string>('');
+  const [expiresAt, setExpiresAt] = useState<string>('');
+  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
+
+  const [autoDetect, setAutoDetect] = useState<boolean | undefined>(undefined);
+  const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
+  const [failedState, setFailedState] = useState<{ utr?: string | null; message?: string | null } | null>(null);
+
+  const pollTimerRef = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const consecutiveFailuresRef = useRef<number>(0);
 
   // Timer
   const [remaining, setRemaining] = useState<number>(TOTAL_SECONDS);
@@ -105,7 +123,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     setId(extractedId.trim());
   }, []);
 
-  // Fetch Public Payment Link
+  // Fetch Public Payment Link and Initiate Checkout Session
   const loadPaymentData = useCallback(async () => {
     if (!id) {
       setIsLoading(false);
@@ -114,8 +132,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       return;
     }
 
-    // Direct Order ID checkout is currently unsupported on public page
-    // TODO: Order verification route /order/verify is merchant-authenticated; customer payment must use payment links (/api/payment-link/:linkId)
     if (isOrderId(id)) {
       setIsLoading(false);
       setErrorKind('order_unsupported');
@@ -127,6 +143,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     setErrorKind(null);
     setErrorMessage(null);
     setVerifyError(null);
+    setFailedState(null);
 
     try {
       const res = await fetch(`${API_URL}/api/payment-link/${encodeURIComponent(id)}`);
@@ -196,7 +213,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         return;
       }
 
-      // Check UPI ID directly from response (no local fallback, no merchant API key lookup)
       const upi = paymentData.upi_id || paymentData.upiId || paymentData.cashier_upi || '';
       if (!upi && !paymentData.is_test) {
         setErrorKind('no_upi');
@@ -208,11 +224,129 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
       setData(paymentData);
       setActiveUpi(upi);
+      setPayAmount(Number(paymentData.amount || 0));
+      setBaseAmount(Number(paymentData.amount || 0));
+
+      // If LIVE link: initiate or resume checkout session!
+      if (!paymentData.is_test) {
+        let existingSid = '';
+        try {
+          existingSid = sessionStorage.getItem(`hamropay_session_${id}`) || '';
+        } catch {}
+
+        try {
+          const sRes = await fetch(`${API_URL}/api/payment-link/${encodeURIComponent(id)}/session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(existingSid ? { session_id: existingSid } : {})
+          });
+
+          if (sRes.status === 403) {
+            setErrorKind('inactive');
+            setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
+            setIsLoading(false);
+            return;
+          }
+          if (sRes.status === 404) {
+            setErrorKind('404');
+            setErrorMessage('This payment link is invalid or has been removed');
+            setIsLoading(false);
+            return;
+          }
+          if (sRes.status === 409) {
+            setErrorKind('409');
+            setErrorMessage('This merchant cannot accept payments right now');
+            setIsLoading(false);
+            return;
+          }
+          if (sRes.status === 429) {
+            let msg = 'Too many people are paying right now. Please try again in a minute.';
+            try {
+              const errData = await sRes.json();
+              if (errData?.message) msg = errData.message;
+            } catch {}
+            setErrorKind('429');
+            setErrorMessage(msg);
+            setIsLoading(false);
+            return;
+          }
+
+          if (!sRes.ok) {
+            let msg = 'Unable to start checkout session';
+            try {
+              const errData = await sRes.json();
+              if (errData?.code === 'LINK_DISABLED') {
+                setErrorKind('inactive');
+                setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
+                setIsLoading(false);
+                return;
+              }
+              if (errData?.message) msg = errData.message;
+            } catch {}
+            setErrorKind('generic');
+            setErrorMessage(msg);
+            setIsLoading(false);
+            return;
+          }
+
+          const sJson = await sRes.json();
+          if (sJson.test_mode) {
+            paymentData.is_test = true;
+            setData({ ...paymentData, is_test: true });
+          } else if (sJson.data && sJson.data.session_id) {
+            const sData = sJson.data;
+            try {
+              sessionStorage.setItem(`hamropay_session_${id}`, sData.session_id);
+            } catch {}
+
+            setSessionId(sData.session_id);
+            setSessionData(sData);
+            setPayAmount(Number(sData.pay_amount || sData.base_amount || paymentData.amount || 0));
+            setBaseAmount(Number(sData.base_amount || paymentData.amount || 0));
+            if (sData.upi_id) setActiveUpi(sData.upi_id);
+            if (sData.qr_code) setSessionQrCode(sData.qr_code);
+
+            const serverTimeMs = sData.server_time ? Date.parse(sData.server_time) : Date.now();
+            const offset = isNaN(serverTimeMs) ? 0 : serverTimeMs - Date.now();
+            setServerTimeOffset(offset);
+            setExpiresAt(sData.expires_at || '');
+
+            const expMs = sData.expires_at ? Date.parse(sData.expires_at) : 0;
+            const remSec = expMs ? Math.max(0, Math.floor((expMs - (Date.now() + offset)) / 1000)) : TOTAL_SECONDS;
+            setRemaining(remSec);
+
+            if (remSec <= 0 || sData.status === 'expired') {
+              setIsExpired(true);
+            } else if (sData.status === 'paid') {
+              try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
+              setOrderResult({
+                order_id: sData.order_id,
+                utr: sData.utr,
+                amount: sData.pay_amount || sData.base_amount
+              });
+              if (sData.utr) setUtr(sData.utr);
+              setIsSuccess(true);
+            } else if (sData.status === 'cancelled') {
+              try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
+              setIsCancelled(true);
+            } else if (sData.status === 'disabled') {
+              setErrorKind('inactive');
+            } else if (sData.status === 'failed') {
+              setFailedState({ utr: sData.utr, message: sData.message });
+            }
+          }
+        } catch {
+          setErrorKind('network');
+          setErrorMessage('Could not connect to payment session. Please retry.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       setErrorKind(null);
       setErrorMessage(null);
       setIsLoading(false);
-    } catch (err: any) {
-      console.error('Fetch payment link network error:', err);
+    } catch {
       setErrorKind('network');
       setErrorMessage('Could not load payment, please retry');
       setIsLoading(false);
@@ -225,28 +359,184 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     }
   }, [id, loadPaymentData]);
 
-  // Countdown Timer
+  // Polling for Live session status
   useEffect(() => {
-    if (isExpired || isSuccess || isLoading || errorKind !== null || isCancelled) return;
+    if (!sessionId || isExpired || isSuccess || isCancelled || errorKind !== null || failedState !== null) {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      return;
+    }
+
+    let isSubscribed = true;
+
+    const pollStatus = async () => {
+      if (!isSubscribed) return;
+
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      try {
+        const res = await fetch(`${API_URL}/api/payment-link/session/${encodeURIComponent(sessionId)}/status`, {
+          signal: controller.signal
+        });
+
+        if (!isSubscribed) return;
+
+        if (res.ok) {
+          consecutiveFailuresRef.current = 0;
+          setIsReconnecting(false);
+
+          const statusJson = await res.json();
+          const stData = statusJson?.data;
+
+          if (stData) {
+            if (stData.auto_detect !== undefined) {
+              setAutoDetect(stData.auto_detect);
+            }
+
+            const currentStatus = stData.status;
+
+            if (currentStatus === 'paid') {
+              try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
+              setOrderResult({
+                order_id: stData.order_id,
+                utr: stData.utr,
+                amount: stData.pay_amount || payAmount
+              });
+              if (stData.utr) setUtr(stData.utr);
+              setIsSuccess(true);
+              showToast('Payment verified successfully!', 'success');
+              return;
+            }
+
+            if (currentStatus === 'expired') {
+              setIsExpired(true);
+              return;
+            }
+
+            if (currentStatus === 'cancelled') {
+              try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
+              setIsCancelled(true);
+              return;
+            }
+
+            if (currentStatus === 'disabled') {
+              setErrorKind('inactive');
+              return;
+            }
+
+            if (currentStatus === 'failed') {
+              setFailedState({ utr: stData.utr, message: stData.message });
+              return;
+            }
+
+            if (stData.expires_at && stData.server_time) {
+              const serverMs = Date.parse(stData.server_time);
+              const offset = isNaN(serverMs) ? 0 : serverMs - Date.now();
+              const expMs = Date.parse(stData.expires_at);
+              const rem = expMs ? Math.max(0, Math.floor((expMs - (Date.now() + offset)) / 1000)) : remaining;
+              setRemaining(rem);
+              if (rem <= 0) {
+                setIsExpired(true);
+                return;
+              }
+            }
+          }
+        } else if (res.status === 404) {
+          setIsExpired(true);
+          return;
+        } else {
+          consecutiveFailuresRef.current += 1;
+          if (consecutiveFailuresRef.current >= 3) {
+            setIsReconnecting(true);
+          }
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        consecutiveFailuresRef.current += 1;
+        if (consecutiveFailuresRef.current >= 3) {
+          setIsReconnecting(true);
+        }
+      }
+
+      if (!isSubscribed) return;
+
+      const nextDelay = document.visibilityState === 'hidden' ? 8000 : 3000;
+      pollTimerRef.current = setTimeout(pollStatus, nextDelay);
+    };
+
+    pollTimerRef.current = setTimeout(pollStatus, 3000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isSubscribed) {
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+        }
+        pollStatus();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      isSubscribed = false;
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [sessionId, isExpired, isSuccess, isCancelled, errorKind, failedState, id, payAmount, remaining]);
+
+  // Countdown Timer based on expires_at or countdown
+  useEffect(() => {
+    if (isExpired || isSuccess || isLoading || errorKind !== null || isCancelled || failedState !== null) return;
 
     const interval = setInterval(() => {
-      setRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
+      if (expiresAt) {
+        const expMs = Date.parse(expiresAt);
+        const rem = expMs ? Math.max(0, Math.floor((expMs - (Date.now() + serverTimeOffset)) / 1000)) : 0;
+        setRemaining(rem);
+        if (rem <= 0) {
           setIsExpired(true);
-          return 0;
+          clearInterval(interval);
         }
-        return prev - 1;
-      });
+      } else {
+        setRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            setIsExpired(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isExpired, isSuccess, isLoading, errorKind, isCancelled]);
+  }, [isExpired, isSuccess, isLoading, errorKind, isCancelled, failedState, expiresAt, serverTimeOffset]);
 
-  const amount = data?.amount !== undefined ? Number(data.amount) : 0;
+  const isTestMode = Boolean(data?.is_test);
   const title = data?.title || 'Payment Request';
   const merchantName = data?.merchant_name || 'Merchant';
-  const isTestMode = Boolean(data?.is_test);
+
+  const displayAmount = isTestMode
+    ? Number(data?.amount || 0).toFixed(2)
+    : payAmount ? payAmount.toFixed(2) : Number(data?.amount || 0).toFixed(2);
+
+  const hasUniqueAmount = !isTestMode && payAmount > 0 && baseAmount > 0 && Math.abs(payAmount - baseAmount) > 0.0001;
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -256,25 +546,65 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
   const isWarning = remaining <= 60 && remaining > 0;
 
-  const handleResetSession = () => {
-    setRemaining(TOTAL_SECONDS);
+  // Start a fresh checkout session
+  const startNewCheckout = async () => {
+    try {
+      sessionStorage.removeItem(`hamropay_session_${id}`);
+    } catch {}
+
+    setSessionId('');
+    setSessionData(null);
     setIsExpired(false);
     setIsCancelled(false);
     setShowCancelModal(false);
+    setFailedState(null);
     setUtr('');
     setVerifyError(null);
+    setIsReconnecting(false);
+    setAutoDetect(undefined);
     setQrTimestamp(Date.now());
+
+    await loadPaymentData();
     showToast('New payment session started', 'info');
   };
 
-  // UPI deep link string
+  // Cancel payment action
+  const handleCancelPayment = async () => {
+    setShowCancelModal(false);
+
+    if (sessionId) {
+      try {
+        await fetch(`${API_URL}/api/payment-link/session/${encodeURIComponent(sessionId)}/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch {}
+    }
+
+    try {
+      sessionStorage.removeItem(`hamropay_session_${id}`);
+    } catch {}
+
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    setIsCancelled(true);
+  };
+
+  // UPI intent link with exact pay_amount and encoded title
   const upiPayUrl = activeUpi
-    ? `upi://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`
+    ? `upi://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`
     : '';
 
-  const qrImageSrc = upiPayUrl
+  const qrImageSrc = sessionQrCode || (upiPayUrl
     ? `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=${encodeURIComponent(upiPayUrl)}&t=${qrTimestamp}`
-    : '';
+    : '');
 
   const handleDownloadQr = async () => {
     if (!qrImageSrc) return;
@@ -285,7 +615,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `hamropay-qr-${amount}.png`;
+      a.download = `hamropay-qr-${displayAmount}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -300,8 +630,8 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   };
 
   const handleUtrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '');
-    if (val.length <= 12) {
+    const val = e.target.value.replace(/[^A-Za-z0-9]/g, '');
+    if (val.length <= 30) {
       setUtr(val);
       if (verifyError) setVerifyError(null);
     }
@@ -322,15 +652,15 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     }
   };
 
-  // Verify UTR
+  // Manual UTR Verification
   const handleVerify = async () => {
     if (isVerifying || isExpired) return;
 
     const cleanUtr = utr.trim();
-    if (!cleanUtr || cleanUtr.length !== 12 || !/^\d{12}$/.test(cleanUtr)) {
+    if (!cleanUtr || !/^[A-Za-z0-9]{6,30}$/.test(cleanUtr)) {
       triggerShake();
-      setVerifyError('Please enter a valid 12-digit numeric UPI Ref / UTR number.');
-      showToast('UTR must be exactly 12 digits', 'error');
+      setVerifyError('Please enter a valid 6 to 30 character UTR / Reference code.');
+      showToast('UTR must be 6 to 30 letters or digits', 'error');
       return;
     }
 
@@ -338,11 +668,15 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     setVerifyError(null);
 
     try {
-      // POST /api/payment-link/:linkId/verify with body { utr } (amount is omitted per backend contract)
+      const verifyBody: any = { utr: cleanUtr };
+      if (sessionId) {
+        verifyBody.session_id = sessionId;
+      }
+
       const res = await fetch(`${API_URL}/api/payment-link/${encodeURIComponent(id)}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ utr: cleanUtr }),
+        body: JSON.stringify(verifyBody),
       });
 
       let resData: any = {};
@@ -359,7 +693,19 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         return;
       }
 
+      if (res.status === 502) {
+        triggerShake();
+        const msg = resData?.message || 'Could not check right now, please try again in a moment';
+        setVerifyError(msg);
+        showToast(msg, 'error');
+        setIsVerifying(false);
+        return;
+      }
+
       if (res.ok && resData?.success !== false) {
+        try {
+          sessionStorage.removeItem(`hamropay_session_${id}`);
+        } catch {}
         setOrderResult(resData?.data || resData);
         setIsSuccess(true);
         if (resData?.test_mode || resData?.data?.test || isTestMode) {
@@ -373,8 +719,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         setVerifyError(msg);
         showToast(msg, 'error');
       }
-    } catch (err: any) {
-      console.error('Verify error:', err);
+    } catch {
       triggerShake();
       const msg = 'Network error during verification. Please try again.';
       setVerifyError(msg);
@@ -384,7 +729,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     }
   };
 
-  const isUtrValid = utr.trim().length === 12;
+  const isUtrValid = utr.trim().length >= 6 && /^[A-Za-z0-9]{6,30}$/.test(utr.trim());
 
   return (
     <div className="pay-page-wrapper">
@@ -1085,14 +1430,61 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             </div>
             <div className="error-title">Payment Cancelled</div>
             <p className="error-sub" style={{ maxWidth: '340px' }}>
-              Payment cancelled by user. Agar aapka paisa kat gaya hai to apne bank statement se UTR lekar merchant ko bhejein.
+              Payment cancelled. Agar aapka paisa kat gaya hai to apne bank statement se UTR lekar merchant ko bhejein.
             </p>
 
             <div className="action-btn-row">
               <button
                 type="button"
                 className="btn-clean btn-retry"
-                onClick={handleResetSession}
+                onClick={startNewCheckout}
+              >
+                Pay again
+              </button>
+              <button
+                type="button"
+                className="btn-clean btn-secondary"
+                onClick={handleGoHome}
+              >
+                Return Home
+              </button>
+            </div>
+          </div>
+        ) : failedState !== null ? (
+          /* 0.5. PAYMENT FAILED / INCOMPLETE SCREEN */
+          <div className="error-card" style={{ borderColor: 'rgba(255,45,85,0.45)' }}>
+            <div className="error-icon" style={{ background: 'rgba(255,30,75,0.14)', color: '#ff4d6d' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <div className="error-title">Payment Incomplete</div>
+            <p className="error-sub" style={{ maxWidth: '360px', color: '#ffc2cc' }}>
+              We received your payment but could not complete it. Please contact the merchant with UTR: <strong style={{ color: '#fff', fontFamily: 'monospace' }}>{failedState.utr || utr || '—'}</strong>.
+            </p>
+            {failedState.message && (
+              <div style={{
+                fontSize: '11.5px',
+                color: '#ff8ca3',
+                background: 'rgba(255,45,85,0.08)',
+                border: '1px solid rgba(255,45,85,0.25)',
+                borderRadius: '10px',
+                padding: '8px 12px',
+                margin: '0 auto 16px',
+                maxWidth: '340px',
+                textAlign: 'center'
+              }}>
+                {failedState.message}
+              </div>
+            )}
+
+            <div className="action-btn-row">
+              <button
+                type="button"
+                className="btn-clean btn-retry"
+                onClick={startNewCheckout}
               >
                 Try again
               </button>
@@ -1136,11 +1528,11 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             <div className="success-details">
               <div className="success-row">
                 <span>Amount Paid</span>
-                <strong style={{ color: '#2bf29a', fontSize: '13.5px' }}>₹{amount}</strong>
+                <strong style={{ color: '#2bf29a', fontSize: '13.5px' }}>₹{displayAmount}</strong>
               </div>
               <div className="success-row">
                 <span>UTR Reference</span>
-                <strong>{utr}</strong>
+                <strong>{utr || orderResult?.utr || '—'}</strong>
               </div>
               {orderResult?.order_id && (
                 <div className="success-row">
@@ -1184,7 +1576,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             <div className="skeleton-box" style={{ width: '100%', height: '90px', borderRadius: '12px' }} />
           </div>
         ) : errorKind !== null ? (
-          /* 3. ERROR SCREEN (404, 409, NETWORK, NO_UPI, ORDER_UNSUPPORTED, INACTIVE) */
+          /* 3. ERROR SCREEN (404, 409, 429, NETWORK, NO_UPI, ORDER_UNSUPPORTED, INACTIVE) */
           <div className="error-card">
             <div className="error-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1196,16 +1588,21 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             <div className="error-title">
               {errorKind === '404' && 'Payment Link Not Found'}
               {errorKind === '409' && 'Merchant Unavailable'}
+              {errorKind === '429' && 'Too Many Checkouts'}
               {errorKind === 'network' && 'Connection Error'}
               {errorKind === 'no_upi' && 'Payment Unavailable'}
               {errorKind === 'order_unsupported' && 'Payment Link Required'}
               {errorKind === 'inactive' && 'Payment Link Disabled'}
               {errorKind === 'generic' && 'Unable to Load Payment'}
             </div>
-            <p className="error-sub">{errorMessage}</p>
+            <p className="error-sub">
+              {errorKind === '429'
+                ? (errorMessage || 'Too many people are paying right now. Please try again in a minute.')
+                : errorMessage}
+            </p>
 
             <div className="action-btn-row">
-              {errorKind === 'network' && (
+              {(errorKind === 'network' || errorKind === '429') && (
                 <button
                   type="button"
                   className="btn-clean btn-retry"
@@ -1273,8 +1670,24 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
             {/* Amount */}
             <div className="amount-card">
-              <div className="amount-value">₹{amount}</div>
+              <div className="amount-value">₹{displayAmount}</div>
               <div className="amount-sub">Amount to Pay</div>
+              {hasUniqueAmount && (
+                <div style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#ffb834',
+                  background: 'rgba(255,184,52,0.1)',
+                  border: '1px solid rgba(255,184,52,0.3)',
+                  borderRadius: '8px',
+                  padding: '5px 10px',
+                  marginTop: '6px',
+                  textAlign: 'center',
+                  lineHeight: '1.4'
+                }}>
+                  Please pay exactly ₹{displayAmount}. This exact amount identifies your payment.
+                </div>
+              )}
             </div>
 
             {/* UPI & QR Section (Hidden in Test Mode so user does not accidentally send real money) */}
@@ -1326,21 +1739,21 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   {activeUpi && (
                     <div className="app-intents-row">
                       <a
-                        href={`fam://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
+                        href={`fam://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`}
                         className="intent-btn"
                         title="Pay with FamPay"
                       >
                         FamPay
                       </a>
                       <a
-                        href={`gpay://upi/pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
+                        href={`gpay://upi/pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`}
                         className="intent-btn"
                         title="Pay with GPay"
                       >
                         GPay
                       </a>
                       <a
-                        href={`phonepe://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR`}
+                        href={`phonepe://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`}
                         className="intent-btn"
                         title="Pay with PhonePe"
                       >
@@ -1366,6 +1779,54 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                     {isDownloading ? 'Saving...' : 'Download QR'}
                   </button>
                 </div>
+
+                {/* Auto payment detection status line */}
+                <div style={{
+                  margin: '14px 0',
+                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  background: 'rgba(255,30,75,0.06)',
+                  border: '1px solid rgba(255,45,85,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '10px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', fontWeight: 700 }}>
+                    {autoDetect === false ? (
+                      <>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ffb834', flexShrink: 0 }} />
+                        <span style={{ color: '#ffb834' }}>
+                          Auto-detection unavailable. Enter your UTR below after paying.
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2bf29a', flexShrink: 0, boxShadow: '0 0 10px #2bf29a' }} />
+                        <span style={{ color: '#fff2f4' }}>
+                          Waiting for your payment...
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {isReconnecting && (
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      background: 'rgba(255,184,52,0.15)',
+                      color: '#ffb834',
+                      border: '1px solid rgba(255,184,52,0.3)',
+                      letterSpacing: '0.4px',
+                      textTransform: 'uppercase',
+                      flexShrink: 0
+                    }}>
+                      Reconnecting...
+                    </span>
+                  )}
+                </div>
               </>
             )}
 
@@ -1379,8 +1840,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   </svg>
                 </div>
                 <div>
-                  <div className="utr-header-title">Enter 12-Digit UTR Number</div>
-                  <div className="utr-header-sub">Submit your 12-digit UPI reference code to verify</div>
+                  <div className="utr-header-title">
+                    {isTestMode ? 'Enter Test UTR' : 'Paid but not confirmed automatically? Enter your UTR.'}
+                  </div>
+                  <div className="utr-header-sub">
+                    {isTestMode ? 'Use 000000000000 to simulate test verification' : 'Submit your 6-30 character UPI reference code to verify manually'}
+                  </div>
                 </div>
               </div>
 
@@ -1396,10 +1861,9 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   value={utr}
                   onChange={handleUtrChange}
                   className={`utr-input ${isShaking ? 'shake' : ''}`}
-                  placeholder="e.g. 623851978381"
-                  inputMode="numeric"
+                  placeholder={isTestMode ? '000000000000' : 'e.g. 623851978381'}
                   autoComplete="off"
-                  maxLength={12}
+                  maxLength={30}
                   disabled={isExpired || isVerifying}
                 />
               </div>
@@ -1467,7 +1931,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   <circle cx="12" cy="12" r="9" />
                   <path d="M12 16v-4M12 8h.01" />
                 </svg>
-                Find 12-digit Ref / UTR number in your UPI transaction receipt
+                Find 6-30 digit Ref / UTR number in your UPI transaction receipt
               </div>
             </div>
 
@@ -1505,14 +1969,14 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   <path d="M12 7v5l3 2" />
                 </svg>
               </div>
-              <div className="expired-title">Payment Session Expired</div>
-              <div className="expired-sub">This payment session has timed out after 8 minutes. Refresh to begin a new session.</div>
-              <button type="button" className="refresh-btn" onClick={handleResetSession}>
+              <div className="expired-title">This checkout expired</div>
+              <div className="expired-sub">This payment checkout has expired. Start a new checkout to get a fresh QR code and timer.</div>
+              <button type="button" className="refresh-btn" onClick={startNewCheckout}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5" />
                   <path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" />
                 </svg>
-                Refresh Session
+                Start new checkout
               </button>
             </div>
 
@@ -1615,10 +2079,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowCancelModal(false);
-                  setIsCancelled(true);
-                }}
+                onClick={handleCancelPayment}
                 style={{
                   padding: '9px 16px',
                   borderRadius: '10px',

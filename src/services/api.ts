@@ -54,18 +54,6 @@ export const apiCall = async (
     ...extraHeaders,
   };
 
-  const isDebugCall = path.includes('create') || path.includes('payment-link') || path.includes('cashier');
-  if (isDebugCall) {
-    console.log(`[API Call Request] ${method} ${path}:`, {
-      payload: sanitizeForLog(body),
-      headers: { 
-        ...headers, 
-        'x-api-key': apiKey ? `${apiKey.substring(0, 4)}***` : 'missing',
-        ...(headers['Authorization'] ? { 'Authorization': 'Bearer ***' } : {})
-      },
-    });
-  }
-
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
@@ -74,8 +62,10 @@ export const apiCall = async (
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (err: any) {
-    console.error(`[API Network Error] ${method} ${path}:`, err);
-    throw new Error('Server unreachable, try again in 30 seconds');
+    const networkErr: any = new Error('Server unreachable, try again in 30 seconds');
+    networkErr.status = 0;
+    networkErr.code = 'NETWORK_ERROR';
+    throw networkErr;
   }
 
   let data: any = {};
@@ -85,13 +75,13 @@ export const apiCall = async (
     data = {};
   }
 
-  if (isDebugCall) {
-    console.log(`[API Call Response] ${method} ${path} (${res.status}):`, sanitizeForLog(data));
-  }
-
   if (!res.ok || (data && data.success === false)) {
     const errorMsg = data?.message || data?.error || res.statusText || 'API Error';
-    throw new Error(`API Error (${res.status}): ${errorMsg}`);
+    const errorObj: any = new Error(errorMsg);
+    errorObj.status = res.status;
+    errorObj.code = data?.code;
+    errorObj.data = data;
+    throw errorObj;
   }
   return data.data !== undefined ? data.data : data;
 };
@@ -110,8 +100,10 @@ export const publicApiCall = async (
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (err: any) {
-    console.error(`[Public API Network Error] ${method} ${path}:`, err);
-    throw new Error('Server unreachable, try again in 30 seconds');
+    const netErr: any = new Error('Server unreachable, try again in 30 seconds');
+    netErr.status = 0;
+    netErr.code = 'NETWORK_ERROR';
+    throw netErr;
   }
 
   let data: any = {};
@@ -123,7 +115,11 @@ export const publicApiCall = async (
 
   if (!res.ok || (data && data.success === false)) {
     const errorMsg = data?.message || data?.error || res.statusText || 'API Error';
-    throw new Error(`API Error (${res.status}): ${errorMsg}`);
+    const errObj: any = new Error(errorMsg);
+    errObj.status = res.status;
+    errObj.code = data?.code;
+    errObj.data = data;
+    throw errObj;
   }
   return data.data !== undefined ? data.data : data;
 };
