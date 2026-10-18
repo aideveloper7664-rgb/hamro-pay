@@ -20,8 +20,23 @@ export interface Transaction {
   ref: string;
   name: string;
   amount: number;
-  status: 'Success' | 'Completed' | 'Pending' | 'Failed';
+  status: 'Success' | 'Completed' | 'Pending' | 'Failed' | 'Timeout' | 'Cancelled';
   date: string;
+}
+
+export interface PaymentRow {
+  id: string;
+  order_id: string | null;
+  link_id: string | null;
+  link_title: string | null;
+  amount: number;
+  net_amount: number | null;
+  commission: number | null;
+  status: 'success' | 'pending' | 'timeout' | 'cancelled' | 'failed' | string;
+  utr: string | null;
+  created_at: string;
+  paid_at: string | null;
+  source?: 'checkout' | 'manual' | string;
 }
 
 export interface Notification {
