@@ -104,23 +104,55 @@ export interface CashierStats {
   window_days?: number;
 }
 
+export interface CashierWindow {
+  from?: string;
+  to?: string | null;
+  truncated?: boolean;
+  next_before?: string;
+}
+
 export interface CashierHistoryData {
   transactions: CashierTransaction[];
   stats: CashierStats;
+  window?: CashierWindow;
 }
 
-export const getCashierHistory = async (refresh: boolean = false): Promise<CashierHistoryData> => {
-  const res = await apiCall(`/api/cashier/history${refresh ? '?refresh=1' : ''}`, 'GET');
-  const payload = (res?.data !== undefined ? res.data : res) || {};
-  return {
-    transactions: Array.isArray(payload.transactions) ? payload.transactions : [],
-    stats: payload.stats || {
-      shown: 0,
-      total_amount: 0,
-      balance: null,
-      last_synced: new Date().toISOString(),
-      window_days: 30
-    }
-  };
+export interface GetCashierHistoryParams {
+  refresh?: boolean;
+  before?: string;
+}
+
+export const getCashierHistory = async (
+  options?: boolean | GetCashierHistoryParams
+): Promise<CashierHistoryData> => {
+  const params: GetCashierHistoryParams =
+    typeof options === 'boolean' ? { refresh: options } : (options || {});
+
+  const queryParts: string[] = [];
+  if (params.refresh) queryParts.push('refresh=1');
+  if (params.before) queryParts.push(`before=${encodeURIComponent(params.before)}`);
+  const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+
+  try {
+    const res = await apiCall(`/api/cashier/history${queryString}`, 'GET');
+    const payload = (res?.data !== undefined ? res.data : res) || {};
+    return {
+      transactions: Array.isArray(payload.transactions) ? payload.transactions : [],
+      stats: payload.stats || {
+        shown: 0,
+        total_amount: 0,
+        balance: null,
+        last_synced: new Date().toISOString(),
+        window_days: 30,
+      },
+      window: payload.window,
+    };
+  } catch (err: any) {
+    const errorObj: any = new Error(err?.message || 'Failed to fetch cashier history');
+    errorObj.status = err?.status;
+    errorObj.code = err?.code || err?.data?.code;
+    errorObj.data = err?.data;
+    throw errorObj;
+  }
 };
 
