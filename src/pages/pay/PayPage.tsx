@@ -21,6 +21,80 @@ interface PayPageProps {
 
 type ErrorKind = '404' | '409' | '429' | 'network' | 'no_upi' | 'order_unsupported' | 'inactive' | 'generic';
 
+interface PaymentCountdownTimerProps {
+  expiresAt?: string;
+  serverTimeOffset: number;
+  isExpired: boolean;
+  onExpire: () => void;
+}
+
+const PaymentCountdownTimer: React.FC<PaymentCountdownTimerProps> = React.memo(({
+  expiresAt,
+  serverTimeOffset,
+  isExpired,
+  onExpire
+}) => {
+  const computeInitial = () => {
+    if (!expiresAt) return TOTAL_SECONDS;
+    const expMs = Date.parse(expiresAt);
+    if (isNaN(expMs)) return TOTAL_SECONDS;
+    return Math.max(0, Math.floor((expMs - (Date.now() + serverTimeOffset)) / 1000));
+  };
+
+  const [secondsLeft, setSecondsLeft] = useState<number>(computeInitial);
+
+  const onExpireRef = useRef(onExpire);
+  onExpireRef.current = onExpire;
+
+  useEffect(() => {
+    if (isExpired) {
+      setSecondsLeft(0);
+      return;
+    }
+
+    const calc = () => {
+      let rem = 0;
+      if (expiresAt) {
+        const expMs = Date.parse(expiresAt);
+        rem = expMs ? Math.max(0, Math.floor((expMs - (Date.now() + serverTimeOffset)) / 1000)) : 0;
+      } else {
+        rem = Math.max(0, secondsLeft - 1);
+      }
+      setSecondsLeft(rem);
+      if (rem <= 0) {
+        onExpireRef.current();
+      }
+    };
+
+    calc();
+    const interval = setInterval(calc, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt, serverTimeOffset, isExpired]);
+
+  const m = Math.floor(secondsLeft / 60);
+  const s = secondsLeft % 60;
+  const timeFormatted = `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+  const isWarning = secondsLeft <= 60 && secondsLeft > 0;
+
+  return (
+    <div className={`timer-card ${isWarning ? 'warning' : ''}`}>
+      <div className="timer-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      </div>
+      <div className="timer-body">
+        <div className="timer-label">Payment Session Expires In</div>
+        <div className="timer-value">{timeFormatted}</div>
+      </div>
+      <span className="timer-badge">
+        {isExpired ? 'Expired' : isWarning ? 'Hurry' : 'Active'}
+      </span>
+    </div>
+  );
+});
+
 const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [id, setId] = useState<string>('');
   const [data, setData] = useState<{
@@ -44,7 +118,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
   // Session & Polling State
   const [sessionId, setSessionId] = useState<string>('');
-  const [sessionData, setSessionData] = useState<any>(null);
   const [payAmount, setPayAmount] = useState<number>(0);
   const [baseAmount, setBaseAmount] = useState<number>(0);
   const [sessionQrCode, setSessionQrCode] = useState<string>('');
@@ -55,21 +128,40 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
   const [failedState, setFailedState] = useState<{ utr?: string | null; message?: string | null } | null>(null);
 
+  // Terminal status calculation
+  const [isExpired, setIsExpired] = useState<boolean>(false);
+  const [isCancelled, setIsCancelled] = useState<boolean>(false);
+  const [isSuccess, setIsSuccess] = useState<boolean>(false);
+  const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
+
+  const isTerminal = isSuccess || isExpired || isCancelled || errorKind !== null || Boolean(failedState);
+
+  // Refs for polling latest values (so polling effect doesn't depend on them)
+  const isTerminalRef = useRef(isTerminal);
+  isTerminalRef.current = isTerminal;
+
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
+
+  const idRef = useRef(id);
+  idRef.current = id;
+
+  const payAmountRef = useRef(payAmount);
+  payAmountRef.current = payAmount;
+
+  const sessionCreatingRef = useRef<boolean>(false);
   const pollTimerRef = useRef<any>(null);
+  const inFlightRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const consecutiveFailuresRef = useRef<number>(0);
 
-  // Timer
-  const [remaining, setRemaining] = useState<number>(TOTAL_SECONDS);
-  const [isExpired, setIsExpired] = useState<boolean>(false);
-  const [isCancelled, setIsCancelled] = useState<boolean>(false);
-  const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
-
   // UTR & Verification State
   const [utr, setUtr] = useState<string>('');
+  const utrRef = useRef(utr);
+  utrRef.current = utr;
+
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
-  const [isSuccess, setIsSuccess] = useState<boolean>(false);
   const [orderResult, setOrderResult] = useState<any>(null);
   const [isShaking, setIsShaking] = useState<boolean>(false);
 
@@ -78,10 +170,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [toastShow, setToastShow] = useState<boolean>(false);
   const [toastType, setToastType] = useState<'info' | 'success' | 'error'>('info');
   const toastTimerRef = useRef<any>(null);
-
-  // QR Image Timestamp & Download State
-  const [qrTimestamp, setQrTimestamp] = useState<number>(Date.now());
-  const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
   const showToast = (msg: string, type: 'info' | 'success' | 'error' = 'info') => {
     setToastMsg(msg);
@@ -92,6 +180,13 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       setToastShow(false);
     }, 2800);
   };
+
+  const showToastRef = useRef(showToast);
+  showToastRef.current = showToast;
+
+  // QR Image Timestamp & Download State
+  const [qrTimestamp, setQrTimestamp] = useState<number>(Date.now());
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
   const handleGoHome = () => {
     if (onBackToDashboard) {
@@ -138,6 +233,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       setErrorMessage('Please use a payment link');
       return;
     }
+
+    // Ref guard to prevent React StrictMode from double-initiating session
+    if (sessionCreatingRef.current) {
+      return;
+    }
+    sessionCreatingRef.current = true;
 
     setIsLoading(true);
     setErrorKind(null);
@@ -300,7 +401,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             } catch {}
 
             setSessionId(sData.session_id);
-            setSessionData(sData);
             setPayAmount(Number(sData.pay_amount || sData.base_amount || paymentData.amount || 0));
             setBaseAmount(Number(sData.base_amount || paymentData.amount || 0));
             if (sData.upi_id) setActiveUpi(sData.upi_id);
@@ -313,7 +413,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
             const expMs = sData.expires_at ? Date.parse(sData.expires_at) : 0;
             const remSec = expMs ? Math.max(0, Math.floor((expMs - (Date.now() + offset)) / 1000)) : TOTAL_SECONDS;
-            setRemaining(remSec);
 
             if (remSec <= 0 || sData.status === 'expired') {
               setIsExpired(true);
@@ -359,9 +458,9 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     }
   }, [id, loadPaymentData]);
 
-  // Polling for Live session status
+  // Polling for Live session status: ONLY depends on [sessionId, isTerminal]
   useEffect(() => {
-    if (!sessionId || isExpired || isSuccess || isCancelled || errorKind !== null || failedState !== null) {
+    if (!sessionId || isTerminal) {
       if (pollTimerRef.current) {
         clearTimeout(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -370,26 +469,49 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
+      inFlightRef.current = false;
       return;
     }
 
-    let isSubscribed = true;
+    let active = true;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     const pollStatus = async () => {
-      if (!isSubscribed) return;
-
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      if (!active || controller.signal.aborted || isTerminalRef.current) {
+        return;
       }
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
+
+      if (inFlightRef.current) {
+        return;
+      }
+      inFlightRef.current = true;
+
+      const currentSid = sessionIdRef.current;
+      if (!currentSid) {
+        inFlightRef.current = false;
+        return;
+      }
+
+      // Per-request 30 second timeout controller
+      const reqCtrl = new AbortController();
+      const timeoutId = setTimeout(() => {
+        reqCtrl.abort();
+      }, 30000);
+
+      const onGlobalAbort = () => {
+        reqCtrl.abort();
+      };
+      controller.signal.addEventListener('abort', onGlobalAbort);
 
       try {
-        const res = await fetch(`${API_URL}/api/payment-link/session/${encodeURIComponent(sessionId)}/status`, {
-          signal: controller.signal
+        const res = await fetch(`${API_URL}/api/payment-link/session/${encodeURIComponent(currentSid)}/status`, {
+          signal: reqCtrl.signal
         });
 
-        if (!isSubscribed) return;
+        if (!active || controller.signal.aborted || isTerminalRef.current) {
+          return;
+        }
 
         if (res.ok) {
           consecutiveFailuresRef.current = 0;
@@ -406,48 +528,46 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             const currentStatus = stData.status;
 
             if (currentStatus === 'paid') {
-              try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
+              try { sessionStorage.removeItem(`hamropay_session_${idRef.current}`); } catch {}
               setOrderResult({
                 order_id: stData.order_id,
                 utr: stData.utr,
-                amount: stData.pay_amount || payAmount
+                amount: stData.pay_amount || payAmountRef.current
               });
               if (stData.utr) setUtr(stData.utr);
               setIsSuccess(true);
-              showToast('Payment verified successfully!', 'success');
-              return;
+              showToastRef.current('Payment verified successfully!', 'success');
+              return; // terminal, terminates loop
             }
 
             if (currentStatus === 'expired') {
               setIsExpired(true);
-              return;
+              return; // terminal
             }
 
             if (currentStatus === 'cancelled') {
-              try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
+              try { sessionStorage.removeItem(`hamropay_session_${idRef.current}`); } catch {}
               setIsCancelled(true);
-              return;
+              return; // terminal
             }
 
             if (currentStatus === 'disabled') {
               setErrorKind('inactive');
-              return;
+              return; // terminal
             }
 
             if (currentStatus === 'failed') {
               setFailedState({ utr: stData.utr, message: stData.message });
-              return;
+              return; // terminal
             }
 
-            if (stData.expires_at && stData.server_time) {
+            if (stData.expires_at) {
+              setExpiresAt(stData.expires_at);
+            }
+            if (stData.server_time) {
               const serverMs = Date.parse(stData.server_time);
-              const offset = isNaN(serverMs) ? 0 : serverMs - Date.now();
-              const expMs = Date.parse(stData.expires_at);
-              const rem = expMs ? Math.max(0, Math.floor((expMs - (Date.now() + offset)) / 1000)) : remaining;
-              setRemaining(rem);
-              if (rem <= 0) {
-                setIsExpired(true);
-                return;
+              if (!isNaN(serverMs)) {
+                setServerTimeOffset(serverMs - Date.now());
               }
             }
           }
@@ -461,15 +581,24 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
           }
         }
       } catch (err: any) {
-        if (err.name === 'AbortError') return;
+        if (!active || controller.signal.aborted || isTerminalRef.current) {
+          return;
+        }
         consecutiveFailuresRef.current += 1;
         if (consecutiveFailuresRef.current >= 3) {
           setIsReconnecting(true);
         }
+      } finally {
+        clearTimeout(timeoutId);
+        controller.signal.removeEventListener('abort', onGlobalAbort);
+        inFlightRef.current = false;
       }
 
-      if (!isSubscribed) return;
+      if (!active || controller.signal.aborted || isTerminalRef.current) {
+        return;
+      }
 
+      // Schedule next poll AFTER previous request finishes
       const nextDelay = document.visibilityState === 'hidden' ? 8000 : 3000;
       pollTimerRef.current = setTimeout(pollStatus, nextDelay);
     };
@@ -477,56 +606,27 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     pollTimerRef.current = setTimeout(pollStatus, 3000);
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && isSubscribed) {
-        if (pollTimerRef.current) {
+      if (document.visibilityState === 'visible' && active && !isTerminalRef.current) {
+        if (!inFlightRef.current && pollTimerRef.current) {
           clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = null;
+          pollStatus();
         }
-        pollStatus();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      isSubscribed = false;
+      active = false;
       if (pollTimerRef.current) {
         clearTimeout(pollTimerRef.current);
         pollTimerRef.current = null;
       }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
+      controller.abort();
+      abortControllerRef.current = null;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [sessionId, isExpired, isSuccess, isCancelled, errorKind, failedState, id, payAmount, remaining]);
-
-  // Countdown Timer based on expires_at or countdown
-  useEffect(() => {
-    if (isExpired || isSuccess || isLoading || errorKind !== null || isCancelled || failedState !== null) return;
-
-    const interval = setInterval(() => {
-      if (expiresAt) {
-        const expMs = Date.parse(expiresAt);
-        const rem = expMs ? Math.max(0, Math.floor((expMs - (Date.now() + serverTimeOffset)) / 1000)) : 0;
-        setRemaining(rem);
-        if (rem <= 0) {
-          setIsExpired(true);
-          clearInterval(interval);
-        }
-      } else {
-        setRemaining((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            setIsExpired(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isExpired, isSuccess, isLoading, errorKind, isCancelled, failedState, expiresAt, serverTimeOffset]);
+  }, [sessionId, isTerminal]);
 
   const isTestMode = Boolean(data?.is_test);
   const title = data?.title || 'Payment Request';
@@ -538,22 +638,14 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
   const hasUniqueAmount = !isTestMode && payAmount > 0 && baseAmount > 0 && Math.abs(payAmount - baseAmount) > 0.0001;
 
-  const formatTime = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
-  };
-
-  const isWarning = remaining <= 60 && remaining > 0;
-
   // Start a fresh checkout session
   const startNewCheckout = async () => {
     try {
       sessionStorage.removeItem(`hamropay_session_${id}`);
     } catch {}
 
+    sessionCreatingRef.current = false;
     setSessionId('');
-    setSessionData(null);
     setIsExpired(false);
     setIsCancelled(false);
     setShowCancelModal(false);
@@ -1652,21 +1744,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             )}
 
             {/* Countdown Timer */}
-            <div className={`timer-card ${isWarning ? 'warning' : ''}`}>
-              <div className="timer-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v5l3 2" />
-                </svg>
-              </div>
-              <div className="timer-body">
-                <div className="timer-label">Payment Session Expires In</div>
-                <div className="timer-value">{formatTime(remaining)}</div>
-              </div>
-              <span className="timer-badge">
-                {isExpired ? 'Expired' : isWarning ? 'Hurry' : 'Active'}
-              </span>
-            </div>
+            <PaymentCountdownTimer
+              expiresAt={expiresAt}
+              serverTimeOffset={serverTimeOffset}
+              isExpired={isExpired}
+              onExpire={() => setIsExpired(true)}
+            />
 
             {/* Amount */}
             <div className="amount-card">
