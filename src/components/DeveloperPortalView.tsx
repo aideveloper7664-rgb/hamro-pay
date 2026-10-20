@@ -165,7 +165,12 @@ export default function DeveloperPortalView({
             </div>
           </div>
           <button
-            onClick={() => onViewChange?.('api-docs')}
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.history.pushState({}, '', '/api/docs');
+              }
+              onViewChange?.('api-docs');
+            }}
             className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#b80028] text-white text-xs font-black tracking-wide flex items-center gap-1.5 shadow-[0_4px_14px_rgba(255,30,75,0.3)] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer shrink-0"
             title="Open API Integration Docs"
           >
@@ -336,7 +341,13 @@ export default function DeveloperPortalView({
 
           <div className="quick-intro">
             Full step-by-step guides for HTML/JS, PHP, and Java are in{' '}
-            <a href="#" onClick={(e) => { e.preventDefault(); onViewChange?.('api-docs'); }}>API Integration</a>, right below Hamro API in the sidebar. Short version:
+            <a href="/api/docs" onClick={(e) => {
+              e.preventDefault();
+              if (typeof window !== 'undefined') {
+                window.history.pushState({}, '', '/api/docs');
+              }
+              onViewChange?.('api-docs');
+            }}>API Integration</a>, right below Hamro API in the sidebar. Short version:
           </div>
 
           <div className="step">

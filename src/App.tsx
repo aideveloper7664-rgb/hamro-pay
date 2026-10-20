@@ -34,6 +34,7 @@ import NoCashierWarningModal from './components/NoCashierWarningModal';
 import Toast, { ToastItem } from './components/Toast';
 import { Link as LinkIcon, Wallet, CheckCircle, Info, Cloud, Wifi, HelpCircle, Key } from 'lucide-react';
 import { PayPage } from './pages/pay/PayPage';
+import { ApiDocsPage } from './pages/docs/ApiDocsPage';
 import AuthCallback from './pages/AuthCallback';
 import { supabase } from './config/supabase';
 
@@ -45,7 +46,26 @@ export default function App() {
 
   const [authMode, setAuthMode] = useState<'login' | 'signup' | null>(null);
 
-  const [currentView, setCurrentView] = useState<string>('dashboard');
+  const [currentView, setCurrentView] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname;
+      if (p.startsWith('/api/docs') || p.startsWith('/api/dosc') || p === '/docs' || p.startsWith('/docs')) {
+        return 'api-docs';
+      }
+    }
+    return 'dashboard';
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = window.location.pathname;
+      if (p.startsWith('/api/docs') || p.startsWith('/api/dosc') || p === '/docs' || p.startsWith('/docs')) {
+        setCurrentView('api-docs');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const [balance, setBalance] = useState<number>(() => {
     const saved = localStorage.getItem('hamro_balance');
@@ -854,10 +874,11 @@ export default function App() {
       case 'api-docs':
       case 'api-integration':
         return (
-          <ApiIntegrationView 
-            showToast={showToast}
-            onOpenSidebar={() => setIsSidebarOpen(true)}
-            onViewChange={setCurrentView}
+          <ApiDocsPage 
+            onBackToDashboard={() => {
+              window.history.pushState({}, '', '/');
+              setCurrentView('developer');
+            }}
           />
         );
 
@@ -928,6 +949,27 @@ export default function App() {
           window.location.reload();
         }} />
       </div>
+    );
+  }
+
+  // Check if current route is API Docs (/api/docs or /api/dosc or /docs)
+  const isDocsView = typeof window !== 'undefined' && (
+    window.location.pathname.startsWith('/api/docs') ||
+    window.location.pathname.startsWith('/api/dosc') ||
+    window.location.pathname === '/docs' ||
+    window.location.pathname.startsWith('/docs')
+  );
+  if (isDocsView) {
+    return (
+      <ApiDocsPage 
+        onBackToDashboard={() => {
+          window.history.pushState({}, '', '/');
+          setCurrentView('developer');
+          if (!isLoggedIn) {
+            window.location.href = '/';
+          }
+        }} 
+      />
     );
   }
 

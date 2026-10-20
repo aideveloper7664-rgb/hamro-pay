@@ -42,6 +42,15 @@ export default function Sidebar({
   };
 
   const handleNavClick = (viewId: string) => {
+    if (viewId === 'api-docs' || viewId === 'api-integration') {
+      if (typeof window !== 'undefined') {
+        window.history.pushState({}, '', '/api/docs');
+      }
+    } else {
+      if (typeof window !== 'undefined' && (window.location.pathname.startsWith('/api/doc') || window.location.pathname.startsWith('/docs'))) {
+        window.history.pushState({}, '', '/');
+      }
+    }
     onViewChange(viewId);
     onClose();
   };
