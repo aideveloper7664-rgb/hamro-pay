@@ -30,7 +30,7 @@ export default function Sidebar({
 
   // Collapsible groups state - default collapsed so subsections do not open automatically
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    dev: currentView === 'developer',
+    dev: currentView === 'developer' || currentView === 'api-docs' || currentView === 'api-integration',
     store: currentView === 'store',
   });
 
@@ -287,8 +287,8 @@ export default function Sidebar({
 
                     {/* API Integration */}
                     <div
-                      className="hp-sub-item"
-                      onClick={() => handleNavClick('developer')}
+                      className={`hp-sub-item ${currentView === 'api-docs' || currentView === 'api-integration' ? 'active' : ''}`}
+                      onClick={() => handleNavClick('api-docs')}
                     >
                       <span
                         className="hp-sub-icon"

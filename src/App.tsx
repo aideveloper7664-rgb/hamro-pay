@@ -24,6 +24,7 @@ import PromoView from './components/PromoView';
 import SupportView from './components/SupportView';
 import ConnectView from './components/ConnectView';
 import DeveloperPortalView from './components/DeveloperPortalView';
+import ApiIntegrationView from './components/ApiIntegrationView';
 import StorePortalView from './components/StorePortalView';
 import FamPayConnectView from './components/FamPayConnectView';
 import { getActiveCashier } from './services/cashier.service';
@@ -850,6 +851,16 @@ export default function App() {
           />
         );
 
+      case 'api-docs':
+      case 'api-integration':
+        return (
+          <ApiIntegrationView 
+            showToast={showToast}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            onViewChange={setCurrentView}
+          />
+        );
+
       case 'store':
         return (
           <StorePortalView
@@ -985,7 +996,7 @@ export default function App() {
 
       {/* Main viewport area */}
       <div className="main-area">
-        {currentView !== 'dashboard' && currentView !== 'developer' && currentView !== 'links' && (
+        {currentView !== 'dashboard' && currentView !== 'developer' && currentView !== 'api-docs' && currentView !== 'api-integration' && currentView !== 'links' && (
           <Header
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}

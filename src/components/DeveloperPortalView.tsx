@@ -152,7 +152,7 @@ export default function DeveloperPortalView({
       <div className="page-content animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
 
         {/* Page Header */}
-        <div className="page-header">
+        <div className="page-header flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="page-head-left">
             <div className="page-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -164,6 +164,18 @@ export default function DeveloperPortalView({
               <p>Accept HamroPay payments directly on your own website or app.</p>
             </div>
           </div>
+          <button
+            onClick={() => onViewChange?.('api-docs')}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#b80028] text-white text-xs font-black tracking-wide flex items-center gap-1.5 shadow-[0_4px_14px_rgba(255,30,75,0.3)] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer shrink-0"
+            title="Open API Integration Docs"
+          >
+            <span>API Integration Docs</span>
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </button>
         </div>
 
         {/* Stat Cards - 2 rows (2 cards per row) */}
@@ -324,7 +336,7 @@ export default function DeveloperPortalView({
 
           <div className="quick-intro">
             Full step-by-step guides for HTML/JS, PHP, and Java are in{' '}
-            <a href="#" onClick={(e) => { e.preventDefault(); onViewChange?.('developer'); }}>API Integration</a>, right below Hamro API in the sidebar. Short version:
+            <a href="#" onClick={(e) => { e.preventDefault(); onViewChange?.('api-docs'); }}>API Integration</a>, right below Hamro API in the sidebar. Short version:
           </div>
 
           <div className="step">
