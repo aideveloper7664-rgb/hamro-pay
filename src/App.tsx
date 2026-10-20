@@ -907,8 +907,8 @@ export default function App() {
     return <AuthCallback />;
   }
 
-  // Check if current route is Pay View (public payment checkout link: /pay/:linkId)
-  const isPayView = typeof window !== 'undefined' && window.location.pathname.includes('/pay/');
+  // Check if current route is Pay View (public payment checkout link: /pay/:linkId or /pay/:orderId)
+  const isPayView = typeof window !== 'undefined' && (window.location.pathname.includes('/pay/') || window.location.pathname === '/pay' || window.location.pathname.startsWith('/pay'));
   if (isPayView) {
     return (
       <div className="min-h-screen bg-[#070102] text-[#fff2f4] font-sans">

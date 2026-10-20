@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { DeveloperOrderPay } from './DeveloperOrderPay';
 
 const API_URL = 'https://hamropay-backends.onrender.com';
 const TOTAL_SECONDS = 8 * 60;
@@ -13,6 +14,11 @@ export const isPaymentLinkId = (idStr: string): boolean => {
 export const isOrderId = (idStr: string): boolean => {
   if (!idStr) return false;
   return idStr.startsWith('ORD_') || idStr.startsWith('ord_');
+};
+
+export const isApiOrderId = (idStr: string): boolean => {
+  if (!idStr) return false;
+  return /^HP[0-9A-Z]+$/.test(idStr);
 };
 
 interface PayPageProps {
@@ -95,8 +101,30 @@ const PaymentCountdownTimer: React.FC<PaymentCountdownTimerProps> = React.memo((
   );
 });
 
+const getInitialPayId = (): string => {
+  if (typeof window !== 'undefined') {
+    const pathname = window.location.pathname;
+    let extractedId = '';
+    if (pathname.includes('/pay/')) {
+      extractedId = pathname.split('/pay/')[1]?.split('?')[0]?.split('/')[0] || '';
+    } else {
+      const parts = pathname.split('/').filter(Boolean);
+      const lastPart = parts[parts.length - 1];
+      if (lastPart && lastPart !== 'pay') {
+        extractedId = lastPart;
+      }
+    }
+    if (!extractedId) {
+      const searchParams = new URLSearchParams(window.location.search);
+      extractedId = searchParams.get('id') || searchParams.get('link_id') || searchParams.get('order_id') || '';
+    }
+    return extractedId.trim();
+  }
+  return '';
+};
+
 const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
-  const [id, setId] = useState<string>('');
+  const [id, setId] = useState<string>(getInitialPayId);
   const [data, setData] = useState<{
     link_id?: string;
     title?: string;
@@ -220,10 +248,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
   // Fetch Public Payment Link and Initiate Checkout Session
   const loadPaymentData = useCallback(async () => {
-    if (!id) {
-      setIsLoading(false);
-      setErrorKind('404');
-      setErrorMessage('This payment link is invalid or has been removed');
+    if (!id || isApiOrderId(id)) {
+      if (!id) {
+        setIsLoading(false);
+        setErrorKind('404');
+        setErrorMessage('This payment link is invalid or has been removed');
+      }
       return;
     }
 
@@ -453,7 +483,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   }, [id]);
 
   useEffect(() => {
-    if (id) {
+    if (id && !isApiOrderId(id)) {
       loadPaymentData();
     }
   }, [id, loadPaymentData]);
@@ -822,6 +852,10 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   };
 
   const isUtrValid = utr.trim().length >= 6 && /^[A-Za-z0-9]{6,30}$/.test(utr.trim());
+
+  if (isApiOrderId(id)) {
+    return <DeveloperOrderPay orderId={id} onBackToDashboard={onBackToDashboard} />;
+  }
 
   return (
     <div className="pay-page-wrapper">
