@@ -1,17 +1,22 @@
-import { useState, useEffect } from 'react';
 import { PanelLeft } from 'lucide-react';
-import { getTokenInfo, regenerateKey, setMode } from '../services/developer.service';
+import { getTokenInfo, regenerateKey, setMode, getApiOrders } from '../services/developer.service';
+import { apiCall } from '../services/api';
+import { useState, useEffect } from 'react';
 
 interface DeveloperPortalViewProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onOpenSidebar?: () => void;
   onViewChange?: (view: string) => void;
+  gatewayMode: 'live' | 'test';
+  setGatewayMode: (mode: 'live' | 'test') => void;
 }
 
 export default function DeveloperPortalView({
   showToast,
   onOpenSidebar,
-  onViewChange
+  onViewChange,
+  gatewayMode,
+  setGatewayMode
 }: DeveloperPortalViewProps) {
   const getStoredApiKey = () => {
     try {
@@ -28,7 +33,6 @@ export default function DeveloperPortalView({
   const [regenerating, setRegenerating] = useState(false);
   const [webhooks, setWebhooks] = useState<string[]>([]);
   const [whInput, setWhInput] = useState('');
-  const [gatewayMode, setGatewayMode] = useState<'live' | 'test'>('live');
 
   const maskedKey = '•'.repeat(realKey.length || 32);
 
@@ -39,20 +43,18 @@ export default function DeveloperPortalView({
         const info = await getTokenInfo();
         if (info?.api_key) {
           setRealKey(info.api_key);
+          setGatewayMode(info.mode || 'live');
           const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
           merchant.api_key = info.api_key;
           localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
         }
-      } catch {
-        // Fallback gracefully
+      } catch (e) {
+        showToast('Could not load developer settings.', 'error');
       }
     };
     fetchTokenInfo();
   }, []);
 
-  const handleReveal = () => {
-    setIsRevealed(!isRevealed);
-  };
 
   const handleCopy = () => {
     navigator.clipboard?.writeText(realKey).then(() => {
@@ -65,23 +67,61 @@ export default function DeveloperPortalView({
   };
 
   const handleRegenerate = async () => {
-    if (!window.confirm('Regenerating will instantly disable the old key. Continue?')) return;
+    if (!window.confirm('The old key stops working immediately. Update every site/app that uses it. Continue?')) return;
     setRegenerating(true);
     try {
       const newData = await regenerateKey();
-      const newKey = newData?.api_key || ('hp_live_' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''));
-      setRealKey(newKey);
-      const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-      merchant.api_key = newKey;
-      localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
-      showToast('API Key regenerated successfully!', 'success');
+      if (newData?.api_key) {
+        setRealKey(newData.api_key);
+        const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+        merchant.api_key = newData.api_key;
+        localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
+        showToast('API Key regenerated successfully!', 'success');
+      } else {
+        throw new Error();
+      }
     } catch {
-      const newKey = 'hp_live_' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-      setRealKey(newKey);
-      showToast('API Key regenerated locally!', 'success');
+      showToast('Could not regenerate key. Your old key is still active.', 'error');
     } finally {
       setRegenerating(false);
     }
+  };
+
+  const handleModeSelect = async (mode: 'live' | 'test') => {
+    if (mode === gatewayMode) return;
+    if (!window.confirm(`Switch to ${mode.toUpperCase()}? ${mode === 'live' ? 'Customers will pay with real money and payments are verified from your FamPay account.' : 'Real payments for API orders will stop. Customers will see a simulator instead.'}`)) return;
+
+    try {
+      await setMode(mode);
+      setGatewayMode(mode);
+      showToast(`Switched to ${mode.toUpperCase()} mode.`, 'success');
+    } catch (e: any) {
+      showToast(e.message || 'Failed to switch mode.', 'error');
+    }
+  };
+
+  const handleTryIt = async () => {
+    const amount = Number((document.getElementById('try-amount') as HTMLInputElement).value);
+    if (!amount || amount < 1) {
+      showToast('Amount must be at least 1.', 'error');
+      return;
+    }
+    try {
+      const resp = await apiCall('/api/developer/create-order', 'POST', { amount, title: 'Try it' }, { 'X-HamroAPI-Key': realKey });
+      if (resp?.data?.payment_url) {
+        window.open(resp.data.payment_url, '_blank', 'noopener');
+        showToast(`Order ${resp.data.order_id} created!`, 'success');
+      } else {
+        throw new Error('No payment URL');
+      }
+    } catch (e: any) {
+      showToast(e.message || 'Failed to create test order.', 'error');
+    }
+  };
+
+
+  const handleReveal = () => {
+    setIsRevealed(!isRevealed);
   };
 
   const handleAddWebhook = () => {
@@ -106,16 +146,6 @@ export default function DeveloperPortalView({
   const handleDeleteWebhook = (urlToDelete: string) => {
     setWebhooks(webhooks.filter(w => w !== urlToDelete));
     showToast('Webhook removed.', 'info');
-  };
-
-  const handleModeSelect = async (mode: 'live' | 'test') => {
-    setGatewayMode(mode);
-    try {
-      await setMode(mode);
-      showToast(`Gateway mode switched to ${mode.toUpperCase()} MODE.`, 'info');
-    } catch {
-      showToast(`Gateway mode switched to ${mode.toUpperCase()} MODE.`, 'info');
-    }
   };
 
   return (
@@ -573,7 +603,15 @@ export default function DeveloperPortalView({
           </div>
 
           <div className="gateway-desc">
-            Applies to your whole account — both your Hamro API and every payment link. Switch to Test Mode to try your integration end-to-end with zero real money involved: customers get HamroPay's own simulator (<code>test.html</code>) instead of a real UPI checkout, and you get the same success/failed/cancelled notifications you'd get for real, without a rupee moving.
+            Applies to API orders created with create-order. Live: real UPI checkout, real money, payment auto-detected from your FamPay.
+            Test: no real money; the customer sees a simulator and can mark the order Successful, Failed or Cancelled themselves.
+            Payment links have their own Test switch on the Payment Links page.
+          </div>
+          
+          <div className="flex items-center gap-2 mb-4">
+            <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase ${gatewayMode === 'live' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
+              {gatewayMode.toUpperCase()} MODE
+            </span>
           </div>
 
           <div 
@@ -595,7 +633,6 @@ export default function DeveloperPortalView({
           <div 
             className={`mode-option ${gatewayMode === 'test' ? 'active' : ''}`} 
             onClick={() => handleModeSelect('test')}
-            style={{ marginBottom: 0 }}
           >
             <div className="mode-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -606,6 +643,17 @@ export default function DeveloperPortalView({
               <div className="mode-title">Test Mode</div>
               <div className="mode-sub">Simulated checkout, no real money</div>
             </div>
+          </div>
+          
+          <div className="mt-6 p-4 rounded-xl bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)]">
+            <h3 className="text-sm font-bold mb-2">Try it</h3>
+            <div className="flex gap-2">
+              <input type="number" className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm" placeholder="Amount (e.g. 10)" id="try-amount" defaultValue="10" />
+              <button className="btn-primary" onClick={handleTryIt}>Create & Open</button>
+            </div>
+            <p className="text-xs text-slate-400 mt-2">
+              {gatewayMode === 'live' ? 'Live mode: this creates a real order. You must pay Rs <amount> to complete it.' : 'Test mode: no real money.'}
+            </p>
           </div>
         </div>
 

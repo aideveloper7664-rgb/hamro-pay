@@ -101,6 +101,9 @@ export default function App() {
     return saved ? JSON.parse(saved) : defaultProfile;
   });
 
+  const [gatewayMode, setGatewayMode] = useState<'live' | 'test'>('live');
+
+
   // --- API Connection Management States ---
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(() => {
     return getApiConfig().baseUrl;
@@ -868,6 +871,8 @@ export default function App() {
             showToast={showToast}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}
+            gatewayMode={gatewayMode}
+            setGatewayMode={setGatewayMode}
           />
         );
 
@@ -1038,6 +1043,17 @@ export default function App() {
 
       {/* Main viewport area */}
       <div className="main-area">
+        {gatewayMode === 'test' && (
+          <div className="bg-amber-950/40 border-b border-amber-800/50 p-3 text-center text-amber-200 text-sm font-bold flex items-center justify-center gap-3">
+            <span>TEST MODE is ON: real payments for API orders are disabled.</span>
+            <button
+              onClick={() => setCurrentView('developer')}
+              className="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded-lg text-xs font-bold transition-all"
+            >
+              Switch to Live
+            </button>
+          </div>
+        )}
         {currentView !== 'dashboard' && currentView !== 'developer' && currentView !== 'api-docs' && currentView !== 'api-integration' && currentView !== 'links' && (
           <Header
             onOpenSidebar={() => setIsSidebarOpen(true)}
