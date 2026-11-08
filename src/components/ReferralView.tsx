@@ -100,7 +100,7 @@ export default function ReferralView({ showToast }: ReferralViewProps) {
           Share your link. Earn <span style={{ color: '#ffb834' }}>18% Cashback</span> instantly.
         </div>
         <div className="hp-ref-hero-desc">
-          When a merchant creates an account using your referral link and completes their first deposit, <strong>18% cashback reward</strong> is instantly credited to your Hamro Cash wallet.
+          When a merchant creates an account using your referral link, <strong>18% cashback reward</strong> is instantly credited to your Hamro Credits balance.
         </div>
 
         {/* Code Display Box */}
@@ -172,9 +172,9 @@ export default function ReferralView({ showToast }: ReferralViewProps) {
           <div className="hp-ref-info-icon">
             <ShieldCheck />
           </div>
-          <div className="hp-ref-info-title">Real-time Wallet Clearance</div>
+          <div className="hp-ref-info-title">Instant Credit Clearance</div>
           <div className="hp-ref-info-desc">
-            Commissions and rewards are automatically credited directly to your Hamro Cash wallet with zero delay, ready for withdrawal.
+            Commissions and rewards are automatically credited directly to your Hamro Credits balance with zero delay.
           </div>
         </div>
       </div>

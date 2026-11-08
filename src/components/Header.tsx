@@ -1,11 +1,12 @@
-import { PanelLeft, Bell, Wallet } from 'lucide-react';
+import { PanelLeft, Bell, Zap } from 'lucide-react';
 import { PlanType } from '../types';
 
 interface HeaderProps {
   onOpenSidebar: () => void;
   onViewChange: (view: string) => void;
   unreadNotifications: number;
-  balance: number;
+  credits?: number;
+  balance?: number;
   apiBaseUrl: string;
   apiEnabled: boolean;
   isSimulated: boolean;
@@ -16,7 +17,8 @@ export default function Header({
   onOpenSidebar,
   onViewChange,
   unreadNotifications,
-  balance,
+  credits = 0,
+  balance = 0,
   apiBaseUrl,
   apiEnabled,
   isSimulated,
@@ -32,6 +34,8 @@ export default function Header({
     displayHost = 'API Offline';
   }
 
+  const displayCredits = credits !== undefined ? credits : balance;
+
   return (
     <header className="sticky top-0 bg-[#0b0204]/90 backdrop-blur-xl border-b border-[rgba(255,45,85,0.18)] px-6 py-3.5 flex items-center justify-between gap-4 z-20 shadow-lg">
       {/* Menu Trigger & Logo */}
@@ -45,7 +49,7 @@ export default function Header({
         </button>
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] flex items-center justify-center shadow-[0_0_12px_rgba(255,30,75,0.4)]">
-            <Wallet className="w-4 h-4 text-white stroke-[2.5]" />
+            <Zap className="w-4 h-4 text-white stroke-[2.5]" />
           </div>
           <span className="text-sm font-black text-[#fff2f4] tracking-tight">HamroPay</span>
         </div>
@@ -53,10 +57,14 @@ export default function Header({
 
       {/* Right-aligned Stats and Quick controls */}
       <div className="flex items-center gap-2 md:gap-3">
-        {/* Mobile quick-balance pill */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-black/40 border border-[rgba(255,45,85,0.2)] rounded-xl text-[11px] font-extrabold text-[#fff2f4] md:hidden">
-          <Wallet className="w-3.5 h-3.5 text-[#ff4d6d] shrink-0" />
-          <span>₹ {balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+        {/* Mobile quick-credits pill */}
+        <div 
+          onClick={() => onViewChange('wallet')}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-black/40 border border-[rgba(255,45,85,0.2)] hover:border-[rgba(255,45,85,0.4)] rounded-xl text-[11px] font-extrabold text-[#fff2f4] cursor-pointer transition"
+          title="Hamro Credits"
+        >
+          <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0 fill-amber-400" />
+          <span>₹ {displayCredits.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
 
         {/* Notifications Icon (Clickable to change view) */}

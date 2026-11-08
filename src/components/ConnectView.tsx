@@ -3,9 +3,10 @@ import { CreditCard, Code, ShoppingBag, ShieldCheck, Cpu, CheckCircle2, AlertTri
 import { getStatus } from '../services/fampay.service';
 import FamPayConnectView from './FamPayConnectView';
 import StorePortalView from './StorePortalView';
+import PaytmConnectView from './PaytmConnectView';
 
 interface ConnectViewProps {
-  viewId: 'fampay' | 'developer' | 'store' | string;
+  viewId: 'fampay' | 'paytm' | 'developer' | 'store' | string;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   isApiSimulated: boolean;
   apiBaseUrl: string;
@@ -27,7 +28,16 @@ export default function ConnectView({
   onViewChange,
   unreadNotifications
 }: ConnectViewProps) {
-  const isFamPay = viewId === 'fampay' || viewId === 'paytm';
+  if (viewId === 'paytm') {
+    return (
+      <PaytmConnectView
+        onViewChange={onViewChange}
+        showToast={showToast}
+      />
+    );
+  }
+
+  const isFamPay = viewId === 'fampay';
 
   if (isFamPay) {
     return (
@@ -121,9 +131,8 @@ export default function ConnectView({
   const statusItems = [
     { key: 'auth', name: 'Login & Session Gateway', ...apiStatus.auth },
     { key: 'paymentLinks', name: 'Payment Links Controller', ...apiStatus.paymentLinks },
-    { key: 'balance', name: 'Wallet Balance Engine', ...apiStatus.balance },
-    { key: 'transactions', name: 'Transactions Ledger', ...apiStatus.transactions },
-    { key: 'withdrawals', name: 'Settlement Payouts', ...apiStatus.withdrawals },
+    { key: 'credits', name: 'Hamro Credits Engine', ...(apiStatus.credits || apiStatus.balance || { status: 'REAL', route: 'GET /api/credits/balance' }) },
+    { key: 'transactions', name: 'Payment History Ledger', ...apiStatus.transactions },
     { key: 'notifications', name: 'Alerts & Notifications', ...apiStatus.notifications },
     { key: 'profile', name: 'Merchant Profile', ...apiStatus.profile },
     { key: 'plans', name: 'Plans & Subscription Upgrades', ...apiStatus.plans },

@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { PanelLeft } from 'lucide-react';
 import { PaymentLink, Transaction } from '../types';
-import { getWalletBalance, getTransactions } from '../services/wallet.service';
+import { getPayments } from '../services/wallet.service';
+import { getCreditBalance } from '../services/credits.service';
 import { useAuth } from '../context/AuthContext';
 
 interface DashboardViewProps {
   profileName: string;
-  balance: number;
+  balance?: number;
   paymentLinks: PaymentLink[];
   transactions: Transaction[];
   onViewChange: (view: string) => void;
   onCreatePaymentLink: () => void;
-  pendingWithdrawals?: number;
   feePercent?: number;
   linkLimit?: number;
   currentPlan?: string;
@@ -21,12 +21,10 @@ interface DashboardViewProps {
 
 export default function DashboardView({
   profileName,
-  balance: propBalance,
   paymentLinks,
   transactions: propTransactions,
   onViewChange,
   onCreatePaymentLink,
-  pendingWithdrawals = 0,
   feePercent = 5,
   linkLimit = 100,
   currentPlan = 'Blaze Free',
@@ -34,8 +32,11 @@ export default function DashboardView({
   unreadNotifications = 0,
 }: DashboardViewProps) {
   const { user } = useAuth();
-  const [balance, setBalance] = useState<number>(propBalance);
-  const [totalEarned, setTotalEarned] = useState<number>(0);
+  const [creditBalance, setCreditBalance] = useState<number>(0);
+  const [totalReceivedAmount, setTotalReceivedAmount] = useState<number>(0);
+  const [successRateStr, setSuccessRateStr] = useState<string>('100%');
+  const [avgOrderVal, setAvgOrderVal] = useState<number>(0);
+  const [thisMonthVol, setThisMonthVol] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>(propTransactions);
 
   // Live time-based greeting calculation
@@ -68,63 +69,63 @@ export default function DashboardView({
   const rawName = user?.name || merchant.name || profileName || '';
   const displayName = rawName.trim() ? rawName.trim() : 'User';
 
-  // Fetch live wallet balance and transactions from custom backend if available
-  const fetchWalletData = async () => {
+  // Fetch live Hamro Credits and payments from backend
+  const fetchDashboardData = async () => {
     try {
-      const balanceData = await getWalletBalance();
-      if (balanceData) {
-        if (typeof balanceData.balance === 'number') {
-          setBalance(balanceData.balance);
-        }
-        if (typeof balanceData.total_earned === 'number') {
-          setTotalEarned(balanceData.total_earned);
-        }
+      const [creditRes, paymentsRes] = await Promise.allSettled([
+        getCreditBalance(),
+        getPayments({ limit: 100 })
+      ]);
+
+      if (creditRes.status === 'fulfilled' && creditRes.value) {
+        const val = creditRes.value;
+        const cred = typeof val?.balance === 'number' ? val.balance : (typeof val === 'number' ? val : 0);
+        setCreditBalance(cred);
       }
 
-      const txData = await getTransactions();
-      if (Array.isArray(txData)) {
-        const mapped: Transaction[] = txData.map((item: any, idx: number) => ({
-          id: item.id || item.transaction_id || `tx-${idx}`,
-          ref: item.ref || item.order_id || item.utr || `TXN${1000 + idx}`,
-          name: item.customer_name || item.name || item.upi_id || 'Hamro Customer',
-          amount: Number(item.amount || item.net_amount || 0),
-          type: item.type === 'withdraw' || item.type === 'withdrawal' ? 'withdrawal' : 'received',
-          status: item.status === 'success' || item.status === 'PAID' ? 'Success' : item.status === 'failed' ? 'Failed' : 'Pending',
+      if (paymentsRes.status === 'fulfilled' && paymentsRes.value) {
+        const paymentsList = paymentsRes.value.payments || [];
+        const successful = paymentsList.filter(p => p.status === 'success');
+        const sumReceived = successful.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+        setTotalReceivedAmount(sumReceived);
+        setThisMonthVol(sumReceived);
+        if (paymentsList.length > 0) {
+          setSuccessRateStr(`${Math.round((successful.length / paymentsList.length) * 100)}%`);
+        } else {
+          setSuccessRateStr('100%');
+        }
+        if (successful.length > 0) {
+          setAvgOrderVal(sumReceived / successful.length);
+        }
+
+        const mapped: Transaction[] = paymentsList.slice(0, 10).map((item, idx) => ({
+          id: item.id || `tx-${idx}`,
+          ref: item.order_id || item.utr || `TXN${1000 + idx}`,
+          name: item.link_title || 'Payment Checkout',
+          amount: Number(item.amount || 0),
+          type: 'received',
+          status: item.status === 'success' ? 'Success' : item.status === 'pending' ? 'Pending' : 'Failed',
           date: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent'
         }));
         setTransactions(mapped);
       }
-    } catch (err) {
-      console.warn('Could not refresh wallet from backend, using active state:', err);
+    } catch {
+      // Graceful fallback
     }
   };
 
   useEffect(() => {
-    fetchWalletData();
+    fetchDashboardData();
   }, []);
 
-  // Sync prop changes
   useEffect(() => {
-    setBalance(propBalance);
-  }, [propBalance]);
-
-  useEffect(() => {
-    setTransactions(propTransactions);
+    if (propTransactions && propTransactions.length > 0) {
+      setTransactions(propTransactions);
+    }
   }, [propTransactions]);
 
   // Calculations for stats cards
   const activeLinksCount = paymentLinks.filter(l => l.active).length;
-  const successfulTx = transactions.filter(t => t.status === 'Success' && t.type === 'received');
-  const successRate = transactions.length > 0 
-    ? `${Math.round((successfulTx.length / transactions.length) * 100)}%` 
-    : '—';
-  
-  const totalReceivedAmount = successfulTx.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-  const avgOrderValue = successfulTx.length > 0 
-    ? totalReceivedAmount / successfulTx.length 
-    : 0;
-  
-  const thisMonthVolume = totalReceivedAmount;
 
   // Plan formatting
   const planTag = currentPlan.toLowerCase().includes('enterprise') 
@@ -1036,23 +1037,47 @@ export default function DashboardView({
             <div className="stat-top">
               <div className="stat-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="7" width="18" height="14" rx="2"/>
-                  <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  <path d="M6 3h12M6 21h12M8 3c0 5 8 5 8 0M8 21c0-5 8-5 8 0M9 12h6"/>
                 </svg>
               </div>
-              <span className="stat-badge badge-gold">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: '11px', height: '11px' }}>
-                  <rect x="3" y="8" width="18" height="13" rx="2"/>
-                  <path d="M12 8v13M3 12h18"/>
-                </svg>
-                ₹5.00
-              </span>
+              <span className="stat-badge badge-green">Direct UPI</span>
             </div>
-            <div className="stat-label">Hamro Cash</div>
+            <div className="stat-label">Total Received</div>
             <div className="stat-value">
-              ₹{balance > 0 ? balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+              ₹{totalReceivedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <div className="stat-foot">Limit: ₹500.00</div>
+            <div className="stat-foot">Direct into your UPI account</div>
+          </div>
+
+          <div 
+            className="stat-card" 
+            data-accent="blue"
+            onMouseMove={handleCardMouseMove}
+            onMouseLeave={handleCardMouseLeave}
+          >
+            <div className="stat-top">
+              <div className="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewChange('wallet');
+                }}
+                className="stat-badge badge-blue"
+                style={{ cursor: 'pointer', background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)' }}
+              >
+                + Buy Credits
+              </button>
+            </div>
+            <div className="stat-label">Hamro Credits</div>
+            <div className="stat-value">
+              ₹{creditBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="stat-foot">Used for fees &amp; plans</div>
           </div>
 
           <div 
@@ -1076,50 +1101,7 @@ export default function DashboardView({
 
           <div 
             className="stat-card" 
-            data-accent="blue"
-            onMouseMove={handleCardMouseMove}
-            onMouseLeave={handleCardMouseLeave}
-          >
-            <div className="stat-top">
-              <div className="stat-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M6 3h12M6 21h12M8 3c0 5 8 5 8 0M8 21c0-5 8-5 8 0M9 12h6"/>
-                </svg>
-              </div>
-            </div>
-            <div className="stat-label">Total Received</div>
-            <div className="stat-value">
-              ₹{(totalEarned || totalReceivedAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-          </div>
-
-          <div 
-            className="stat-card" 
             data-accent="purple"
-            onMouseMove={handleCardMouseMove}
-            onMouseLeave={handleCardMouseLeave}
-          >
-            <div className="stat-top">
-              <div className="stat-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3v12"/>
-                  <path d="M8 11l4 4 4-4"/>
-                  <rect x="4" y="18" width="16" height="3" rx="1"/>
-                </svg>
-              </div>
-            </div>
-            <div className="stat-label">Pending Withdrawal</div>
-            <div className="stat-value">
-              {pendingWithdrawals > 0 ? `₹${pendingWithdrawals.toLocaleString('en-IN')}` : '0'}
-            </div>
-          </div>
-        </div>
-
-        {/* Row 2: 4 cards */}
-        <div className="stats-grid">
-          <div 
-            className="stat-card" 
-            data-accent="green"
             onMouseMove={handleCardMouseMove}
             onMouseLeave={handleCardMouseLeave}
           >
@@ -1131,9 +1113,13 @@ export default function DashboardView({
               </div>
             </div>
             <div className="stat-label">Success Rate</div>
-            <div className="stat-value">{successRate}</div>
+            <div className="stat-value">{successRateStr}</div>
+            <div className="stat-foot">Checkout conversion</div>
           </div>
+        </div>
 
+        {/* Row 2: 4 cards */}
+        <div className="stats-grid">
           <div 
             className="stat-card" 
             data-accent="blue"
@@ -1150,7 +1136,7 @@ export default function DashboardView({
             </div>
             <div className="stat-label">Avg. Order Value</div>
             <div className="stat-value">
-              ₹{avgOrderValue.toFixed(2)}
+              ₹{avgOrderVal.toFixed(2)}
             </div>
           </div>
 
@@ -1171,8 +1157,29 @@ export default function DashboardView({
             </div>
             <div className="stat-label">This Month</div>
             <div className="stat-value">
-              ₹{thisMonthVolume.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{thisMonthVol.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
+          </div>
+
+          <div 
+            className="stat-card" 
+            data-accent="green"
+            onMouseMove={handleCardMouseMove}
+            onMouseLeave={handleCardMouseLeave}
+            style={{ cursor: 'pointer' }}
+            onClick={() => onViewChange('pricing')}
+          >
+            <div className="stat-top">
+              <div className="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+              </div>
+              <span className="stat-badge badge-green">Active</span>
+            </div>
+            <div className="stat-label">Current Plan</div>
+            <div className="stat-value">{currentPlan}</div>
+            <div className="stat-foot">{feePercent}% platform fee</div>
           </div>
 
           <div 
@@ -1180,6 +1187,8 @@ export default function DashboardView({
             data-accent="purple"
             onMouseMove={handleCardMouseMove}
             onMouseLeave={handleCardMouseLeave}
+            style={{ cursor: 'pointer' }}
+            onClick={() => onViewChange('referral')}
           >
             <div className="stat-top">
               <div className="stat-icon">
@@ -1191,8 +1200,9 @@ export default function DashboardView({
                 </svg>
               </div>
             </div>
-            <div className="stat-label">Referral Earnings</div>
-            <div className="stat-value">₹0.00</div>
+            <div className="stat-label">Referral Rewards</div>
+            <div className="stat-value">Earn Credits</div>
+            <div className="stat-foot">Invite &amp; get bonus</div>
           </div>
         </div>
 
@@ -1225,7 +1235,9 @@ export default function DashboardView({
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="p-3 rounded-xl bg-[rgba(43,242,154,0.08)] border border-[rgba(43,242,154,0.2)] text-center">
                     <div className="text-[10px] uppercase font-bold text-[#2bf29a]">Successful</div>
-                    <div className="text-lg font-black text-[#fff] mt-1">{successfulTx.length}</div>
+                    <div className="text-lg font-black text-[#fff] mt-1">
+                      {transactions.filter(t => t.status === 'Success').length}
+                    </div>
                   </div>
                   <div className="p-3 rounded-xl bg-[rgba(255,184,52,0.08)] border border-[rgba(255,184,52,0.2)] text-center">
                     <div className="text-[10px] uppercase font-bold text-[#ffb834]">Pending</div>

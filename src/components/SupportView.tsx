@@ -245,7 +245,7 @@ export default function SupportView({ showToast, profileName, profileEmail }: Su
                       style={{ background: 'rgba(20, 5, 10, 0.9)', color: '#fff' }}
                     >
                       <option value="Payment link issue">Payment link issue</option>
-                      <option value="Wallet or withdrawal">Wallet or withdrawal</option>
+                      <option value="Hamro Credits & Fees">Hamro Credits & Fees</option>
                       <option value="Account access">Account access</option>
                       <option value="Other">Other merchant issue</option>
                     </select>

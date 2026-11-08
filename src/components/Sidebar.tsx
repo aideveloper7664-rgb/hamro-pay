@@ -6,7 +6,8 @@ import { X, User, LogOut } from 'lucide-react';
 interface SidebarProps {
   currentView: string;
   onViewChange: (view: string) => void;
-  balance: number;
+  credits?: number;
+  balance?: number;
   profileName: string;
   profileEmail: string;
   unreadNotifications?: number;
@@ -19,7 +20,8 @@ interface SidebarProps {
 export default function Sidebar({
   currentView,
   onViewChange,
-  balance,
+  credits = 0,
+  balance = 0,
   profileName,
   profileEmail,
   onSignOut,
@@ -27,6 +29,7 @@ export default function Sidebar({
   onClose,
 }: SidebarProps) {
   const { user } = useAuth();
+  const displayCredits = credits !== undefined ? credits : balance;
 
   // Collapsible groups state - default collapsed so subsections do not open automatically
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
@@ -117,24 +120,13 @@ export default function Sidebar({
           <div
             className="hp-balance-pill shrink-0"
             onClick={() => handleNavClick('wallet')}
-            title="Open Wallet"
+            title="Open Hamro Credits"
           >
             <span className="hp-wallet-icon">
-              <svg
-                className="w-3.5 h-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
-                <path d="M16 12h3v4h-3a2 2 0 0 1 0-4Z" />
-              </svg>
+              <span style={{ fontSize: '12px' }}>⚡</span>
             </span>
             <span className="hp-balance-amount">
-              ₹ {balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹ {displayCredits.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
 
@@ -475,7 +467,7 @@ export default function Sidebar({
 
             {/* ========== BOTTOM SECTION ========== */}
 
-            {/* Wallet */}
+            {/* Hamro Credits */}
             <div
               className={`hp-nav-item ${currentView === 'wallet' ? 'active' : ''}`}
               onClick={() => handleNavClick('wallet')}
@@ -496,12 +488,10 @@ export default function Sidebar({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <rect x="2" y="6" width="20" height="13" rx="2.5" />
-                  <path d="M2 10h20" />
-                  <circle cx="17" cy="14" r="1.2" fill="currentColor" />
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                 </svg>
               </span>
-              <span className="flex-1 min-w-0 truncate">Wallet</span>
+              <span className="flex-1 min-w-0 truncate">Hamro Credits</span>
             </div>
 
             {/* Transactions */}
@@ -530,34 +520,6 @@ export default function Sidebar({
                 </svg>
               </span>
               <span className="flex-1 min-w-0 truncate">Transactions</span>
-            </div>
-
-            {/* Withdraw */}
-            <div
-              className={`hp-nav-item ${currentView === 'withdraw' ? 'active' : ''}`}
-              onClick={() => handleNavClick('withdraw')}
-            >
-              <span
-                className="hp-nav-icon"
-                style={{
-                  background: 'linear-gradient(135deg, #ff4d6d, #d81f42)',
-                  boxShadow: '0 4px 14px rgba(255,77,109,0.35)',
-                }}
-              >
-                <svg
-                  className="w-4 h-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v8M9 12l3 3 3-3" />
-                </svg>
-              </span>
-              <span className="flex-1 min-w-0 truncate">Withdraw</span>
             </div>
 
             {/* Notifications */}

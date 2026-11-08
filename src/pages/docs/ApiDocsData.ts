@@ -236,10 +236,10 @@ export const ERRORS: ErrorItem[] = [
     "cat": "limits",
     "code": "400",
     "name": "No payment account connected",
-    "msg": "Please connect FamPay or Paytm account first...",
+    "msg": "Please connect a FamPay account first...",
     "why": "Live mode needs a connected, active FamPay account to receive payments. Test mode does not.",
     "fix": "Connect a FamPay account in the dashboard (UPI ID + Gmail App Password), or switch to Test mode while developing.",
-    "payload": "{ \"success\": false, \"message\": \"Please connect FamPay or Paytm account first to accept payments\" }"
+    "payload": "{ \"success\": false, \"message\": \"Please connect a FamPay account first to accept payments\" }"
   },
   {
     "cat": "limits",

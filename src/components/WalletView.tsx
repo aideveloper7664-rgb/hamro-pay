@@ -2,65 +2,47 @@ import React, { useState, useEffect } from 'react';
 import {
   Wallet,
   Plus,
-  ArrowDownLeft,
   Coins,
-  Copy,
   RefreshCw,
   Sparkles,
   Award,
   Loader2,
-  DollarSign,
-  Check,
   TrendingUp,
   ArrowUpRight,
-  X
+  X,
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
-import { Transaction } from '../types';
 import { getCreditBalance, purchaseCredits, getCreditHistory, CreditTransaction } from '../services/credits.service';
-import { getBonusBalance, convertBonusToCredit, convertCashToCredit } from '../services/promo.service';
-import { getWalletBalance } from '../services/wallet.service';
-import WithdrawModal from './WithdrawModal';
+import { getBonusBalance, convertBonusToCredit } from '../services/promo.service';
 
 interface WalletViewProps {
-  balance: number;
-  transactions: Transaction[];
-  onAddFunds: () => void;
   onViewChange: (view: string) => void;
   showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onRefreshWallet?: () => void;
 }
 
 export default function WalletView({
-  balance,
-  transactions,
-  onAddFunds,
   onViewChange,
   showToast,
   onRefreshWallet
 }: WalletViewProps) {
-  // 1. Hamro Cash Balance
-  const [cashBalance, setCashBalance] = useState<number>(balance);
-  const [commissionPaid, setCommissionPaid] = useState<number>(0);
-
-  // 2. Hamro Credit Balance
+  // 1. Hamro Credit Balance
   const [creditBalance, setCreditBalance] = useState<number>(0);
   const [creditHistory, setCreditHistory] = useState<CreditTransaction[]>([]);
 
-  // 3. Hamro Bonus Balance
+  // 2. Hamro Bonus Balance
   const [bonusBalance, setBonusBalance] = useState<number>(0);
 
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
 
   // Modals state
-  const [isWithdrawOpen, setIsWithdrawOpen] = useState<boolean>(false);
   const [isBuyCreditsOpen, setIsBuyCreditsOpen] = useState<boolean>(false);
-  const [isConvertCashOpen, setIsConvertCashOpen] = useState<boolean>(false);
   const [isConvertBonusOpen, setIsConvertBonusOpen] = useState<boolean>(false);
 
   // Modal Inputs
   const [buyAmount, setBuyAmount] = useState<string>('500');
   const [buyUtr, setBuyUtr] = useState<string>('');
-  const [convertCashAmt, setConvertCashAmt] = useState<string>('100');
   const [convertBonusAmt, setConvertBonusAmt] = useState<string>('100');
 
   const [isSubmittingBuy, setIsSubmittingBuy] = useState<boolean>(false);
@@ -70,35 +52,24 @@ export default function WalletView({
     if (showToast) showToast(msg, type);
   };
 
-  // Load all 4 wallets data
-  const fetchAllWallets = async () => {
+  // Load Credits and Bonus
+  const fetchAllCredits = async () => {
     setIsLoadingData(true);
     try {
-      const [cashRes, creditRes, bonusRes, histRes] = await Promise.allSettled([
-        getWalletBalance(),
+      const [creditRes, bonusRes, histRes] = await Promise.allSettled([
         getCreditBalance(),
         getBonusBalance(),
         getCreditHistory()
       ]);
 
-      // 1. Cash Balance & Commission
-      if (cashRes.status === 'fulfilled' && cashRes.value) {
-        const val = cashRes.value;
-        if (typeof val.balance === 'number') setCashBalance(val.balance);
-        else if (typeof val === 'number') setCashBalance(val);
-
-        if (typeof val.commission_paid === 'number') setCommissionPaid(val.commission_paid);
-        else if (typeof val.commission === 'number') setCommissionPaid(val.commission);
-      }
-
-      // 2. Credit Balance
+      // 1. Credit Balance
       if (creditRes.status === 'fulfilled' && creditRes.value) {
         const val = creditRes.value;
         if (typeof val.balance === 'number') setCreditBalance(val.balance);
         else if (typeof val === 'number') setCreditBalance(val);
       }
 
-      // 3. Bonus Balance
+      // 2. Bonus Balance
       if (bonusRes.status === 'fulfilled' && bonusRes.value) {
         const val = bonusRes.value;
         if (typeof val.balance === 'number') setBonusBalance(val.balance);
@@ -106,7 +77,7 @@ export default function WalletView({
         else if (typeof val === 'number') setBonusBalance(val);
       }
 
-      // Credit History
+      // 3. Credit History
       if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) {
         setCreditHistory(histRes.value);
       }
@@ -118,8 +89,8 @@ export default function WalletView({
   };
 
   useEffect(() => {
-    fetchAllWallets();
-  }, [balance]);
+    fetchAllCredits();
+  }, []);
 
   // Handle Buy Credits Submit
   const handleBuyCreditsSubmit = async (e: React.FormEvent) => {
@@ -140,38 +111,12 @@ export default function WalletView({
       notify(res?.message || `Credit purchase request of ₹${amt} submitted for verification!`, 'success');
       setIsBuyCreditsOpen(false);
       setBuyUtr('');
-      fetchAllWallets();
+      fetchAllCredits();
+      if (onRefreshWallet) onRefreshWallet();
     } catch (err: any) {
       notify(err?.message || 'Failed to submit credit purchase.', 'error');
     } finally {
       setIsSubmittingBuy(false);
-    }
-  };
-
-  // Handle Convert Cash to Credit
-  const handleConvertCashSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = Number(convertCashAmt);
-    if (isNaN(amt) || amt <= 0) {
-      notify('Please enter a valid amount.', 'error');
-      return;
-    }
-    if (amt > cashBalance) {
-      notify('Amount exceeds your available Hamro Cash balance.', 'error');
-      return;
-    }
-
-    setIsSubmittingConvert(true);
-    try {
-      const res = await convertCashToCredit(amt);
-      notify(res?.message || `Successfully converted ₹${amt} Cash to Hamro Credits!`, 'success');
-      setIsConvertCashOpen(false);
-      fetchAllWallets();
-      if (onRefreshWallet) onRefreshWallet();
-    } catch (err: any) {
-      notify(err?.message || 'Failed to convert Cash to Credits.', 'error');
-    } finally {
-      setIsSubmittingConvert(false);
     }
   };
 
@@ -193,7 +138,7 @@ export default function WalletView({
       const res = await convertBonusToCredit(amt);
       notify(res?.message || `Successfully converted ₹${amt} Bonus to Hamro Credits!`, 'success');
       setIsConvertBonusOpen(false);
-      fetchAllWallets();
+      fetchAllCredits();
       if (onRefreshWallet) onRefreshWallet();
     } catch (err: any) {
       notify(err?.message || 'Failed to convert Bonus to Credits.', 'error');
@@ -209,17 +154,17 @@ export default function WalletView({
         <div className="hp-w-page-header">
           <div className="hp-w-page-head-left">
             <div className="hp-w-page-icon">
-              <Wallet />
+              <Zap />
             </div>
             <div className="hp-w-page-info">
-              <h1>Wallet &amp; Balances</h1>
-              <p>Manage your real-time Hamro Cash, Hamro Credits, Hamro Bonus, and referral earnings</p>
+              <h1>Hamro Credits &amp; Balances</h1>
+              <p>Manage your Hamro Credits for platform commissions, plan upgrades, and reward bonuses</p>
             </div>
           </div>
 
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
-              onClick={fetchAllWallets}
+              onClick={fetchAllCredits}
               disabled={isLoadingData}
               className="hp-w-panel-action"
               style={{ cursor: 'pointer' }}
@@ -238,53 +183,32 @@ export default function WalletView({
           </div>
         </div>
 
-        {/* 4 WALLETS GRID */}
-        <div className="hp-w-wallet-grid">
-          {/* Left Column Stack: Cash Card & Credit Card */}
-          <div className="hp-w-left-stack">
-            {/* Wallet 1: HAMRO CASH */}
-            <div className="hp-w-cash-card">
-              <div className="hp-w-cash-label">HAMRO CASH (REAL BALANCE)</div>
-              <div className="hp-w-cash-amount">
-                ₹ {cashBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <button
-                onClick={() => setIsWithdrawOpen(true)}
-                className="hp-w-withdraw-btn"
-              >
-                <ArrowDownLeft />
-                <span>Withdraw Funds</span>
-              </button>
-              <button
-                onClick={() => setIsConvertCashOpen(true)}
-                style={{
-                  width: '100%',
-                  marginTop: '8px',
-                  padding: '8px',
-                  borderRadius: '9px',
-                  background: 'rgba(0,0,0,0.25)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  color: '#fff',
-                  fontSize: '11.5px',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                <Coins style={{ width: 13, height: 13, color: '#ffb834' }} />
-                <span>Convert Cash to Credit</span>
-              </button>
-            </div>
+        {/* Direct UPI Notice */}
+        <div style={{
+          padding: '14px 18px',
+          borderRadius: '16px',
+          background: 'rgba(43, 242, 154, 0.08)',
+          border: '1px solid rgba(43, 242, 154, 0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '20px'
+        }}>
+          <ShieldCheck style={{ width: 20, height: 20, color: '#2bf29a', flexShrink: 0 }} />
+          <div style={{ fontSize: '12.5px', color: '#e5f9f0', lineHeight: 1.4 }}>
+            <strong style={{ color: '#fff' }}>Direct UPI Settlements:</strong> Customer payments reach your connected UPI account instantly. Hamro Pay never holds your cash balance. Platform fees and plan upgrades are deducted directly from your <strong>Hamro Credits</strong>.
+          </div>
+        </div>
 
-            {/* Wallet 2: HAMRO CREDIT */}
-            <div className="hp-w-credit-card">
+        {/* CREDITS & BONUS GRID */}
+        <div className="hp-w-wallet-grid">
+          {/* Left: Hamro Credit Card */}
+          <div className="hp-w-left-stack">
+            <div className="hp-w-credit-card" style={{ padding: '24px' }}>
               <div className="hp-w-credit-head">
                 <div className="hp-w-credit-label">
                   <span className="bolt">⚡</span>
-                  <span>HAMRO CREDIT</span>
+                  <span>HAMRO CREDITS</span>
                 </div>
                 <button
                   onClick={() => setIsBuyCreditsOpen(true)}
@@ -294,18 +218,26 @@ export default function WalletView({
                   <Plus />
                 </button>
               </div>
-              <div className="hp-w-credit-amount">
-                ₹ {creditBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              <div className="hp-w-credit-amount" style={{ fontSize: '32px', margin: '14px 0 8px' }}>
+                ₹ {creditBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div className="hp-w-credit-desc">
-                API credits are consumed automatically for incoming transaction webhooks and gateway calls.
+              <div className="hp-w-credit-desc" style={{ marginBottom: '18px' }}>
+                Used automatically to deduct small commissions on payments and for purchasing plan upgrades.
               </div>
+              <button
+                onClick={() => setIsBuyCreditsOpen(true)}
+                className="btn-primary"
+                style={{ width: '100%', padding: '10px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              >
+                <Sparkles style={{ width: 14, height: 14 }} />
+                <span>Buy Credits Now</span>
+              </button>
             </div>
           </div>
 
-          {/* Right Column Stack: Bonus Card & Commission Stats */}
+          {/* Right: Hamro Bonus & Referral Rewards */}
           <div className="hp-w-left-stack">
-            {/* Wallet 3: HAMRO BONUS */}
+            {/* Hamro Bonus */}
             <div className="hp-w-bonus-card">
               <div className="hp-w-bonus-head">
                 <div className="hp-w-bonus-label">
@@ -315,10 +247,10 @@ export default function WalletView({
                 <div className="hp-w-bonus-badge">REWARDS</div>
               </div>
               <div className="hp-w-bonus-amount">
-                ₹ {bonusBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                ₹ {bonusBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div className="hp-w-bonus-desc" style={{ marginBottom: '12px' }}>
-                Earned via promo codes and welcome vouchers. Convertible to Hamro Credits.
+                Earned via promo codes, referral milestones, and vouchers. Easily convert to Hamro Credits.
               </div>
               <button
                 onClick={() => setIsConvertBonusOpen(true)}
@@ -345,25 +277,30 @@ export default function WalletView({
               </button>
             </div>
 
-            {/* Wallet 4: COMMISSION PAID STATS */}
+            {/* Referral Stats */}
             <div className="hp-w-stats-grid">
               <div className="hp-w-stat-card" data-accent="green">
                 <div className="hp-w-stat-icon">
                   <Award />
                 </div>
-                <div className="hp-w-stat-label">COMMISSION EARNED</div>
+                <div className="hp-w-stat-label">PLATFORM FEE</div>
                 <div className="hp-w-stat-value">
-                  ₹ {commissionPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  Zero Hold
                 </div>
               </div>
 
-              <div className="hp-w-stat-card" data-accent="gold">
+              <div
+                className="hp-w-stat-card"
+                data-accent="gold"
+                style={{ cursor: 'pointer' }}
+                onClick={() => onViewChange('referral')}
+              >
                 <div className="hp-w-stat-icon">
                   <TrendingUp />
                 </div>
                 <div className="hp-w-stat-label">REFERRAL REWARDS</div>
                 <div className="hp-w-stat-value">
-                  18% Cash
+                  Earn Credits
                 </div>
               </div>
             </div>
@@ -373,12 +310,12 @@ export default function WalletView({
         {/* Credit Purchase & History Panel */}
         <div className="hp-w-panel">
           <div className="hp-w-panel-head">
-            <div className="hp-w-panel-title">Recent Wallet &amp; Credit Activity</div>
+            <div className="hp-w-panel-title">Credit Transaction History</div>
             <button
               onClick={() => onViewChange('transactions')}
               className="hp-w-panel-action"
             >
-              <span>View All Transactions</span>
+              <span>View Payment History</span>
               <ArrowUpRight style={{ width: 12, height: 12 }} />
             </button>
           </div>
@@ -390,7 +327,7 @@ export default function WalletView({
               </div>
               <div className="hp-w-empty-title">No Credit Transactions Yet</div>
               <div style={{ fontSize: '12px', color: 'var(--hp-w-muted)', maxWidth: 360 }}>
-                Purchased credits and bonus conversions will appear here in your real-time log.
+                Purchased credits and converted bonuses will appear here in your real-time log.
               </div>
             </div>
           ) : (
@@ -441,15 +378,6 @@ export default function WalletView({
           )}
         </div>
       </div>
-
-      {/* WITHDRAW MODAL */}
-      <WithdrawModal
-        isOpen={isWithdrawOpen}
-        onClose={() => setIsWithdrawOpen(false)}
-        availableBalance={cashBalance}
-        showToast={showToast}
-        onSuccess={fetchAllWallets}
-      />
 
       {/* BUY CREDITS MODAL */}
       {isBuyCreditsOpen && (
@@ -537,68 +465,6 @@ export default function WalletView({
                     className="hp-w-modal-btn hp-w-btn-proceed"
                   >
                     {isSubmittingBuy ? <Loader2 className="animate-spin" /> : <span>Submit UTR</span>}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CONVERT CASH MODAL */}
-      {isConvertCashOpen && (
-        <div className="hp-w-modal-scrim" onClick={() => setIsConvertCashOpen(false)}>
-          <div className="hp-w-credit-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="hp-w-modal-head">
-              <div className="hp-w-modal-head-icon">
-                <Coins />
-              </div>
-              <div className="hp-w-modal-head-text">
-                <div className="hp-w-modal-title">Convert Cash to Credits</div>
-              </div>
-              <button onClick={() => setIsConvertCashOpen(false)} className="hp-w-modal-close">
-                <X />
-              </button>
-            </div>
-
-            <div className="hp-w-credit-body">
-              <p style={{ fontSize: '12.5px', color: 'var(--hp-w-muted)', marginBottom: '14px' }}>
-                Available Cash: <strong style={{ color: '#fff' }}>₹{cashBalance.toLocaleString('en-IN')}</strong>
-              </p>
-
-              <form onSubmit={handleConvertCashSubmit}>
-                <div className="hp-w-field">
-                  <div className="hp-w-field-label">
-                    <span>Amount to Convert (₹)</span>
-                    <span className="req">*</span>
-                  </div>
-                  <div className="hp-w-input-wrap-f">
-                    <input
-                      type="number"
-                      min="1"
-                      max={cashBalance}
-                      value={convertCashAmt}
-                      onChange={(e) => setConvertCashAmt(e.target.value)}
-                      className="hp-w-input-field"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="hp-w-modal-foot" style={{ borderTop: 'none', padding: '12px 0 0' }}>
-                  <button
-                    type="button"
-                    onClick={() => setIsConvertCashOpen(false)}
-                    className="hp-w-modal-btn hp-w-btn-cancel"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmittingConvert}
-                    className="hp-w-modal-btn hp-w-btn-proceed"
-                  >
-                    {isSubmittingConvert ? <Loader2 className="animate-spin" /> : <span>Confirm Conversion</span>}
                   </button>
                 </div>
               </form>

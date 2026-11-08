@@ -104,7 +104,7 @@ export default function NotificationsView({
         <div className="hp-notif-push-body">
           <div className="hp-notif-push-title">Push Notifications</div>
           <div className="hp-notif-push-desc">
-            Get notified instantly for payments, withdrawals, and more — even when this tab isn't open.
+            Get notified instantly for payments, credits, and more — even when this tab isn't open.
           </div>
         </div>
         <button
@@ -179,7 +179,7 @@ export default function NotificationsView({
             </div>
             <div className="hp-notif-empty-title">No notifications yet</div>
             <div className="hp-notif-empty-sub">
-              You're all caught up. Alerts about payments, withdrawals and updates will appear here.
+              You're all caught up. Alerts about payments, credits and updates will appear here.
             </div>
           </div>
         )}

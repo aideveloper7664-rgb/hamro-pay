@@ -57,6 +57,12 @@ export const addFamPayAccount = async (data: {
   };
 };
 
+export const addPaytmAccount = async (_data?: any): Promise<never> => {
+  const err: any = new Error('Paytm is coming soon. Please connect FamPay.');
+  err.code = 'PAYTM_COMING_SOON';
+  throw err;
+};
+
 export const toggleCashier = async (id: string, type: 'fampay' | string = 'fampay') => {
   return await apiCall(`/api/cashier/${id}/toggle`, 'PATCH', { type });
 };

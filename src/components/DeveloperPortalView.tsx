@@ -1,7 +1,6 @@
-import { PanelLeft } from 'lucide-react';
-import { getTokenInfo, regenerateKey, setMode, getApiOrders } from '../services/developer.service';
-import { apiCall } from '../services/api';
-import { useState, useEffect } from 'react';
+import { PanelLeft, RefreshCw, Copy, Check, Eye, EyeOff, AlertTriangle, ExternalLink, Loader2, KeyRound, Globe, Radio, Plus, Trash2, ArrowUpRight } from 'lucide-react';
+import { getTokenInfo, regenerateKey, setMode, getApiOrders, getWebhooks, addWebhook, deleteWebhook, createApiOrder } from '../services/developer.service';
+import { useState, useEffect, useRef } from 'react';
 
 interface DeveloperPortalViewProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -9,6 +8,18 @@ interface DeveloperPortalViewProps {
   onViewChange?: (view: string) => void;
   gatewayMode: 'live' | 'test';
   setGatewayMode: (mode: 'live' | 'test') => void;
+}
+
+export interface DeveloperOrder {
+  order_id: string;
+  title?: string;
+  amount: number;
+  pay_amount?: number;
+  status: 'pending' | 'success' | 'failed' | 'paid' | 'expired' | 'cancelled';
+  reason?: string | null;
+  utr?: string | null;
+  mode?: 'live' | 'test';
+  created_at?: string;
 }
 
 export default function DeveloperPortalView({
@@ -21,132 +32,256 @@ export default function DeveloperPortalView({
   const getStoredApiKey = () => {
     try {
       const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-      return merchant.api_key || 'hp_live_8f3c9a2b7e4d1f8a3c9b2e7d4f1a8c3b9e2d7f4a';
+      return merchant.api_key || '';
     } catch {
-      return 'hp_live_8f3c9a2b7e4d1f8a3c9b2e7d4f1a8c3b9e2d7f4a';
+      return '';
     }
   };
 
-  const [realKey, setRealKey] = useState(getStoredApiKey);
+  const [realKey, setRealKey] = useState<string>(getStoredApiKey);
+  const [keyCreatedAt, setKeyCreatedAt] = useState<string>('Active');
   const [isRevealed, setIsRevealed] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
-  const [webhooks, setWebhooks] = useState<string[]>([]);
+
+  // Loading & error state for token
+  const [isLoadingToken, setIsLoadingToken] = useState(true);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
+  // Gateway mode switching
+  const [isSwitchingMode, setIsSwitchingMode] = useState(false);
+
+  // Try it card state
+  const [tryAmount, setTryAmount] = useState<string>('10');
+  const [isCreatingTryOrder, setIsCreatingTryOrder] = useState(false);
+  const [lastCreatedOrder, setLastCreatedOrder] = useState<{ id: string; url: string } | null>(null);
+
+  // Webhooks state (max 1 webhook supported by backend)
+  const [webhooksList, setWebhooksList] = useState<{ url: string }[]>([]);
   const [whInput, setWhInput] = useState('');
+  const [isSavingWebhook, setIsSavingWebhook] = useState(false);
+  const [isDeletingWebhook, setIsDeletingWebhook] = useState(false);
 
-  const maskedKey = '•'.repeat(realKey.length || 32);
+  // Developer orders state
+  const [orders, setOrders] = useState<DeveloperOrder[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
 
-  // Sync token info from backend API on mount
-  useEffect(() => {
-    const fetchTokenInfo = async () => {
-      try {
-        const info = await getTokenInfo();
-        if (info?.api_key) {
-          setRealKey(info.api_key);
-          setGatewayMode(info.mode || 'live');
-          const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-          merchant.api_key = info.api_key;
-          localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
+  const maskedKey = realKey ? '•'.repeat(Math.min(realKey.length, 36)) : '••••••••••••••••••••••••••••••••';
+
+  // 1. Fetch token on mount
+  const fetchTokenInfo = async () => {
+    setIsLoadingToken(true);
+    setTokenError(null);
+    try {
+      const info = await getTokenInfo();
+      const data = info?.data !== undefined ? info.data : info;
+      if (data?.api_key) {
+        setRealKey(data.api_key);
+        if (data.mode) {
+          setGatewayMode(data.mode);
         }
-      } catch (e) {
-        showToast('Could not load developer settings.', 'error');
+        if (data.created_at) {
+          setKeyCreatedAt(new Date(data.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }));
+        }
+        try {
+          const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+          merchant.api_key = data.api_key;
+          localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
+        } catch {
+          // Ignore localStorage errors
+        }
       }
-    };
+    } catch (err: any) {
+      setTokenError(err?.message || 'Could not load developer token settings.');
+    } finally {
+      setIsLoadingToken(false);
+    }
+  };
+
+  // 2. Fetch webhooks
+  const fetchWebhooks = async () => {
+    try {
+      const res = await getWebhooks();
+      const payload = res?.data !== undefined ? res.data : res;
+      if (Array.isArray(payload)) {
+        setWebhooksList(payload.map((item: any) => typeof item === 'string' ? { url: item } : item));
+      } else if (payload?.url) {
+        setWebhooksList([{ url: payload.url }]);
+      } else {
+        setWebhooksList([]);
+      }
+    } catch {
+      // Graceful fallback
+    }
+  };
+
+  // 3. Fetch developer orders
+  const fetchOrders = async (silent = false) => {
+    if (!silent) setIsLoadingOrders(true);
+    try {
+      const res = await getApiOrders();
+      const data = res?.data !== undefined ? res.data : res;
+      if (Array.isArray(data)) {
+        setOrders(data);
+      }
+    } catch {
+      // Graceful fallback
+    } finally {
+      if (!silent) setIsLoadingOrders(false);
+    }
+  };
+
+  useEffect(() => {
     fetchTokenInfo();
+    fetchWebhooks();
+    fetchOrders();
   }, []);
 
+  // 4. Auto-refresh orders every 10s if pending, else 60s
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      const hasPending = ordersRef.current.some(o => o.status === 'pending');
+      fetchOrders(true);
+    }, orders.some(o => o.status === 'pending') ? 10000 : 60000);
+
+    return () => clearInterval(timer);
+  }, [orders]);
 
   const handleCopy = () => {
+    if (!realKey) return;
     navigator.clipboard?.writeText(realKey).then(() => {
       setCopiedKey(true);
       showToast('API Key copied to clipboard!', 'success');
       setTimeout(() => setCopiedKey(false), 1600);
     }).catch(() => {
-      showToast('Copy failed. Please select key manually.', 'error');
+      showToast('Copy failed. Please copy key manually.', 'error');
     });
   };
 
   const handleRegenerate = async () => {
-    if (!window.confirm('The old key stops working immediately. Update every site/app that uses it. Continue?')) return;
+    const confirmed = window.confirm(
+      'Are you sure you want to regenerate your API key?\n\nThe existing key will stop working immediately. Update all your websites and servers that use it.'
+    );
+    if (!confirmed) return;
+
     setRegenerating(true);
     try {
-      const newData = await regenerateKey();
-      if (newData?.api_key) {
-        setRealKey(newData.api_key);
-        const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-        merchant.api_key = newData.api_key;
-        localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
+      const res = await regenerateKey();
+      const data = res?.data !== undefined ? res.data : res;
+      if (data?.api_key) {
+        setRealKey(data.api_key);
+        try {
+          const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+          merchant.api_key = data.api_key;
+          localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
+        } catch {
+          // Ignore
+        }
         showToast('API Key regenerated successfully!', 'success');
       } else {
-        throw new Error();
+        throw new Error(res?.message || 'Failed to regenerate key');
       }
-    } catch {
-      showToast('Could not regenerate key. Your old key is still active.', 'error');
+    } catch (err: any) {
+      showToast(err?.message || 'Could not regenerate key. Your active key remains valid.', 'error');
     } finally {
       setRegenerating(false);
     }
   };
 
   const handleModeSelect = async (mode: 'live' | 'test') => {
-    if (mode === gatewayMode) return;
-    if (!window.confirm(`Switch to ${mode.toUpperCase()}? ${mode === 'live' ? 'Customers will pay with real money and payments are verified from your FamPay account.' : 'Real payments for API orders will stop. Customers will see a simulator instead.'}`)) return;
+    if (mode === gatewayMode || isSwitchingMode) return;
+    const confirmMsg = mode === 'live'
+      ? 'Switch to LIVE mode?\n\nCustomers will make real UPI payments directly into your connected FamPay account.'
+      : 'Switch to TEST mode?\n\nReal payments will stop for API orders. Customers will see a test simulator instead.';
 
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsSwitchingMode(true);
     try {
-      await setMode(mode);
-      setGatewayMode(mode);
-      showToast(`Switched to ${mode.toUpperCase()} mode.`, 'success');
+      const res = await setMode(mode);
+      const data = res?.data !== undefined ? res.data : res;
+      setGatewayMode(data?.mode || mode);
+      showToast(`Gateway mode switched to ${mode.toUpperCase()}`, 'success');
     } catch (e: any) {
-      showToast(e.message || 'Failed to switch mode.', 'error');
+      showToast(e?.message || 'Failed to switch gateway mode.', 'error');
+    } finally {
+      setIsSwitchingMode(false);
     }
   };
 
   const handleTryIt = async () => {
-    const amount = Number((document.getElementById('try-amount') as HTMLInputElement).value);
-    if (!amount || amount < 1) {
-      showToast('Amount must be at least 1.', 'error');
+    const amt = Number(tryAmount);
+    if (isNaN(amt) || amt < 1 || amt > 5000) {
+      showToast('Enter an amount between ₹1 and ₹5,000.', 'error');
       return;
     }
+    if (!realKey) {
+      showToast('API Key is missing. Please reload or regenerate.', 'error');
+      return;
+    }
+
+    setIsCreatingTryOrder(true);
     try {
-      const resp = await apiCall('/api/developer/create-order', 'POST', { amount, title: 'Try it' }, { 'X-HamroAPI-Key': realKey });
-      if (resp?.data?.payment_url) {
-        window.open(resp.data.payment_url, '_blank', 'noopener');
-        showToast(`Order ${resp.data.order_id} created!`, 'success');
+      const resp: any = await createApiOrder({ amount: amt, title: 'Try it Checkout' }, realKey);
+      const data = resp?.data !== undefined ? resp.data : resp;
+      if (data?.payment_url) {
+        setLastCreatedOrder({ id: data.order_id, url: data.payment_url });
+        window.open(data.payment_url, '_blank', 'noopener,noreferrer');
+        showToast(`Order ${data.order_id} created successfully!`, 'success');
+        fetchOrders(true);
       } else {
-        throw new Error('No payment URL');
+        throw new Error(resp?.message || 'Could not retrieve payment checkout URL.');
       }
     } catch (e: any) {
-      showToast(e.message || 'Failed to create test order.', 'error');
+      showToast(e?.message || 'Failed to create try order.', 'error');
+    } finally {
+      setIsCreatingTryOrder(false);
     }
   };
 
-
-  const handleReveal = () => {
-    setIsRevealed(!isRevealed);
-  };
-
-  const handleAddWebhook = () => {
+  const handleAddWebhook = async () => {
     const url = whInput.trim();
     if (!url || !url.startsWith('http')) {
       showToast('Please enter a valid HTTP/HTTPS URL.', 'error');
       return;
     }
-    if (webhooks.length >= 3) {
-      showToast('Maximum 3 webhooks allowed.', 'error');
+    if (webhooksList.length >= 1) {
+      showToast('Maximum 1 webhook supported. Delete existing webhook first.', 'error');
       return;
     }
-    if (webhooks.includes(url)) {
-      showToast('Webhook URL already exists.', 'error');
-      return;
+
+    setIsSavingWebhook(true);
+    try {
+      await addWebhook(url);
+      setWebhooksList([{ url }]);
+      setWhInput('');
+      showToast('Webhook URL saved successfully!', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to save webhook.', 'error');
+    } finally {
+      setIsSavingWebhook(false);
     }
-    setWebhooks([...webhooks, url]);
-    setWhInput('');
-    showToast('Webhook added successfully!', 'success');
   };
 
-  const handleDeleteWebhook = (urlToDelete: string) => {
-    setWebhooks(webhooks.filter(w => w !== urlToDelete));
-    showToast('Webhook removed.', 'info');
+  const handleDeleteWebhook = async () => {
+    setIsDeletingWebhook(true);
+    try {
+      await deleteWebhook();
+      setWebhooksList([]);
+      showToast('Webhook removed.', 'info');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to delete webhook.', 'error');
+    } finally {
+      setIsDeletingWebhook(false);
+    }
   };
+
+  const successfulOrders = orders.filter(o => o.status === 'success' || o.status === 'paid');
+  const thisMonthVolume = successfulOrders.reduce((sum, o) => sum + (Number(o.pay_amount || o.amount) || 0), 0);
 
   return (
     <div className="min-h-screen text-[#fff2f4] flex flex-col">
@@ -179,7 +314,23 @@ export default function DeveloperPortalView({
         </div>
       </header>
 
-      <div className="page-content animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
+      <div className="page-content animate-[fadeInUp_0.3s_cubic-bezier(0.16,1,0.3,1)_both] space-y-6">
+
+        {/* Error banner if token fetch failed */}
+        {tokenError && (
+          <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between text-xs text-rose-300">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{tokenError}</span>
+            </div>
+            <button
+              onClick={fetchTokenInfo}
+              className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         {/* Page Header */}
         <div className="page-header flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -191,26 +342,34 @@ export default function DeveloperPortalView({
             </div>
             <div className="page-info">
               <h1>Developer Portal — Hamro API</h1>
-              <p>Accept HamroPay payments directly on your own website or app.</p>
+              <p>Accept direct UPI payments via API on your custom website or app</p>
             </div>
           </div>
-          <button
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.history.pushState({}, '', '/api/docs');
-              }
-              onViewChange?.('api-docs');
-            }}
-            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#b80028] text-white text-xs font-black tracking-wide flex items-center gap-1.5 shadow-[0_4px_14px_rgba(255,30,75,0.3)] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer shrink-0"
-            title="Open API Integration Docs"
-          >
-            <span>API Integration Docs</span>
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-              <polyline points="15 3 21 3 21 9" />
-              <line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href="https://hamropay-backends.onrender.com/docs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+              title="Open Backend API Docs"
+            >
+              <span>Swagger Docs</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.history.pushState({}, '', '/api/docs');
+                }
+                onViewChange?.('api-docs');
+              }}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#b80028] text-white text-xs font-black tracking-wide flex items-center gap-1.5 shadow-[0_4px_14px_rgba(255,30,75,0.3)] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer shrink-0"
+              title="Open API Integration Docs"
+            >
+              <span>API Integration Docs</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Stat Cards - 2 rows (2 cards per row) */}
@@ -223,7 +382,7 @@ export default function DeveloperPortalView({
               </svg>
             </div>
             <div className="stat-label">API Orders</div>
-            <div className="stat-value">0</div>
+            <div className="stat-value">{orders.length}</div>
           </div>
 
           <div className="stat-card" data-accent="green">
@@ -234,7 +393,7 @@ export default function DeveloperPortalView({
               </svg>
             </div>
             <div className="stat-label">Successful</div>
-            <div className="stat-value">0</div>
+            <div className="stat-value">{successfulOrders.length}</div>
           </div>
 
           <div className="stat-card" data-accent="gold">
@@ -245,7 +404,7 @@ export default function DeveloperPortalView({
               </svg>
             </div>
             <div className="stat-label">This Month</div>
-            <div className="stat-value">₹0.00</div>
+            <div className="stat-value">₹{thisMonthVolume.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
           </div>
 
           <div className="stat-card" data-accent="gold">
@@ -255,8 +414,10 @@ export default function DeveloperPortalView({
                 <path d="M12 7v5l3 2"/>
               </svg>
             </div>
-            <div className="stat-label">Last Used</div>
-            <div className="stat-value">Never</div>
+            <div className="stat-label">Mode Status</div>
+            <div className="stat-value uppercase" style={{ color: gatewayMode === 'live' ? '#2bf29a' : '#ffb834', fontSize: '18px' }}>
+              {gatewayMode}
+            </div>
           </div>
         </div>
 
@@ -265,250 +426,246 @@ export default function DeveloperPortalView({
           <div className="panel-head">
             <div className="panel-title-wrap">
               <div className="panel-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="7" cy="15" r="4"/>
-                  <path d="m10.5 11.5 8-8M16 4l4 4M14 6l4 4"/>
-                </svg>
+                <KeyRound className="w-5 h-5 text-[#ff4d6d]" />
               </div>
               <div className="panel-title-text">
                 <h2>Your Hamro API Key</h2>
-                <p>Identifies your HamroPay account when your website, app, or server calls HamroPay</p>
+                <p>Pass via <code>X-HamroAPI-Key</code> or <code>x-api-key</code> headers</p>
               </div>
             </div>
           </div>
 
           <div className="warn-banner">
             <span className="warn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 9v4M12 17h.01"/>
-                <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>
-              </svg>
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
             </span>
             <span>Keep this private — anyone with this key can create payment orders billed to your account.</span>
           </div>
 
-          <div className="api-key-field">
-            <div className="key-input-wrap">
-              <input 
-                className="key-input" 
-                type="text" 
-                value={isRevealed ? realKey : maskedKey} 
-                readOnly 
-                style={{ letterSpacing: isRevealed ? '0.5px' : '2px' }}
-              />
+          {isLoadingToken ? (
+            <div className="p-6 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-[#ff4d6d]" />
+              <span>Loading developer credentials...</span>
             </div>
-            <button 
-              className="icon-action" 
-              onClick={handleReveal} 
-              aria-label="Reveal key" 
-              title="Show / hide"
-              style={{ color: isRevealed ? '#2bf29a' : '' }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-            </button>
-            <button 
-              className={`icon-action ${copiedKey ? 'copied' : ''}`} 
-              onClick={handleCopy} 
-              aria-label="Copy key" 
-              title="Copy"
-            >
-              {copiedKey ? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6 9 17l-5-5"/>
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-              )}
-            </button>
-          </div>
+          ) : (
+            <>
+              <div className="api-key-field">
+                <div className="key-input-wrap">
+                  <input 
+                    className="key-input" 
+                    type="text" 
+                    value={isRevealed ? realKey : maskedKey} 
+                    readOnly 
+                    style={{ letterSpacing: isRevealed ? '0.5px' : '2px' }}
+                  />
+                </div>
+                <button 
+                  className="icon-action" 
+                  onClick={() => setIsRevealed(!isRevealed)} 
+                  aria-label="Reveal key" 
+                  title="Show / hide"
+                  style={{ color: isRevealed ? '#2bf29a' : '' }}
+                >
+                  {isRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+                <button 
+                  className={`icon-action ${copiedKey ? 'copied' : ''}`} 
+                  onClick={handleCopy} 
+                  aria-label="Copy key" 
+                  title="Copy"
+                >
+                  {copiedKey ? <Check className="w-4 h-4 text-[#2bf29a]" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
 
-          <div className="key-meta">
-            <div className="key-created">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2"/>
-                <path d="M16 2v4M8 2v4M3 10h18"/>
-              </svg>
-              Created <strong style={{ color: '#fff', marginLeft: '4px' }}>17 Sept 2026</strong>
-            </div>
-            <button className="btn-danger" onClick={handleRegenerate} disabled={regenerating}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5"/>
-                <path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
-              </svg>
-              {regenerating ? 'Regenerating...' : 'Regenerate Key'}
-            </button>
-          </div>
+              <div className="key-meta">
+                <div className="key-created text-xs text-slate-400">
+                  Created: <strong style={{ color: '#fff', marginLeft: '4px' }}>{keyCreatedAt}</strong>
+                </div>
+                <button className="btn-danger" onClick={handleRegenerate} disabled={regenerating}>
+                  {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                  <span>{regenerating ? 'Regenerating...' : 'Regenerate Key'}</span>
+                </button>
+              </div>
+            </>
+          )}
 
           <div className="key-footer-note">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="9"/>
-              <path d="M12 16v-4M12 8h.01"/>
-            </svg>
             Regenerating instantly disables the old key — update it everywhere you've used it.
           </div>
         </div>
 
-        {/* QUICK START PANEL */}
+        {/* GATEWAY MODE PANEL (ASLI) */}
         <div className="panel">
           <div className="panel-head">
             <div className="panel-title-wrap">
-              <div className="panel-icon purple">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
-                </svg>
+              <div className="panel-icon gold">
+                <Radio className="w-5 h-5 text-amber-400" />
               </div>
               <div className="panel-title-text">
-                <h2>Quick Start</h2>
+                <h2>Gateway Mode</h2>
+                <p>Live traffic vs. safe simulator testing</p>
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                gatewayMode === 'live'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+              }`}>
+                {gatewayMode.toUpperCase()} MODE ACTIVE
+              </span>
             </div>
           </div>
 
-          <div className="quick-intro">
-            Full step-by-step guides for HTML/JS, PHP, and Java are in{' '}
-            <a href="/api/docs" onClick={(e) => {
-              e.preventDefault();
-              if (typeof window !== 'undefined') {
-                window.history.pushState({}, '', '/api/docs');
-              }
-              onViewChange?.('api-docs');
-            }}>API Integration</a>, right below Hamro API in the sidebar. Short version:
+          <div className="gateway-desc text-xs text-slate-300 leading-relaxed mb-4">
+            Applies to API orders created with <code>/api/developer/create-order</code>.<br />
+            <strong>Live:</strong> real UPI checkout, real money, payment auto-detected from your connected FamPay account.<br />
+            <strong>Test:</strong> no real money; customer sees a simulator and can select Success, Failed, or Cancelled directly.
           </div>
 
-          <div className="step">
-            <div className="step-num">1</div>
-            <div className="step-body">
-              <div className="step-title">Create an order</div>
-              <div className="code-line">
-                <span className="method">POST</span>
-                <span className="path">/api/developer/create-order</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            <button 
+              type="button"
+              className={`mode-option text-left w-full transition cursor-pointer ${gatewayMode === 'live' ? 'active ring-2 ring-emerald-500/40 bg-emerald-500/10' : 'opacity-70 hover:opacity-100'}`} 
+              onClick={() => handleModeSelect('live')}
+              disabled={isSwitchingMode}
+            >
+              <div className="mode-icon text-emerald-400">
+                <Globe className="w-5 h-5" />
               </div>
-              <div className="step-desc">
-                Body: <code>{`{ hamro_api, amount, title }`}</code>
+              <div className="mode-body">
+                <div className="mode-title font-bold text-white flex items-center gap-2">
+                  <span>Live Mode</span>
+                  {gatewayMode === 'live' && <span className="text-[10px] bg-emerald-500/30 text-emerald-200 px-1.5 py-0.5 rounded">Active</span>}
+                </div>
+                <div className="mode-sub text-xs text-slate-400">Real UPI collections into your FamPay account</div>
               </div>
-            </div>
-          </div>
+            </button>
 
-          <div className="step">
-            <div className="step-num">2</div>
-            <div className="step-body">
-              <div className="step-title">Redirect the customer</div>
-              <div className="step-desc">
-                Send them to the <code>payment_url</code> you get back in the response.
+            <button 
+              type="button"
+              className={`mode-option text-left w-full transition cursor-pointer ${gatewayMode === 'test' ? 'active ring-2 ring-amber-500/40 bg-amber-500/10' : 'opacity-70 hover:opacity-100'}`} 
+              onClick={() => handleModeSelect('test')}
+              disabled={isSwitchingMode}
+            >
+              <div className="mode-icon text-amber-400">
+                <Radio className="w-5 h-5" />
               </div>
-            </div>
-          </div>
-
-          <div className="step">
-            <div className="step-num">3</div>
-            <div className="step-body">
-              <div className="step-title">Poll for the result</div>
-              <div className="code-line">
-                <span className="method">GET</span>
-                <span className="path">/api/developer/order-status/:orderId</span>
+              <div className="mode-body">
+                <div className="mode-title font-bold text-white flex items-center gap-2">
+                  <span>Test Mode</span>
+                  {gatewayMode === 'test' && <span className="text-[10px] bg-amber-500/30 text-amber-200 px-1.5 py-0.5 rounded">Active</span>}
+                </div>
+                <div className="mode-sub text-xs text-slate-400">Simulated checkout with 3 test simulator buttons</div>
               </div>
-              <div className="step-desc">
-                Same key. Poll until status is <span className="ok">success</span> or <span className="fail">failed</span>, then show your own UI.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* RECENT API ORDERS PANEL */}
-        <div className="panel">
-          <div className="panel-head">
-            <div className="panel-title-wrap">
-              <div className="panel-icon purple">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 6h16M4 12h16M4 18h10"/>
-                </svg>
-              </div>
-              <div className="panel-title-text">
-                <h2>Recent API Orders</h2>
-              </div>
-            </div>
-            <button className="panel-action">
-              View All
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18l6-6-6-6"/>
-              </svg>
             </button>
           </div>
 
-          <div className="empty-state">
-            <div className="empty-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
-                <path d="M3 12h6l2 3h2l2-3h6"/>
-              </svg>
+          {/* TRY IT CARD */}
+          <div className="p-4 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.1)] space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span>Try It Out</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Interactive Order Test</span>
+              </h3>
             </div>
-            <div className="empty-title">No API orders yet</div>
-            <div className="empty-sub">
-              Orders created via <code>create-order</code> will show up here.
+            
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input 
+                type="number" 
+                min="1"
+                max="5000"
+                value={tryAmount}
+                onChange={(e) => setTryAmount(e.target.value)}
+                className="flex-1 bg-black/60 border border-white/15 rounded-xl px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-rose-500" 
+                placeholder="Amount (₹)" 
+              />
+              <button 
+                className="btn-primary flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold shrink-0 cursor-pointer" 
+                onClick={handleTryIt}
+                disabled={isCreatingTryOrder}
+              >
+                {isCreatingTryOrder ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                <span>Create Order &amp; Open Checkout</span>
+              </button>
             </div>
+
+            <p className="text-[11.5px] text-slate-400 leading-relaxed">
+              {gatewayMode === 'live' 
+                ? '⚠️ Live mode: this generates a real order. You must pay via UPI to complete it.' 
+                : 'ℹ️ Test mode: safe simulation. You can click Success/Failed/Cancelled on the checkout page.'}
+            </p>
+
+            {lastCreatedOrder && (
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/10 flex items-center justify-between text-xs font-mono">
+                <span className="text-slate-300 truncate">Order: {lastCreatedOrder.id}</span>
+                <a 
+                  href={lastCreatedOrder.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-rose-400 hover:text-white flex items-center gap-1 shrink-0 font-sans font-bold"
+                >
+                  <span>Re-open</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* WEBHOOKS PANEL */}
+        {/* WEBHOOKS PANEL (Max 1) */}
         <div className="panel">
           <div className="panel-head">
             <div className="panel-title-wrap">
               <div className="panel-icon blue">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7"/>
-                  <circle cx="12" cy="12" r="1.5"/>
-                </svg>
+                <Globe className="w-5 h-5 text-sky-400" />
               </div>
               <div className="panel-title-text">
                 <h2>Webhooks</h2>
-                <p>Get notified the instant an order changes status</p>
+                <p>Instant server-to-server notifications for order status changes</p>
               </div>
             </div>
-            <span className="wh-badge">{webhooks.length} / 3 used</span>
+            <span className="wh-badge">{webhooksList.length} / 1 configured</span>
           </div>
 
-          <div className="wh-desc">
-            Optional. Get an instant POST to your own server whenever an order you created via Hamro API goes{' '}
-            <span className="pend">pending</span>, <span className="ok">success</span>, or <span className="fail">failed</span> —
-            so you don't have to poll <code>order-status</code>.
+          <div className="wh-desc text-xs text-slate-400">
+            Hamro Pay dispatches an instant HTTP POST to your webhook endpoint whenever an API order updates to <code>success</code>, <code>failed</code>, or <code>cancelled</code>.
           </div>
 
-          <div className="wh-input-row">
-            <div className="input-wrap">
-              <input 
-                className="wh-input" 
-                type="url" 
-                value={whInput} 
-                onChange={(e) => setWhInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
-                placeholder="https://yourserver.com/hamropay/webhook" 
-              />
+          {webhooksList.length === 0 ? (
+            <div className="wh-input-row flex gap-2">
+              <div className="input-wrap flex-1">
+                <input 
+                  className="wh-input w-full bg-black/60 border border-white/15 rounded-xl px-3 py-2.5 text-xs font-mono text-white" 
+                  type="url" 
+                  value={whInput} 
+                  onChange={(e) => setWhInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
+                  placeholder="https://yourdomain.com/api/hamropay/webhook" 
+                />
+              </div>
+              <button 
+                className="btn-primary px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer" 
+                onClick={handleAddWebhook}
+                disabled={isSavingWebhook}
+              >
+                {isSavingWebhook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                <span>Save Webhook</span>
+              </button>
             </div>
-            <button className="btn-primary" onClick={handleAddWebhook}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-              Add
-            </button>
-          </div>
-
-          {webhooks.length === 0 ? (
-            <div className="wh-empty">No webhook URLs added yet.</div>
           ) : (
             <div className="space-y-2 mb-4">
-              {webhooks.map((url, i) => (
-                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-[rgba(8,1,4,0.85)] border border-[rgba(255,45,85,0.16)] text-xs font-mono">
-                  <span className="text-[#2bf29a] font-semibold truncate mr-2">✓ {url}</span>
+              {webhooksList.map((wh, i) => (
+                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-black/50 border border-emerald-500/30 text-xs font-mono">
+                  <span className="text-emerald-400 font-semibold truncate mr-2">✓ {wh.url}</span>
                   <button 
-                    onClick={() => handleDeleteWebhook(url)}
-                    className="text-[#ff5274] hover:text-white transition font-sans font-bold text-xs"
+                    onClick={handleDeleteWebhook}
+                    disabled={isDeletingWebhook}
+                    className="text-rose-400 hover:text-white transition font-sans font-bold text-xs flex items-center gap-1 cursor-pointer"
                   >
-                    Delete
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
                   </button>
                 </div>
               ))}
@@ -516,145 +673,89 @@ export default function DeveloperPortalView({
           )}
 
           <div className="payload-box">
-            <div className="payload-label">PAYLOAD</div>
+            <div className="payload-label">PAYLOAD FORMAT</div>
             <div className="payload-code">
-              {`{ `}
-              <span className="k">"event"</span>: <span className="v">"order.success"</span>,{' '}
-              <span className="k">"order_id"</span>: <span className="v">"..."</span>,{' '}
-              <span className="k">"status"</span>: <span className="v">"success"</span>,{' '}
-              <span className="k">"amount"</span>: <span className="n">199</span>,{' '}
-              <span className="k">"utr"</span>: <span className="v">"..."</span>,{' '}
-              <span className="k">"sent_at"</span>: <span className="n">1234567890</span>
-              {` }`}
+              {`{ "event": "order.success", "order_id": "HP...", "status": "success", "amount": 100, "utr": "...", "sent_at": 1726000000 }`}
             </div>
           </div>
         </div>
 
-        {/* PAYMENT ROUTING PANEL - FAM PAY ONLY */}
+        {/* DEVELOPER ORDERS TABLE */}
         <div className="panel">
-          <div className="panel-head">
+          <div className="panel-head flex items-center justify-between">
             <div className="panel-title-wrap">
-              <div className="panel-icon purple">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M8 3H4a1 1 0 0 0-1 1v4M16 3h4a1 1 0 0 1 1 1v4M8 21H4a1 1 0 0 1-1-1v-4M16 21h4a1 1 0 0 0 1-1v-4"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-              </div>
               <div className="panel-title-text">
-                <h2>Payment Routing</h2>
-                <p>How your customers actually pay</p>
+                <h2>API Orders History</h2>
+                <p>Real-time log of orders generated via Developer API</p>
               </div>
             </div>
+            <button 
+              onClick={() => fetchOrders(false)} 
+              disabled={isLoadingOrders}
+              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-300 flex items-center gap-1.5 cursor-pointer transition"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingOrders ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
           </div>
 
-          <div className="routing-desc">
-            Choose how payments created via Hamro API and your Payment Links are processed for your customers. This applies to every existing link too — not just new ones.
-          </div>
-
-          <div className="warn-banner">
-            <span className="warn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 9v4M12 17h.01"/>
-                <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>
-              </svg>
-            </span>
-            <span>Wallet routing has been disabled platform-wide — every merchant must accept payments through their own connected cashier.</span>
-          </div>
-
-          <div className="routing-item" onClick={() => onViewChange?.('fampay')}>
-            <div className="routing-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                <path d="M14 14h3v3M14 21h7v-7M17 21h4v-4"/>
-              </svg>
-            </div>
-            <div className="routing-body">
-              <div className="routing-title">Cashier (Direct QR)</div>
-              <div className="routing-sub">Custom checkout &amp; auto verification via FamPay</div>
-            </div>
-          </div>
-
-          <div className="routing-locked" style={{ marginBottom: 0 }}>
-            <svg className="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="4" y="11" width="16" height="10" rx="2"/>
-              <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
-            </svg>
-            <span>Connect FamPay first to unlock Cashier routing. <a href="#" onClick={(e) => { e.preventDefault(); onViewChange?.('fampay'); }}>Connect now</a></span>
-          </div>
-        </div>
-
-        {/* GATEWAY MODE PANEL */}
-        <div className="panel">
-          <div className="panel-head">
-            <div className="panel-title-wrap">
-              <div className="panel-icon gold">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                  <path d="M8 9h8M8 13h5"/>
-                </svg>
-              </div>
-              <div className="panel-title-text">
-                <h2>Gateway Mode</h2>
-                <p>Live traffic vs. safe testing</p>
+          {orders.length === 0 ? (
+            <div className="empty-state py-8 text-center text-slate-400 space-y-2">
+              <div className="text-xs">No Developer API orders created yet.</div>
+              <div className="text-[11px] text-slate-500">
+                Call <code>POST /api/developer/create-order</code> or use the "Try It Out" card above to test.
               </div>
             </div>
-          </div>
-
-          <div className="gateway-desc">
-            Applies to API orders created with create-order. Live: real UPI checkout, real money, payment auto-detected from your FamPay.
-            Test: no real money; the customer sees a simulator and can mark the order Successful, Failed or Cancelled themselves.
-            Payment links have their own Test switch on the Payment Links page.
-          </div>
-          
-          <div className="flex items-center gap-2 mb-4">
-            <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase ${gatewayMode === 'live' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
-              {gatewayMode.toUpperCase()} MODE
-            </span>
-          </div>
-
-          <div 
-            className={`mode-option ${gatewayMode === 'live' ? 'active' : ''}`} 
-            onClick={() => handleModeSelect('live')}
-          >
-            <div className="mode-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7"/>
-                <circle cx="12" cy="12" r="1.5"/>
-              </svg>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-white/10 text-slate-400 uppercase text-[10px] tracking-wider font-extrabold">
+                    <th className="py-2.5 px-3">Order ID</th>
+                    <th className="py-2.5 px-3">Title</th>
+                    <th className="py-2.5 px-3">Amount</th>
+                    <th className="py-2.5 px-3">Mode</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {orders.map((ord, idx) => (
+                    <tr key={ord.order_id || idx} className="hover:bg-white/[0.02]">
+                      <td className="py-2.5 px-3 font-mono font-bold text-white">
+                        {ord.order_id}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-300">
+                        {ord.title || 'API Order'}
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-emerald-400">
+                        ₹{(Number(ord.pay_amount || ord.amount) || 0).toFixed(2)}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${ord.mode === 'test' ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                          {ord.mode || 'live'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          ord.status === 'success' || ord.status === 'paid'
+                            ? 'bg-emerald-500/20 text-emerald-300'
+                            : ord.status === 'pending'
+                              ? 'bg-amber-500/20 text-amber-300 animate-pulse'
+                              : 'bg-rose-500/20 text-rose-300'
+                        }`}>
+                          {ord.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
+                        {ord.created_at ? new Date(ord.created_at).toLocaleDateString() : 'Recent'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="mode-body">
-              <div className="mode-title">Live Mode</div>
-              <div className="mode-sub">Real payments, real money</div>
-            </div>
-          </div>
-
-          <div 
-            className={`mode-option ${gatewayMode === 'test' ? 'active' : ''}`} 
-            onClick={() => handleModeSelect('test')}
-          >
-            <div className="mode-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 3h6M9 3v6L4.5 18a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L15 9V3"/>
-              </svg>
-            </div>
-            <div className="mode-body">
-              <div className="mode-title">Test Mode</div>
-              <div className="mode-sub">Simulated checkout, no real money</div>
-            </div>
-          </div>
-          
-          <div className="mt-6 p-4 rounded-xl bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)]">
-            <h3 className="text-sm font-bold mb-2">Try it</h3>
-            <div className="flex gap-2">
-              <input type="number" className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm" placeholder="Amount (e.g. 10)" id="try-amount" defaultValue="10" />
-              <button className="btn-primary" onClick={handleTryIt}>Create & Open</button>
-            </div>
-            <p className="text-xs text-slate-400 mt-2">
-              {gatewayMode === 'live' ? 'Live mode: this creates a real order. You must pay Rs <amount> to complete it.' : 'Test mode: no real money.'}
-            </p>
-          </div>
+          )}
         </div>
 
       </div>

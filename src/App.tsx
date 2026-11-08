@@ -15,7 +15,7 @@ import DashboardView from './components/DashboardView';
 import PaymentLinksView from './components/PaymentLinksView';
 import WalletView from './components/WalletView';
 import TransactionsView from './components/TransactionsView';
-import WithdrawView from './components/WithdrawView';
+import PaytmConnectView from './components/PaytmConnectView';
 import NotificationsView from './components/NotificationsView';
 import PricingView from './components/PricingView';
 import ProfileView from './components/ProfileView';
@@ -28,6 +28,8 @@ import ApiIntegrationView from './components/ApiIntegrationView';
 import StorePortalView from './components/StorePortalView';
 import FamPayConnectView from './components/FamPayConnectView';
 import { getActiveCashier } from './services/cashier.service';
+import { getCreditBalance } from './services/credits.service';
+import { setMode } from './services/developer.service';
 import Modal from './components/Modal';
 import CreatePaymentLinkModal from './components/CreatePaymentLinkModal';
 import NoCashierWarningModal from './components/NoCashierWarningModal';
@@ -67,15 +69,23 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const [balance, setBalance] = useState<number>(() => {
-    const saved = localStorage.getItem('hamro_balance');
-    return saved ? parseFloat(saved) : 12840.50;
-  });
+  const [credits, setCredits] = useState<number>(0);
+  const [balance, setBalance] = useState<number>(0);
 
-  const [pendingWithdrawals, setPendingWithdrawals] = useState<number>(() => {
-    const saved = localStorage.getItem('hamro_pending_withdrawals');
-    return saved ? parseFloat(saved) : 0;
-  });
+  const refreshCredits = async () => {
+    try {
+      const res: any = await getCreditBalance();
+      const val = res?.data !== undefined ? res.data : res;
+      const c = typeof val?.balance === 'number' ? val.balance : (typeof val === 'number' ? val : 0);
+      setCredits(c);
+    } catch {
+      // Ignore
+    }
+  };
+
+  useEffect(() => {
+    refreshCredits();
+  }, []);
 
   const [currentPlan, setCurrentPlan] = useState<PlanType>(() => {
     return (localStorage.getItem('hamro_plan') as PlanType) || 'Blaze Free';
@@ -178,14 +188,6 @@ export default function App() {
   }, [currentView]);
 
   useEffect(() => {
-    localStorage.setItem('hamro_balance', String(balance));
-  }, [balance]);
-
-  useEffect(() => {
-    localStorage.setItem('hamro_pending_withdrawals', String(pendingWithdrawals));
-  }, [pendingWithdrawals]);
-
-  useEffect(() => {
     localStorage.setItem('hamro_plan', currentPlan);
   }, [currentPlan]);
 
@@ -239,8 +241,6 @@ export default function App() {
               emailReceipts: res.user.emailReceipts ?? true,
               withdrawalAlerts: res.user.withdrawalAlerts ?? true
             });
-            setBalance(res.user.availableBalance ?? 0);
-            setPendingWithdrawals(res.user.pendingPayout ?? 0);
             setCurrentPlan(res.user.plan || 'Blaze Free');
             setFeePercent(res.user.feePercent ?? 1.5);
             setLinkLimit(res.user.linkLimit ?? 100);
@@ -390,8 +390,6 @@ export default function App() {
       emailReceipts: user.emailReceipts ?? true,
       withdrawalAlerts: user.withdrawalAlerts ?? true
     });
-    setBalance(user.availableBalance ?? 0);
-    setPendingWithdrawals(user.pendingPayout ?? 0);
     setCurrentPlan(user.plan || 'Blaze Free');
     setFeePercent(user.feePercent ?? 1.5);
     setLinkLimit(user.linkLimit ?? 100);
@@ -638,63 +636,6 @@ export default function App() {
     }
   };
 
-  // --- Payout / Withdrawal Action ---
-  const handleWithdrawalSubmit = async (amount: number, upi: string) => {
-    try {
-      const res = await ApiService.withdrawFunds(amount, upi);
-      if (!res.success) {
-        showToast(`Withdrawal failed: ${res.error || 'Server error'}`, 'error');
-        return;
-      }
-
-      setBalance(prev => prev - amount);
-      setPendingWithdrawals(prev => prev + amount);
-
-      const newTx: Transaction = {
-        id: 'tx-' + Date.now(),
-        type: 'withdrawal',
-        ref: 'WD-' + Math.floor(100000 + Math.random() * 899999),
-        name: `UPI · ${upi}`,
-        amount,
-        status: 'Pending',
-        date: 'Just now'
-      };
-
-      setTransactions(prev => [newTx, ...prev]);
-      showToast(`Settlement transfer of ₹ ${amount.toLocaleString('en-IN')} successfully requested.`, 'success');
-      setCurrentView('transactions');
-    } catch (err: any) {
-      console.error('Withdrawal error:', err);
-      showToast(`Withdrawal failed: ${err.message || 'Unknown error'}`, 'error');
-    }
-  };
-
-  // --- Add Wallet Funds Actions ---
-  const handleConfirmAddFunds = () => {
-    const amountNum = parseFloat(modalFundAmount);
-    if (isNaN(amountNum) || amountNum < 100) {
-      showToast('Minimum funding threshold is ₹ 100.', 'error');
-      return;
-    }
-
-    setBalance(prev => prev + amountNum);
-
-    const newTx: Transaction = {
-      id: 'tx-' + Date.now(),
-      type: 'received',
-      ref: 'HP-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
-      name: 'Local Sandbox Top-Up',
-      amount: amountNum,
-      status: 'Success',
-      date: 'Just now'
-    };
-
-    setTransactions(prev => [newTx, ...prev]);
-    setActiveModal(null);
-    setModalFundAmount('');
-    showToast(`₹ ${amountNum.toLocaleString('en-IN')} credited to Hamro Cash.`, 'success');
-  };
-
   // --- Plan Subscription Switch Action ---
   const handleOpenPlanConfirm = (planId: PlanType, price: number) => {
     setSelectedPendingPlan({ id: planId, price });
@@ -775,13 +716,11 @@ export default function App() {
         return (
           <DashboardView
             profileName={profile.name}
-            balance={balance}
             paymentLinks={paymentLinks}
             transactions={transactions}
             currentPlan={currentPlan}
             onViewChange={setCurrentView}
             onCreatePaymentLink={handleOpenCreateLink}
-            pendingWithdrawals={pendingWithdrawals}
             feePercent={feePercent}
             linkLimit={linkLimit}
             onOpenSidebar={() => setIsSidebarOpen(true)}
@@ -807,11 +746,9 @@ export default function App() {
       case 'wallet':
         return (
           <WalletView
-            balance={balance}
-            transactions={transactions}
-            onAddFunds={() => setActiveModal('add_funds')}
             onViewChange={setCurrentView}
             showToast={showToast}
+            onRefreshWallet={refreshCredits}
           />
         );
       case 'transactions':
@@ -819,15 +756,6 @@ export default function App() {
           <TransactionsView
             transactions={transactions}
             onExportCSV={handleExportTransactionsCSV}
-          />
-        );
-      case 'withdraw':
-        return (
-          <WithdrawView
-            balance={balance}
-            onWithdrawSubmit={handleWithdrawalSubmit}
-            showToast={showToast}
-            onViewChange={setCurrentView}
           />
         );
       case 'notifications':
@@ -842,6 +770,8 @@ export default function App() {
           <PricingView
             currentPlan={currentPlan}
             onPlanSelect={handleOpenPlanConfirm}
+            showToast={showToast}
+            onViewChange={setCurrentView}
           />
         );
       case 'profile':
@@ -897,6 +827,13 @@ export default function App() {
         );
 
       case 'paytm':
+        return (
+          <PaytmConnectView
+            onViewChange={setCurrentView}
+            showToast={showToast}
+          />
+        );
+
       case 'fampay':
         return (
           <FamPayConnectView
@@ -911,13 +848,11 @@ export default function App() {
         return (
           <DashboardView
             profileName={profile.name}
-            balance={balance}
             paymentLinks={paymentLinks}
             transactions={transactions}
             currentPlan={currentPlan}
             onViewChange={setCurrentView}
             onCreatePaymentLink={handleOpenCreateLink}
-            pendingWithdrawals={pendingWithdrawals}
             feePercent={feePercent}
             linkLimit={linkLimit}
             onOpenSidebar={() => setIsSidebarOpen(true)}
@@ -1031,7 +966,7 @@ export default function App() {
       <Sidebar
         currentView={currentView}
         onViewChange={setCurrentView}
-        balance={balance}
+        credits={credits}
         profileName={profile.name}
         profileEmail={profile.email}
         unreadNotifications={unreadNotificationsCount}
@@ -1047,8 +982,16 @@ export default function App() {
           <div className="bg-amber-950/40 border-b border-amber-800/50 p-3 text-center text-amber-200 text-sm font-bold flex items-center justify-center gap-3">
             <span>TEST MODE is ON: real payments for API orders are disabled.</span>
             <button
-              onClick={() => setCurrentView('developer')}
-              className="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded-lg text-xs font-bold transition-all"
+              onClick={async () => {
+                try {
+                  await setMode('live');
+                  setGatewayMode('live');
+                  showToast('Switched gateway to LIVE mode', 'success');
+                } catch {
+                  setCurrentView('developer');
+                }
+              }}
+              className="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer"
             >
               Switch to Live
             </button>
@@ -1059,7 +1002,7 @@ export default function App() {
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}
             unreadNotifications={unreadNotificationsCount}
-            balance={balance}
+            credits={credits}
             apiBaseUrl={apiBaseUrl}
             apiEnabled={apiEnabled}
             isSimulated={isApiSimulated}
@@ -1210,78 +1153,7 @@ export default function App() {
         }}
       />
 
-      {/* MODAL 2: Add Wallet Funds */}
-      <Modal
-        isOpen={activeModal === 'add_funds'}
-        onClose={() => setActiveModal(null)}
-        title={
-          <span className="flex items-center gap-2">
-            <span className="w-7 h-7 bg-gradient-to-br from-[#ff1e4b] to-[#b30e30] text-white rounded-lg flex items-center justify-center shadow-md shadow-[#ff1e4b]/20">
-              <Wallet className="w-3.5 h-3.5 stroke-[2.2]" />
-            </span>
-            <span>Add Wallet Cash Funds</span>
-          </span>
-        }
-        footer={
-          <>
-            <button 
-              onClick={() => setActiveModal(null)}
-              className="px-3.5 py-2 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 outline-none"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={handleConfirmAddFunds}
-              className="px-4 py-2 bg-gradient-to-r from-[#ff1e4b] to-[#d8153d] hover:from-[#ff3c63] hover:to-[#ff1e4b] text-white rounded-xl text-xs font-bold shadow-md shadow-[#ff1e4b]/30 active:scale-95 outline-none"
-            >
-              Confirm Deposit
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <label htmlFor="fundAmount" className="block text-xs font-bold text-slate-700 uppercase">
-              Amount to Deposit (₹)
-            </label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 font-bold text-slate-400">₹</span>
-              <input
-                id="fundAmount"
-                type="number"
-                min="100"
-                placeholder="Minimum ₹ 100"
-                value={modalFundAmount}
-                onChange={(e) => setModalFundAmount(e.target.value)}
-                className="w-full text-xs pl-8 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 placeholder:text-slate-400 bg-white focus:border-[#ff1e4b] focus:outline-none transition-all font-semibold"
-                required
-              />
-            </div>
-            {/* Quick preset chips */}
-            <div className="flex gap-2 pt-1">
-              {[500, 1000, 2500, 5000].map(amt => (
-                <button
-                  key={amt}
-                  type="button"
-                  onClick={() => setModalFundAmount(amt.toString())}
-                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 hover:border-[#ff1e4b]/40 hover:text-[#ff1e4b] text-slate-600 bg-slate-50 transition-all"
-                >
-                  ₹{amt}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-2.5 bg-rose-50/70 border border-rose-100 text-rose-900/90 rounded-xl p-3 text-xs leading-normal font-medium">
-            <Info className="w-4.5 h-4.5 text-[#ff1e4b] shrink-0 mt-0.5" />
-            <span>
-              This triggers a demo wallet funding sandbox transaction. Funds will appear instantly on your on-screen cash reserves.
-            </span>
-          </div>
-        </div>
-      </Modal>
-
-      {/* MODAL 3: Plan Switching Confirmation */}
+      {/* MODAL 2: Plan Switching Confirmation */}
       <Modal
         isOpen={activeModal === 'confirm_plan'}
         onClose={() => setActiveModal(null)}

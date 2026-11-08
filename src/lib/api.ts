@@ -31,7 +31,6 @@ export const ApiService = {
   async getMe() {
     try {
       const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-      const balanceData = await apiCall('/wallet/balance', 'GET').catch(() => ({ balance: 0 }));
       return {
         success: true,
         user: {
@@ -40,7 +39,7 @@ export const ApiService = {
           phone: '',
           emailReceipts: true,
           withdrawalAlerts: true,
-          availableBalance: balanceData?.balance ?? 0,
+          availableBalance: 0,
           pendingPayout: 0,
           plan: 'Blaze Free',
           feePercent: 1.5,
@@ -51,10 +50,6 @@ export const ApiService = {
     } catch (err: any) {
       return { success: false, user: null as any, error: err.message };
     }
-  },
-
-  async getWalletBalance() {
-    return apiCall('/wallet/balance', 'GET');
   },
 
   async getTransactions(localFallback?: Transaction[]) {
@@ -149,16 +144,6 @@ export const ApiService = {
       status: active ? 'active' : 'inactive'
     });
     return { success: true, data, isSimulated: false };
-  },
-
-  async withdrawFunds(amount: number, upi_id: string) {
-    try {
-      const res = await apiCall('/wallet/withdraw', 'POST', { amount, upi_id });
-      return { success: true, isSimulated: false, data: res };
-    } catch (err: any) {
-      console.error('[ApiService.withdrawFunds failed]:', err);
-      return { success: false, isSimulated: false, error: err.message || 'Withdrawal failed' };
-    }
   },
 
   async getUserProfile() {

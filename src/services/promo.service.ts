@@ -8,6 +8,3 @@ export const getBonusBalance = async () =>
 
 export const convertBonusToCredit = async (amount: number) =>
   apiCall('/api/promo/bonus/convert-to-credit', 'POST', { amount });
-
-export const convertCashToCredit = async (amount: number) =>
-  apiCall('/api/promo/cash/convert-to-credit', 'POST', { amount });

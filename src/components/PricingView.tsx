@@ -8,22 +8,23 @@ import {
   Code2,
   Star,
   Sparkles,
-  Loader2,
-  RefreshCw
+  Loader2
 } from 'lucide-react';
 import { PlanType } from '../types';
-import { getPlans, getCurrentPlan, upgradePlan } from '../services/plans.service';
+import { getCurrentPlan, upgradePlan } from '../services/plans.service';
 
 interface PricingViewProps {
   currentPlan: PlanType;
   onPlanSelect: (plan: PlanType, price: number) => void;
   showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onViewChange?: (view: string) => void;
 }
 
 export default function PricingView({
   currentPlan,
   onPlanSelect,
-  showToast
+  showToast,
+  onViewChange
 }: PricingViewProps) {
   const [activePlanId, setActivePlanId] = useState<string>(currentPlan || 'Blaze');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -33,7 +34,7 @@ export default function PricingView({
     if (showToast) showToast(msg, type);
   };
 
-  // Exact 6 plans matching user specification
+  // 6 plans with wallet limits and withdrawal removed
   const plansList = [
     {
       id: 'Blaze',
@@ -46,10 +47,8 @@ export default function PricingView({
       isPopular: false,
       features: [
         { text: '100/month payment links', locked: false, bold: '100' },
-        { text: '₹500 wallet limit', locked: false, bold: '₹500' },
         { text: '7 day link expiry', locked: false, bold: '7 day' },
         { text: '5% commission', locked: false, bold: '5%' },
-        { text: '1 withdrawal/week', locked: false, bold: '1' },
         { text: '3 webhooks', locked: false, bold: '3' },
         { text: 'Unlock premium themes', locked: true, bold: '' },
         { text: 'Hide QR Code', locked: true, bold: '' }
@@ -66,10 +65,8 @@ export default function PricingView({
       isPopular: false,
       features: [
         { text: '250/month payment links', locked: false, bold: '250' },
-        { text: '₹1,000 wallet limit', locked: false, bold: '₹1,000' },
         { text: '15 day link expiry', locked: false, bold: '15 day' },
         { text: '3.5% commission', locked: false, bold: '3.5%' },
-        { text: '3 withdrawal/week', locked: false, bold: '3' },
         { text: '5 webhooks', locked: false, bold: '5' },
         { text: 'Unlock premium themes', locked: true, bold: '' },
         { text: 'Hide QR Code', locked: true, bold: '' }
@@ -86,10 +83,8 @@ export default function PricingView({
       isPopular: true,
       features: [
         { text: '1,000/month payment links', locked: false, bold: '1,000' },
-        { text: '₹3,000 wallet limit', locked: false, bold: '₹3,000' },
         { text: '30 day link expiry', locked: false, bold: '30 day' },
         { text: '2% commission', locked: false, bold: '2%' },
-        { text: '1 withdrawal/day', locked: false, bold: '1' },
         { text: '10 webhooks', locked: false, bold: '10' },
         { text: 'Unlock premium themes', locked: false, bold: '' },
         { text: 'Hide QR Code', locked: true, bold: '' }
@@ -106,10 +101,8 @@ export default function PricingView({
       isPopular: false,
       features: [
         { text: '3,000/month payment links', locked: false, bold: '3,000' },
-        { text: '₹7,500 wallet limit', locked: false, bold: '₹7,500' },
         { text: '90 day link expiry', locked: false, bold: '90 day' },
         { text: '1% commission', locked: false, bold: '1%' },
-        { text: '3 withdrawal/day', locked: false, bold: '3' },
         { text: '25 webhooks', locked: false, bold: '25' },
         { text: 'Unlock premium themes', locked: false, bold: '' },
         { text: 'Hide QR Code', locked: false, bold: '' }
@@ -126,10 +119,8 @@ export default function PricingView({
       isPopular: false,
       features: [
         { text: 'Unlimited payment links', locked: false, bold: 'Unlimited' },
-        { text: '₹20,000 wallet limit', locked: false, bold: '₹20,000' },
         { text: 'Never expires', locked: false, bold: 'Never' },
         { text: '0.5% commission', locked: false, bold: '0.5%' },
-        { text: '10 withdrawal/day', locked: false, bold: '10' },
         { text: 'Unlimited webhooks', locked: false, bold: 'Unlimited' },
         { text: 'Unlock premium themes', locked: false, bold: '' },
         { text: 'Hide QR Code', locked: false, bold: '' }
@@ -146,10 +137,8 @@ export default function PricingView({
       isPopular: false,
       features: [
         { text: 'Unlimited payment links', locked: false, bold: 'Unlimited' },
-        { text: 'Unlimited wallet limit', locked: false, bold: 'Unlimited' },
         { text: 'Never expires', locked: false, bold: 'Never' },
         { text: '0% commission', locked: false, bold: '0%' },
-        { text: 'Unlimited withdrawals', locked: false, bold: 'Unlimited' },
         { text: 'Unlimited webhooks', locked: false, bold: 'Unlimited' },
         { text: 'Unlock premium themes', locked: false, bold: '' },
         { text: 'Hide QR Code', locked: false, bold: '' }
@@ -167,7 +156,6 @@ export default function PricingView({
         if (planName) setActivePlanId(planName);
       }
     } catch {
-      // Fallback to prop
       setActivePlanId(currentPlan || 'Blaze');
     } finally {
       setIsLoading(false);
@@ -186,7 +174,8 @@ export default function PricingView({
       setActivePlanId(planId);
       onPlanSelect(planId as PlanType, price);
     } catch (err: any) {
-      notify(err?.message || `Failed to upgrade to ${planId}. Check wallet balance.`, 'error');
+      const msg = err?.message || 'Upgrade failed';
+      notify(msg, 'error');
     } finally {
       setUpgradingId(null);
     }
@@ -197,7 +186,7 @@ export default function PricingView({
       {/* Page Head */}
       <div className="plan-page-head">
         <h1 className="plan-page-title">Choose Your Plan</h1>
-        <p className="plan-page-sub">Upgrade to unlock more links, lower commission &amp; higher wallet limits.</p>
+        <p className="plan-page-sub">Upgrade to unlock more links and lower commission.</p>
         <div className="current-badge">
           <span style={{ color: 'var(--muted, #b89fa5)' }}>Current:</span>
           <span className="plan-name-badge">
@@ -294,22 +283,27 @@ export default function PricingView({
                   <span>Current Plan</span>
                 </button>
               ) : (
-                <button
-                  onClick={() => handleUpgrade(plan.id, plan.price)}
-                  disabled={upgradingId === plan.id}
-                  className="plan-action-btn upgrade"
-                >
-                  {upgradingId === plan.id ? (
-                    <Loader2 className="animate-spin" style={{ width: 14, height: 14 }} />
-                  ) : (
-                    <Zap style={{ width: 13, height: 13, fill: 'currentColor' }} />
-                  )}
-                  <span>
-                    {upgradingId === plan.id
-                      ? 'Upgrading...'
-                      : `Upgrade — ₹${plan.price}`}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
+                  <button
+                    onClick={() => handleUpgrade(plan.id, plan.price)}
+                    disabled={upgradingId === plan.id}
+                    className="plan-action-btn upgrade"
+                  >
+                    {upgradingId === plan.id ? (
+                      <Loader2 className="animate-spin" style={{ width: 14, height: 14 }} />
+                    ) : (
+                      <Zap style={{ width: 13, height: 13, fill: 'currentColor' }} />
+                    )}
+                    <span>
+                      {upgradingId === plan.id
+                        ? 'Upgrading...'
+                        : `Upgrade — ₹${plan.price}`}
+                    </span>
+                  </button>
+                  <span style={{ fontSize: '10px', color: '#ff8ca3', textAlign: 'center', fontWeight: 600 }}>
+                    Paid from Hamro Credits
                   </span>
-                </button>
+                </div>
               )}
             </div>
           );
@@ -318,7 +312,7 @@ export default function PricingView({
 
       {/* Note */}
       <div className="plan-note">
-        All paid plans are valid for <strong>30 days</strong>. Payment via UPI / Wallet balance.
+        All paid plans are valid for <strong>30 days</strong>. Paid from Hamro Credits.
       </div>
     </div>
   );
