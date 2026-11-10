@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Plus, Search, Copy, Edit, Trash2, Loader2, CheckCircle2, Clock, PanelLeft } from 'lucide-react';
+import { Link as LinkIcon, Plus, Search, Copy, Edit, Trash2, Loader2, CheckCircle2, Clock, PanelLeft, Palette } from 'lucide-react';
 import { PaymentLink } from '../types';
 import { deleteLink, getLinkPaymentUrl } from '../services/paymentLink.service';
 
@@ -156,15 +156,26 @@ export default function PaymentLinksView({
             </p>
           </div>
         </div>
-        <button 
-          onClick={onCreateNewLink}
-          className="inline-flex items-center justify-center gap-[7px] px-[18px] py-[10px] rounded-[11px] bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-[13.5px] font-extrabold shadow-[0_8px_24px_rgba(255,30,75,0.35),inset_0_1px_0_rgba(255,255,255,0.16)] hover:shadow-[0_12px_30px_rgba(255,30,75,0.55)] active:scale-95 transition-all cursor-pointer relative overflow-hidden"
-        >
-          <svg className="w-[15px] h-[15px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-          New Link
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button 
+            type="button"
+            onClick={() => onViewChange?.('customize')}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-[11px] bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,30,75,0.12)] border border-[rgba(255,45,85,0.25)] text-[#fff2f4] hover:text-white text-[13px] font-bold transition-all cursor-pointer shadow-sm active:scale-95"
+            title="Customize Checkout Theme & Page"
+          >
+            <Palette className="w-4 h-4 text-[#ff4d6d]" />
+            <span>Customize checkout</span>
+          </button>
+          <button 
+            onClick={onCreateNewLink}
+            className="inline-flex items-center justify-center gap-[7px] px-[18px] py-[10px] rounded-[11px] bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-[13.5px] font-extrabold shadow-[0_8px_24px_rgba(255,30,75,0.35),inset_0_1px_0_rgba(255,255,255,0.16)] hover:shadow-[0_12px_30px_rgba(255,30,75,0.55)] active:scale-95 transition-all cursor-pointer relative overflow-hidden"
+          >
+            <svg className="w-[15px] h-[15px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            New Link
+          </button>
+        </div>
       </div>
 
       {/* Stats Grid */}

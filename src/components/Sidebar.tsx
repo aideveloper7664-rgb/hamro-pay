@@ -699,8 +699,8 @@ export default function Sidebar({
 
             {/* Customize Page */}
             <div
-              className="hp-nav-item"
-              onClick={() => handleNavClick('dashboard')}
+              className={`hp-nav-item ${currentView === 'customize' ? 'active' : ''}`}
+              onClick={() => handleNavClick('customize')}
             >
               <span
                 className="hp-nav-icon"

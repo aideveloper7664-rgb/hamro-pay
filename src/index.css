@@ -6013,6 +6013,132 @@ html, body {
   }
 }
 
+/* ============================================
+   HAMROPAY CUSTOMIZE & PAY PAGE DYNAMIC THEMING
+   ============================================ */
+.hp-page {
+  min-height: 100vh;
+  background: var(--hp-bg);
+  color: var(--hp-text);
+  font-family: var(--hp-font);
+}
+
+.hp-card {
+  background: var(--hp-surface);
+  border: 1px solid var(--hp-border);
+  border-radius: var(--hp-radius);
+  transition: all 0.25s ease;
+}
+
+[data-mode="light"] .hp-card {
+  box-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.18);
+}
+
+[data-mode="dark"] .hp-card {
+  box-shadow: 0 20px 50px -25px rgba(0, 0, 0, 0.75);
+}
+
+.hp-panel {
+  background: var(--hp-surface-2);
+  border: 1px solid var(--hp-border);
+  border-radius: var(--hp-radius-sm);
+}
+
+.hp-muted {
+  color: var(--hp-muted);
+}
+
+.hp-accent {
+  color: var(--hp-accent);
+}
+
+.hp-btn {
+  background: var(--hp-grad);
+  color: var(--hp-on-accent);
+  border-radius: var(--hp-radius-btn);
+  box-shadow: 0 8px 24px -10px var(--hp-glow);
+  font-weight: 700;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.hp-btn:hover {
+  filter: brightness(1.08);
+}
+
+.hp-btn:active {
+  transform: scale(0.98);
+}
+
+.hp-btn-ghost {
+  background: var(--hp-surface-2);
+  color: var(--hp-text);
+  border: 1px solid var(--hp-border);
+  border-radius: var(--hp-radius-btn);
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.hp-btn-ghost:hover {
+  border-color: var(--hp-accent);
+}
+
+.hp-input {
+  background: var(--hp-surface-2);
+  color: var(--hp-text);
+  border: 1px solid var(--hp-border);
+  border-radius: var(--hp-radius-sm);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.hp-input::placeholder {
+  color: var(--hp-muted);
+}
+
+.hp-input:focus {
+  border-color: var(--hp-accent);
+  box-shadow: 0 0 0 3px var(--hp-accent-soft);
+}
+
+.hp-badge-ok {
+  color: var(--hp-ok);
+  background: color-mix(in srgb, var(--hp-ok) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hp-ok) 35%, transparent);
+}
+
+.hp-badge-warn {
+  color: var(--hp-warn);
+  background: color-mix(in srgb, var(--hp-warn) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hp-warn) 35%, transparent);
+}
+
+.hp-badge-bad {
+  color: var(--hp-bad);
+  background: color-mix(in srgb, var(--hp-bad) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hp-bad) 35%, transparent);
+}
+
+.hp-chip {
+  background: var(--hp-accent-soft);
+  color: var(--hp-accent);
+  border-radius: 999px;
+}
+
+.hp-qr-box {
+  background: #ffffff !important;
+  border-radius: var(--hp-radius-sm);
+  padding: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.hp-page :focus-visible,
+.hp-card :focus-visible {
+  outline: 2px solid var(--hp-accent);
+  outline-offset: 2px;
+}
+
+
 
 
 

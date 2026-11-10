@@ -11,6 +11,7 @@ interface HeaderProps {
   apiEnabled: boolean;
   isSimulated: boolean;
   onOpenApiSettings: () => void;
+  currentView?: string;
 }
 
 export default function Header({
@@ -22,7 +23,8 @@ export default function Header({
   apiBaseUrl,
   apiEnabled,
   isSimulated,
-  onOpenApiSettings
+  onOpenApiSettings,
+  currentView
 }: HeaderProps) {
   // Extract simple hostname for visual display
   let displayHost = 'Local Sandbox';
@@ -35,6 +37,24 @@ export default function Header({
   }
 
   const displayCredits = credits !== undefined ? credits : balance;
+
+  const getViewTitle = () => {
+    switch (currentView) {
+      case 'customize': return 'Customize Page';
+      case 'wallet': return 'Hamro Credits';
+      case 'transactions': return 'Payment History';
+      case 'notifications': return 'Notifications';
+      case 'profile': return 'Account Profile';
+      case 'pricing': return 'Upgrade Plan';
+      case 'fampay': return 'FamPay Connect';
+      case 'support': return 'Support Desk';
+      case 'referral': return 'Refer & Earn';
+      case 'promo': return 'Promo Code';
+      default: return null;
+    }
+  };
+
+  const pageTitle = getViewTitle();
 
   return (
     <header className="sticky top-0 bg-[#0b0204]/90 backdrop-blur-xl border-b border-[rgba(255,45,85,0.18)] px-6 py-3.5 flex items-center justify-between gap-4 z-20 shadow-lg">
@@ -52,6 +72,14 @@ export default function Header({
             <Zap className="w-4 h-4 text-white stroke-[2.5]" />
           </div>
           <span className="text-sm font-black text-[#fff2f4] tracking-tight">HamroPay</span>
+          {pageTitle && (
+            <>
+              <span className="text-xs text-[#83686e] font-semibold">/</span>
+              <span className="text-xs sm:text-sm font-extrabold text-white truncate max-w-[150px] sm:max-w-none">
+                {pageTitle}
+              </span>
+            </>
+          )}
         </div>
       </div>
 

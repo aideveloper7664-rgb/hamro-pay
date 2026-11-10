@@ -27,6 +27,7 @@ import DeveloperPortalView from './components/DeveloperPortalView';
 import ApiIntegrationView from './components/ApiIntegrationView';
 import StorePortalView from './components/StorePortalView';
 import FamPayConnectView from './components/FamPayConnectView';
+import CustomizePageView from './components/CustomizePageView';
 import { getActiveCashier } from './services/cashier.service';
 import { getCreditBalance } from './services/credits.service';
 import { setMode } from './services/developer.service';
@@ -844,6 +845,16 @@ export default function App() {
           />
         );
 
+      case 'customize':
+        return (
+          <CustomizePageView
+            showToast={showToast}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            onViewChange={setCurrentView}
+            merchantName={profile.name}
+          />
+        );
+
       default:
         return (
           <DashboardView
@@ -999,6 +1010,7 @@ export default function App() {
         )}
         {currentView !== 'dashboard' && currentView !== 'developer' && currentView !== 'api-docs' && currentView !== 'api-integration' && currentView !== 'links' && (
           <Header
+            currentView={currentView}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}
             unreadNotifications={unreadNotificationsCount}

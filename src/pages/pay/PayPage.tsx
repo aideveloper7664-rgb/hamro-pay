@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DeveloperOrderPay } from './DeveloperOrderPay';
+import { BrandingObject, DEFAULT_BRANDING } from '../../services/customize.service';
+import { 
+  Clock, Copy, Check, Smartphone, Download, AlertCircle, 
+  CheckCircle2, X, RefreshCw, ShieldCheck, Lock, ExternalLink
+} from 'lucide-react';
 
 const API_URL = 'https://hamropay-backends.onrender.com';
 const TOTAL_SECONDS = 8 * 60;
 
-// Helper to identify payment link IDs vs order IDs
-// FIXME: confirm link_id prefix with backend (e.g. lnk_, link_, or other format)
 export const isPaymentLinkId = (idStr: string): boolean => {
   if (!idStr) return false;
   return idStr.startsWith('lnk_') || idStr.startsWith('link_') || idStr.startsWith('pl_');
@@ -83,18 +86,23 @@ const PaymentCountdownTimer: React.FC<PaymentCountdownTimerProps> = React.memo((
   const isWarning = secondsLeft <= 60 && secondsLeft > 0;
 
   return (
-    <div className={`timer-card ${isWarning ? 'warning' : ''}`}>
-      <div className="timer-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 7v5l3 2" />
-        </svg>
+    <div className={`hp-panel w-full flex items-center justify-between p-2.5 px-3.5 mb-2.5 ${isWarning ? 'hp-badge-warn' : ''}`}>
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center hp-chip">
+          <Clock className="w-3.5 h-3.5 stroke-[2.2]" />
+        </div>
+        <div>
+          <div className="text-[10px] uppercase font-bold tracking-wider hp-muted">
+            Payment Session Expires In
+          </div>
+          <div className="text-sm font-black font-mono tracking-tight leading-none">
+            {timeFormatted}
+          </div>
+        </div>
       </div>
-      <div className="timer-body">
-        <div className="timer-label">Payment Session Expires In</div>
-        <div className="timer-value">{timeFormatted}</div>
-      </div>
-      <span className="timer-badge">
+      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+        isExpired ? 'hp-badge-bad' : isWarning ? 'hp-badge-warn' : 'hp-badge-ok'
+      }`}>
         {isExpired ? 'Expired' : isWarning ? 'Hurry' : 'Active'}
       </span>
     </div>
@@ -125,6 +133,9 @@ const getInitialPayId = (): string => {
 
 const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [id, setId] = useState<string>(getInitialPayId);
+  const [branding, setBranding] = useState<BrandingObject>(DEFAULT_BRANDING);
+  const [logoError, setLogoError] = useState<boolean>(false);
+
   const [data, setData] = useState<{
     link_id?: string;
     title?: string;
@@ -164,7 +175,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
   const isTerminal = isSuccess || isExpired || isCancelled || errorKind !== null || Boolean(failedState);
 
-  // Refs for polling latest values (so polling effect doesn't depend on them)
   const isTerminalRef = useRef(isTerminal);
   isTerminalRef.current = isTerminal;
 
@@ -185,9 +195,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
   // UTR & Verification State
   const [utr, setUtr] = useState<string>('');
-  const utrRef = useRef(utr);
-  utrRef.current = utr;
-
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [orderResult, setOrderResult] = useState<any>(null);
@@ -212,8 +219,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const showToastRef = useRef(showToast);
   showToastRef.current = showToast;
 
-  // QR Image Timestamp & Download State
-  const [qrTimestamp, setQrTimestamp] = useState<number>(Date.now());
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
   const handleGoHome = () => {
@@ -224,26 +229,45 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     }
   };
 
+  // Sync background and theme-color meta tag with active branding
+  useEffect(() => {
+    const originalBg = document.body.style.background;
+    const bgBase = branding.vars?.['--hp-bg-base'];
+    if (bgBase) {
+      document.body.style.background = bgBase;
+    }
+
+    let metaTag = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
+    let createdMeta = false;
+    let originalThemeColor = '';
+
+    if (!metaTag) {
+      metaTag = document.createElement('meta');
+      metaTag.name = 'theme-color';
+      document.head.appendChild(metaTag);
+      createdMeta = true;
+    } else {
+      originalThemeColor = metaTag.content;
+    }
+
+    if (bgBase && metaTag) {
+      metaTag.content = bgBase;
+    }
+
+    return () => {
+      document.body.style.background = originalBg;
+      if (createdMeta && metaTag?.parentNode) {
+        metaTag.parentNode.removeChild(metaTag);
+      } else if (metaTag) {
+        metaTag.content = originalThemeColor;
+      }
+    };
+  }, [branding]);
+
   // Extract ID on mount
   useEffect(() => {
-    let extractedId = '';
-    if (typeof window !== 'undefined') {
-      const pathname = window.location.pathname;
-      if (pathname.includes('/pay/')) {
-        extractedId = pathname.split('/pay/')[1]?.split('?')[0]?.split('/')[0] || '';
-      } else {
-        const parts = pathname.split('/').filter(Boolean);
-        const lastPart = parts[parts.length - 1];
-        if (lastPart && lastPart !== 'pay') {
-          extractedId = lastPart;
-        }
-      }
-      if (!extractedId) {
-        const searchParams = new URLSearchParams(window.location.search);
-        extractedId = searchParams.get('id') || searchParams.get('link_id') || searchParams.get('order_id') || '';
-      }
-    }
-    setId(extractedId.trim());
+    const extractedId = getInitialPayId();
+    setId(extractedId);
   }, []);
 
   // Fetch Public Payment Link and Initiate Checkout Session
@@ -264,7 +288,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       return;
     }
 
-    // Ref guard to prevent React StrictMode from double-initiating session
     if (sessionCreatingRef.current) {
       return;
     }
@@ -328,6 +351,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
       const paymentData = resData?.data || resData;
 
+      // Extract and apply branding
+      const loadedBranding: BrandingObject | undefined = resData?.data?.branding || resData?.branding || paymentData?.branding;
+      if (loadedBranding && loadedBranding.vars) {
+        setBranding(loadedBranding);
+      }
+
       if (!paymentData || paymentData.amount === undefined || paymentData.amount === null) {
         setErrorKind('404');
         setErrorMessage('This payment link is invalid or has been removed');
@@ -335,7 +364,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         return;
       }
 
-      // Check if link is deactivated / disabled
       if (paymentData.status === 'inactive' || paymentData.active === false || paymentData.status === 'deactivated') {
         setErrorKind('inactive');
         setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
@@ -358,7 +386,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       setPayAmount(Number(paymentData.amount || 0));
       setBaseAmount(Number(paymentData.amount || 0));
 
-      // If LIVE link: initiate or resume checkout session!
+      // Initiate checkout session for live links
       if (!paymentData.is_test) {
         let existingSid = '';
         try {
@@ -488,7 +516,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     }
   }, [id, loadPaymentData]);
 
-  // Polling for Live session status: ONLY depends on [sessionId, isTerminal]
+  // Polling loop for Live session status
   useEffect(() => {
     if (!sessionId || isTerminal) {
       if (pollTimerRef.current) {
@@ -523,7 +551,6 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         return;
       }
 
-      // Per-request 30 second timeout controller
       const reqCtrl = new AbortController();
       const timeoutId = setTimeout(() => {
         reqCtrl.abort();
@@ -567,185 +594,122 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
               if (stData.utr) setUtr(stData.utr);
               setIsSuccess(true);
               showToastRef.current('Payment verified successfully!', 'success');
-              return; // terminal, terminates loop
-            }
-
-            if (currentStatus === 'expired') {
-              setIsExpired(true);
-              return; // terminal
+              return;
             }
 
             if (currentStatus === 'cancelled') {
               try { sessionStorage.removeItem(`hamropay_session_${idRef.current}`); } catch {}
               setIsCancelled(true);
-              return; // terminal
+              return;
+            }
+
+            if (currentStatus === 'expired') {
+              try { sessionStorage.removeItem(`hamropay_session_${idRef.current}`); } catch {}
+              setIsExpired(true);
+              return;
             }
 
             if (currentStatus === 'disabled') {
               setErrorKind('inactive');
-              return; // terminal
+              setErrorMessage('This payment link has been disabled by the merchant.');
+              return;
             }
 
             if (currentStatus === 'failed') {
               setFailedState({ utr: stData.utr, message: stData.message });
-              return; // terminal
-            }
-
-            if (stData.expires_at) {
-              setExpiresAt(stData.expires_at);
-            }
-            if (stData.server_time) {
-              const serverMs = Date.parse(stData.server_time);
-              if (!isNaN(serverMs)) {
-                setServerTimeOffset(serverMs - Date.now());
-              }
+              return;
             }
           }
-        } else if (res.status === 404) {
-          setIsExpired(true);
-          return;
         } else {
           consecutiveFailuresRef.current += 1;
-          if (consecutiveFailuresRef.current >= 3) {
+          if (consecutiveFailuresRef.current >= 2) {
             setIsReconnecting(true);
           }
         }
-      } catch (err: any) {
-        if (!active || controller.signal.aborted || isTerminalRef.current) {
-          return;
-        }
-        consecutiveFailuresRef.current += 1;
-        if (consecutiveFailuresRef.current >= 3) {
-          setIsReconnecting(true);
+      } catch {
+        if (active && !controller.signal.aborted) {
+          consecutiveFailuresRef.current += 1;
+          if (consecutiveFailuresRef.current >= 2) {
+            setIsReconnecting(true);
+          }
         }
       } finally {
         clearTimeout(timeoutId);
         controller.signal.removeEventListener('abort', onGlobalAbort);
         inFlightRef.current = false;
-      }
-
-      if (!active || controller.signal.aborted || isTerminalRef.current) {
-        return;
-      }
-
-      // Schedule next poll AFTER previous request finishes
-      const nextDelay = document.visibilityState === 'hidden' ? 8000 : 3000;
-      pollTimerRef.current = setTimeout(pollStatus, nextDelay);
-    };
-
-    pollTimerRef.current = setTimeout(pollStatus, 3000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && active && !isTerminalRef.current) {
-        if (!inFlightRef.current && pollTimerRef.current) {
-          clearTimeout(pollTimerRef.current);
-          pollTimerRef.current = null;
-          pollStatus();
+        if (active && !controller.signal.aborted && !isTerminalRef.current) {
+          pollTimerRef.current = setTimeout(pollStatus, 3000);
         }
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    pollTimerRef.current = setTimeout(pollStatus, 2000);
 
     return () => {
       active = false;
+      controller.abort();
       if (pollTimerRef.current) {
         clearTimeout(pollTimerRef.current);
         pollTimerRef.current = null;
       }
-      controller.abort();
-      abortControllerRef.current = null;
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      inFlightRef.current = false;
     };
   }, [sessionId, isTerminal]);
 
-  const isTestMode = Boolean(data?.is_test);
-  const title = data?.title || 'Payment Request';
-  const merchantName = data?.merchant_name || 'Merchant';
-
-  const displayAmount = isTestMode
-    ? Number(data?.amount || 0).toFixed(2)
-    : payAmount ? payAmount.toFixed(2) : Number(data?.amount || 0).toFixed(2);
-
-  const hasUniqueAmount = !isTestMode && payAmount > 0 && baseAmount > 0 && Math.abs(payAmount - baseAmount) > 0.0001;
-
-  // Start a fresh checkout session
-  const startNewCheckout = async () => {
-    try {
-      sessionStorage.removeItem(`hamropay_session_${id}`);
-    } catch {}
-
-    sessionCreatingRef.current = false;
-    setSessionId('');
-    setIsExpired(false);
-    setIsCancelled(false);
-    setShowCancelModal(false);
-    setFailedState(null);
-    setUtr('');
-    setVerifyError(null);
-    setIsReconnecting(false);
-    setAutoDetect(undefined);
-    setQrTimestamp(Date.now());
-
-    await loadPaymentData();
-    showToast('New payment session started', 'info');
-  };
-
-  // Cancel payment action
+  // Cancel Payment Flow
   const handleCancelPayment = async () => {
     setShowCancelModal(false);
-
     if (sessionId) {
       try {
         await fetch(`${API_URL}/api/payment-link/session/${encodeURIComponent(sessionId)}/cancel`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          method: 'POST'
         });
       } catch {}
     }
-
-    try {
-      sessionStorage.removeItem(`hamropay_session_${id}`);
-    } catch {}
-
-    if (pollTimerRef.current) {
-      clearTimeout(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-
+    try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
     setIsCancelled(true);
   };
 
-  // UPI intent link with exact pay_amount and encoded title
-  const upiPayUrl = activeUpi
-    ? `upi://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`
-    : '';
+  const startNewCheckout = () => {
+    try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
+    sessionCreatingRef.current = false;
+    setIsExpired(false);
+    setIsCancelled(false);
+    setFailedState(null);
+    setOrderResult(null);
+    setUtr('');
+    setVerifyError(null);
+    loadPaymentData();
+  };
 
-  const qrImageSrc = sessionQrCode || (upiPayUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=${encodeURIComponent(upiPayUrl)}&t=${qrTimestamp}`
-    : '');
+  const copyToClipboard = (text: string, label: string) => {
+    if (!text) return;
+    navigator.clipboard?.writeText(text).then(() => {
+      showToast(`${label} copied to clipboard!`, 'success');
+    }).catch(() => {
+      showToast(`Could not copy ${label}`, 'error');
+    });
+  };
 
   const handleDownloadQr = async () => {
-    if (!qrImageSrc) return;
+    const src = sessionQrCode || (data ? `${API_URL}/api/payment-link/${encodeURIComponent(id)}/qr` : '');
+    if (!src) return;
+
     setIsDownloading(true);
     try {
-      const response = await fetch(qrImageSrc, { mode: 'cors' });
+      const response = await fetch(src);
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `hamropay-qr-${displayAmount}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `hamropay-qr-${id}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
       showToast('QR code downloaded', 'success');
     } catch {
-      window.open(qrImageSrc, '_blank');
-      showToast('Long-press QR to save', 'info');
+      showToast('Could not download QR', 'error');
     } finally {
       setIsDownloading(false);
     }
@@ -753,36 +717,30 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
   const handleUtrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/[^A-Za-z0-9]/g, '');
-    if (val.length <= 30) {
-      setUtr(val);
-      if (verifyError) setVerifyError(null);
-    }
+    setUtr(val);
+    if (verifyError) setVerifyError(null);
   };
 
   const triggerShake = () => {
     setIsShaking(true);
-    setTimeout(() => setIsShaking(false), 450);
+    setTimeout(() => setIsShaking(false), 600);
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    if (!text) return;
-    if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(text);
-      showToast(`${label} copied to clipboard!`, 'info');
-    } else {
-      showToast(`${text}`, 'info');
-    }
-  };
-
-  // Manual UTR Verification
   const handleVerify = async () => {
     if (isVerifying || isExpired) return;
 
-    const cleanUtr = utr.trim();
-    if (!cleanUtr || !/^[A-Za-z0-9]{6,30}$/.test(cleanUtr)) {
+    const trimmedUtr = utr.trim();
+    if (!trimmedUtr) {
       triggerShake();
-      setVerifyError('Please enter a valid 6 to 30 character UTR / Reference code.');
-      showToast('UTR must be 6 to 30 letters or digits', 'error');
+      setVerifyError('Please enter your UTR number');
+      showToast('Please enter UTR', 'error');
+      return;
+    }
+
+    if (trimmedUtr.length < 6 || trimmedUtr.length > 30) {
+      triggerShake();
+      setVerifyError('UTR must be between 6 and 30 characters');
+      showToast('Invalid UTR length', 'error');
       return;
     }
 
@@ -790,12 +748,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     setVerifyError(null);
 
     try {
-      const verifyBody: any = { utr: cleanUtr };
-      if (sessionId) {
-        verifyBody.session_id = sessionId;
-      }
+      const verifyUrl = `${API_URL}/api/payment-link/${encodeURIComponent(id)}/verify`;
+      const verifyBody = sessionId
+        ? { utr: trimmedUtr, session_id: sessionId }
+        : { utr: trimmedUtr };
 
-      const res = await fetch(`${API_URL}/api/payment-link/${encodeURIComponent(id)}/verify`, {
+      const res = await fetch(verifyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(verifyBody),
@@ -830,7 +788,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         } catch {}
         setOrderResult(resData?.data || resData);
         setIsSuccess(true);
-        if (resData?.test_mode || resData?.data?.test || isTestMode) {
+        if (resData?.test_mode || resData?.data?.test || data?.is_test) {
           showToast('Test payment verified!', 'success');
         } else {
           showToast('Payment verified successfully!', 'success');
@@ -853,723 +811,55 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
   const isUtrValid = utr.trim().length >= 6 && /^[A-Za-z0-9]{6,30}$/.test(utr.trim());
 
+  // Route to developer API order view if HP...
   if (isApiOrderId(id)) {
     return <DeveloperOrderPay orderId={id} onBackToDashboard={onBackToDashboard} />;
   }
 
+  const isTestMode = Boolean(data?.is_test);
+  const title = data?.title || 'Payment Checkout';
+  const merchantName = branding.brand_name || data?.merchant_name || 'Merchant';
+  const displayAmount = payAmount > 0 ? payAmount.toFixed(2) : (data?.amount ? data.amount.toFixed(2) : '0.00');
+  const hasUniqueAmount = baseAmount > 0 && payAmount > 0 && payAmount !== baseAmount;
+
+  const upiPayUrl = activeUpi
+    ? `upi://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`
+    : '';
+
+  const qrImageSrc = sessionQrCode || `${API_URL}/api/payment-link/${encodeURIComponent(id)}/qr`;
+  const firstLetter = merchantName.charAt(0).toUpperCase() || 'M';
+
   return (
-    <div className="pay-page-wrapper">
-      <style>{`
-        :root {
-          --card-border: rgba(255,45,85,0.18);
-          --text: #fff2f4;
-          --muted: #b89fa5;
-          --muted-dim: #83686e;
-          --red-primary: #ff1e4b;
-          --red-light: #ff4d6d;
-          --green: #2bf29a;
-          --gold: #ffb834;
-          --blue: #5b8dff;
-          --purple: #a78bfa;
-        }
+    <div
+      className="hp-page min-h-screen w-full flex flex-col items-center justify-center p-3.5 sm:p-6"
+      data-mode={branding.mode || 'dark'}
+      style={branding.vars as React.CSSProperties}
+    >
+      <div className="w-full max-w-[380px] flex flex-col items-center">
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        .pay-page-wrapper {
-          font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-          background-color: #070102;
-          background-image:
-            radial-gradient(circle at 85% 15%, rgba(255,30,75,0.14), transparent 32%),
-            radial-gradient(circle at 15% 30%, rgba(180,10,40,0.12), transparent 28%),
-            linear-gradient(180deg, #070102 0%, #0d0305 45%, #120306 100%);
-          color: var(--text);
-          -webkit-font-smoothing: antialiased;
-          min-height: 100vh;
-          width: 100%;
-          padding: 20px 14px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          overflow-x: hidden;
-          overflow-y: auto;
-        }
-
-        button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
-        input { font-family: inherit; }
-
-        .page-stack {
-          width: 100%;
-          max-width: 380px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          margin: 0 auto;
-          padding: 0;
-        }
-
-        /* CARD */
-        .pay-card {
-          width: 100%;
-          padding: 18px 16px 16px;
-          border-radius: 18px;
-          background: linear-gradient(165deg, rgba(28,7,12,0.95), rgba(14,3,7,0.98));
-          border: 1px solid var(--card-border);
-          box-shadow:
-            0 20px 60px rgba(0,0,0,0.7),
-            0 0 50px rgba(255,30,75,0.12),
-            inset 0 1px 0 rgba(255,255,255,0.06);
-          position: relative;
-          overflow: hidden;
-        }
-
-        .pay-card::before {
-          content: "";
-          position: absolute; top: 0; left: 0; right: 0; height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(255,45,85,0.6), transparent);
-        }
-
-        .card-head {
-          text-align: center;
-          margin-bottom: 12px;
-        }
-
-        .card-brand {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 4px 10px;
-          border-radius: 999px;
-          background: rgba(255,30,75,0.08);
-          border: 1px solid rgba(255,30,75,0.22);
-          margin-bottom: 8px;
-          font-size: 10.5px;
-          font-weight: 800;
-          color: #ff8ca3;
-          letter-spacing: 0.2px;
-        }
-
-        .card-title {
-          font-size: 15.5px;
-          font-weight: 900;
-          color: #fff;
-          letter-spacing: -0.3px;
-        }
-
-        .card-sub {
-          font-size: 11.5px;
-          color: var(--muted);
-          margin-top: 2px;
-          word-break: break-word;
-        }
-
-        /* TIMER */
-        .timer-card {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 8px 12px;
-          border-radius: 12px;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.07);
-          margin-bottom: 10px;
-          transition: all 0.3s ease;
-        }
-
-        .timer-card.warning {
-          border-color: rgba(255,184,52,0.35);
-          background: rgba(255,184,52,0.07);
-        }
-
-        .timer-icon {
-          width: 26px; height: 26px; border-radius: 8px;
-          display: grid; place-items: center;
-          background: rgba(255,45,85,0.12);
-          color: var(--red-light);
-          flex-shrink: 0;
-        }
-        .timer-card.warning .timer-icon {
-          background: rgba(255,184,52,0.15);
-          color: var(--gold);
-        }
-        .timer-icon svg { width: 14px; height: 14px; }
-
-        .timer-body { flex: 1; min-width: 0; }
-        .timer-label { font-size: 10px; font-weight: 700; color: var(--muted-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-        .timer-value {
-          font-size: 16px;
-          font-weight: 900;
-          color: #fff;
-          font-variant-numeric: tabular-nums;
-          letter-spacing: -0.2px;
-        }
-        .timer-card.warning .timer-value { color: var(--gold); }
-
-        .timer-badge {
-          font-size: 9.5px;
-          font-weight: 800;
-          padding: 2px 7px;
-          border-radius: 6px;
-          background: rgba(43,242,154,0.12);
-          color: var(--green);
-          border: 1px solid rgba(43,242,154,0.25);
-          text-transform: uppercase;
-          letter-spacing: 0.4px;
-        }
-        .timer-card.warning .timer-badge {
-          background: rgba(255,184,52,0.12);
-          color: var(--gold);
-          border-color: rgba(255,184,52,0.3);
-        }
-
-        /* AMOUNT */
-        .amount-card {
-          padding: 10px 12px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, rgba(255,30,75,0.14), rgba(180,10,40,0.08));
-          border: 1px solid rgba(255,45,85,0.28);
-          text-align: center;
-          margin-bottom: 10px;
-        }
-        .amount-value {
-          font-size: 27px;
-          font-weight: 900;
-          color: #fff;
-          letter-spacing: -0.8px;
-          line-height: 1.1;
-        }
-        .amount-sub {
-          font-size: 10.5px;
-          font-weight: 700;
-          color: #ff8ca3;
-          margin-top: 2px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-
-        /* UPI INFO */
-        .upi-info-box {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 8px 11px;
-          border-radius: 11px;
-          background: rgba(0,0,0,0.35);
-          border: 1px solid rgba(255,255,255,0.07);
-          margin-bottom: 10px;
-          gap: 8px;
-        }
-        .upi-info-details { min-width: 0; flex: 1; }
-        .upi-id-text {
-          font-size: 12.5px;
-          font-weight: 800;
-          color: #fff;
-          font-family: monospace;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .upi-merchant-text {
-          font-size: 10px;
-          color: var(--muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .copy-upi-btn {
-          padding: 5px 9px;
-          border-radius: 7px;
-          background: rgba(255,45,85,0.14);
-          border: 1px solid rgba(255,45,85,0.3);
-          color: #ff8ca3;
-          font-size: 10.5px;
-          font-weight: 800;
-          white-space: nowrap;
-          transition: all 0.2s;
-        }
-        .copy-upi-btn:hover {
-          background: rgba(255,45,85,0.22);
-          color: #fff;
-        }
-
-        /* QR SECTION */
-        .qr-section {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          padding: 10px 0 12px;
-          border-bottom: 1px solid rgba(255,255,255,0.07);
-          margin-bottom: 12px;
-        }
-        .qr-wrap {
-          padding: 10px;
-          border-radius: 16px;
-          background: #fff;
-          box-shadow: 0 12px 36px rgba(0,0,0,0.5), 0 0 30px rgba(255,30,75,0.18);
-          margin-bottom: 8px;
-        }
-        .qr-wrap img {
-          width: 125px;
-          height: 125px;
-          display: block;
-          image-rendering: pixelated;
-        }
-        .qr-hint {
-          font-size: 10.5px;
-          color: var(--muted);
-          text-align: center;
-          line-height: 1.35;
-          margin-bottom: 8px;
-        }
-        .qr-hint strong { color: #fff; }
-
-        .app-intents-row {
-          width: 100%;
-          display: flex;
-          gap: 6px;
-          margin-bottom: 8px;
-        }
-        .intent-btn {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 5px;
-          padding: 7px 6px;
-          border-radius: 9px;
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.12);
-          font-size: 10.5px;
-          font-weight: 800;
-          color: #fff;
-          text-decoration: none;
-          transition: all 0.2s;
-          text-align: center;
-        }
-        .intent-btn:hover {
-          background: rgba(255,255,255,0.12);
-          border-color: rgba(255,255,255,0.25);
-        }
-
-        .pay-intent-primary {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          padding: 9px 12px;
-          border-radius: 11px;
-          background: linear-gradient(135deg, #ff1e4b 0%, #b80028 100%);
-          border: 1px solid rgba(255,45,85,0.4);
-          box-shadow: 0 6px 20px rgba(255,30,75,0.3);
-          font-size: 12px;
-          font-weight: 900;
-          color: #fff;
-          text-decoration: none;
-          margin-bottom: 8px;
-          transition: all 0.2s;
-        }
-        .pay-intent-primary:hover {
-          box-shadow: 0 8px 24px rgba(255,30,75,0.5);
-          transform: translateY(-1px);
-        }
-
-        .download-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          font-size: 10.5px;
-          font-weight: 700;
-          color: var(--muted);
-          padding: 4px 9px;
-          border-radius: 7px;
-          border: 1px dashed rgba(255,255,255,0.14);
-          transition: all 0.2s;
-        }
-        .download-btn:hover {
-          color: #fff;
-          border-color: rgba(255,255,255,0.3);
-        }
-        .download-btn svg { width: 12px; height: 12px; }
-
-        /* UTR SECTION */
-        .utr-section {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-        .utr-header {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-        }
-        .utr-header-icon {
-          width: 22px; height: 22px; border-radius: 7px;
-          display: grid; place-items: center;
-          background: rgba(43,242,154,0.12);
-          color: var(--green);
-        }
-        .utr-header-icon svg { width: 12px; height: 12px; }
-        .utr-header-title { font-size: 11.5px; font-weight: 800; color: #fff; }
-        .utr-header-sub { font-size: 9.5px; color: var(--muted-dim); }
-
-        .utr-input-wrap {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-        .utr-input-icon {
-          position: absolute; left: 12px;
-          color: var(--muted-dim);
-          pointer-events: none;
-          display: grid; place-items: center;
-        }
-        .utr-input-icon svg { width: 14px; height: 14px; }
-        .utr-input {
-          width: 100%;
-          padding: 10px 12px 10px 36px;
-          border-radius: 11px;
-          background: rgba(0,0,0,0.45);
-          border: 1.5px solid rgba(255,255,255,0.12);
-          font-size: 13.5px;
-          font-weight: 800;
-          letter-spacing: 0.8px;
-          color: #fff;
-          font-family: monospace;
-          outline: none;
-          transition: all 0.2s;
-        }
-        .utr-input:focus {
-          border-color: var(--red-primary);
-          box-shadow: 0 0 16px rgba(255,30,75,0.3);
-          background: rgba(10,2,5,0.7);
-        }
-        .utr-input.shake {
-          animation: shakeAnim 0.4s ease-in-out;
-          border-color: #ff4d6d;
-        }
-        @keyframes shakeAnim {
-          0%, 100% { transform: translateX(0); }
-          20%, 60% { transform: translateX(-6px); }
-          40%, 80% { transform: translateX(6px); }
-        }
-
-        .utr-verify-btn {
-          width: 100%;
-          padding: 11px 16px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, #2bf29a 0%, #10b673 100%);
-          box-shadow: 0 8px 24px rgba(43,242,154,0.35);
-          color: #051a0f;
-          font-size: 12.5px;
-          font-weight: 900;
-          letter-spacing: -0.2px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          transition: all 0.2s;
-        }
-        .utr-verify-btn:hover:not(:disabled) {
-          box-shadow: 0 10px 28px rgba(43,242,154,0.5);
-          transform: translateY(-1px);
-        }
-        .utr-verify-btn:disabled {
-          opacity: 0.45;
-          cursor: not-allowed;
-          filter: grayscale(0.5);
-        }
-
-        .utr-alert {
-          padding: 8px 10px;
-          border-radius: 9px;
-          background: rgba(255,30,75,0.12);
-          border: 1px solid rgba(255,30,75,0.3);
-          font-size: 10.5px;
-          font-weight: 700;
-          color: #ff8ca3;
-          line-height: 1.4;
-          display: flex;
-          align-items: flex-start;
-          gap: 6px;
-        }
-        .utr-alert svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; color: #ff4d6d; }
-
-        .utr-help {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          font-size: 10px;
-          color: var(--muted-dim);
-          justify-content: center;
-          margin-top: 2px;
-        }
-        .utr-help svg { width: 11px; height: 11px; }
-
-        /* SUCCESS STATE */
-        .success-card {
-          width: 100%;
-          padding: 24px 18px 20px;
-          border-radius: 18px;
-          background: linear-gradient(165deg, rgba(10,26,16,0.95), rgba(4,14,8,0.98));
-          border: 1px solid rgba(43,242,154,0.35);
-          box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 50px rgba(43,242,154,0.18);
-          text-align: center;
-        }
-        .success-icon {
-          width: 58px; height: 58px; border-radius: 50%;
-          margin: 0 auto 14px;
-          display: grid; place-items: center;
-          background: rgba(43,242,154,0.16);
-          border: 1.5px solid rgba(43,242,154,0.4);
-          color: var(--green);
-          box-shadow: 0 0 28px rgba(43,242,154,0.3);
-        }
-        .success-icon svg { width: 30px; height: 30px; }
-        .success-title {
-          font-size: 18px; font-weight: 900; color: #fff; letter-spacing: -0.3px; margin-bottom: 4px;
-        }
-        .success-sub { font-size: 11.5px; color: #9feac5; margin-bottom: 16px; }
-
-        .success-details {
-          padding: 12px;
-          border-radius: 12px;
-          background: rgba(0,0,0,0.45);
-          border: 1px solid rgba(43,242,154,0.18);
-          margin-bottom: 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          text-align: left;
-        }
-        .success-row {
-          display: flex; justify-content: space-between; align-items: center;
-          font-size: 11.5px;
-        }
-        .success-row span { color: var(--muted); }
-        .success-row strong { color: #fff; font-weight: 800; font-family: monospace; }
-
-        /* ERROR CARD */
-        .error-card {
-          width: 100%;
-          padding: 30px 18px 24px;
-          border-radius: 18px;
-          background: linear-gradient(165deg, rgba(28,7,12,0.95), rgba(14,3,7,0.98));
-          border: 1px solid rgba(255,45,85,0.3);
-          box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 50px rgba(255,30,75,0.15);
-          text-align: center;
-        }
-        .error-icon {
-          width: 54px; height: 54px; border-radius: 50%;
-          margin: 0 auto 14px;
-          display: grid; place-items: center;
-          background: rgba(255,30,75,0.14);
-          border: 1.5px solid rgba(255,30,75,0.4);
-          color: #ff4d6d;
-          box-shadow: 0 0 24px rgba(255,30,75,0.25);
-        }
-        .error-icon svg { width: 26px; height: 26px; }
-        .error-title { font-size: 16.5px; font-weight: 900; color: #fff; margin-bottom: 6px; letter-spacing: -0.3px; }
-        .error-sub { font-size: 11.5px; color: var(--muted); line-height: 1.5; max-width: 300px; margin: 0 auto 18px; }
-
-        .action-btn-row {
-          display: flex;
-          gap: 8px;
-          justify-content: center;
-        }
-        .btn-clean {
-          padding: 9px 18px;
-          border-radius: 10px;
-          font-size: 12px;
-          font-weight: 800;
-          transition: all 0.2s;
-        }
-        .btn-retry {
-          background: linear-gradient(135deg, #ff1e4b 0%, #b80028 100%);
-          border: 1px solid rgba(255,45,85,0.4);
-          color: #fff;
-          box-shadow: 0 6px 18px rgba(255,30,75,0.3);
-        }
-        .btn-secondary {
-          background: rgba(255,255,255,0.08);
-          border: 1px solid rgba(255,255,255,0.16);
-          color: #fff;
-        }
-
-        /* EXPIRED OVERLAY */
-        .expired-overlay {
-          position: absolute;
-          inset: 0;
-          background: rgba(7,1,2,0.92);
-          backdrop-filter: blur(6px);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 20px;
-          text-align: center;
-          opacity: 0;
-          pointer-events: none;
-          transition: opacity 0.3s ease;
-          z-index: 20;
-        }
-        .expired-overlay.show {
-          opacity: 1;
-          pointer-events: auto;
-        }
-        .expired-icon {
-          width: 48px; height: 48px; border-radius: 50%;
-          background: rgba(255,184,52,0.15);
-          border: 1.5px solid rgba(255,184,52,0.35);
-          color: var(--gold);
-          display: grid; place-items: center;
-          margin-bottom: 12px;
-        }
-        .expired-icon svg { width: 22px; height: 22px; }
-        .expired-title { font-size: 16px; font-weight: 900; color: #fff; margin-bottom: 6px; }
-        .expired-sub { font-size: 11px; color: var(--muted); line-height: 1.45; margin-bottom: 16px; max-width: 260px; }
-        .refresh-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 9px 18px;
-          border-radius: 10px;
-          background: linear-gradient(135deg, #ff1e4b, #b80028);
-          border: 1px solid rgba(255,45,85,0.4);
-          color: #fff;
-          font-size: 12px;
-          font-weight: 800;
-          box-shadow: 0 6px 20px rgba(255,30,75,0.35);
-        }
-        .refresh-btn svg { width: 14px; height: 14px; }
-
-        /* SKELETON */
-        .skeleton-box {
-          background: linear-gradient(90deg, rgba(255,45,85,0.06) 25%, rgba(255,45,85,0.16) 50%, rgba(255,45,85,0.06) 75%);
-          background-size: 200% 100%;
-          animation: skeletonShimmer 1.6s ease-in-out infinite;
-          border-radius: 8px;
-        }
-        @keyframes skeletonShimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-
-        /* TRUST + POWERED */
-        .trust-row {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 20px;
-          margin-top: 14px;
-          flex-wrap: wrap;
-        }
-        .trust-item {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 3px;
-        }
-        .trust-item svg { width: 17px; height: 17px; color: rgba(184,159,165,0.55); }
-        .trust-item span {
-          font-size: 8px;
-          font-weight: 800;
-          letter-spacing: 0.6px;
-          color: rgba(184,159,165,0.55);
-          text-transform: uppercase;
-        }
-
-        .powered-by {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          margin-top: 12px;
-          font-size: 10.5px;
-          font-weight: 700;
-          color: var(--muted-dim);
-          letter-spacing: 0.3px;
-        }
-        .powered-by svg { width: 12px; height: 12px; color: rgba(184,159,165,0.5); }
-        .powered-by b { color: var(--muted); font-weight: 900; }
-
-        /* TOAST */
-        .toast {
-          position: fixed;
-          bottom: 20px; left: 50%;
-          transform: translateX(-50%) translateY(120%);
-          z-index: 100;
-          display: flex; align-items: center; gap: 9px;
-          padding: 10px 15px;
-          border-radius: 11px;
-          background: linear-gradient(165deg, rgba(28,8,14,0.97), rgba(14,3,7,0.98));
-          border: 1px solid var(--card-border);
-          box-shadow: 0 14px 34px rgba(0,0,0,0.6), 0 0 26px rgba(255,30,75,0.15);
-          font-size: 12px; font-weight: 700; color: #fff;
-          opacity: 0;
-          transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-          pointer-events: none;
-        }
-        .toast.toast-error {
-          border-color: rgba(255,30,75,0.4);
-          box-shadow: 0 14px 34px rgba(0,0,0,0.6), 0 0 26px rgba(255,30,75,0.3);
-        }
-        .toast.toast-success {
-          border-color: rgba(43,242,154,0.4);
-          box-shadow: 0 14px 34px rgba(0,0,0,0.6), 0 0 26px rgba(43,242,154,0.2);
-        }
-        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-        .toast-icon {
-          width: 22px; height: 22px; border-radius: 7px;
-          display: grid; place-items: center;
-          background: rgba(43,242,154,0.14);
-          color: #2bf29a;
-          border: 1px solid rgba(43,242,154,0.28);
-          flex-shrink: 0;
-        }
-        .toast-error .toast-icon {
-          background: rgba(255,30,75,0.14);
-          color: #ff4d6d;
-          border-color: rgba(255,30,75,0.3);
-        }
-
-        @media (max-width: 420px) {
-          .pay-card { padding: 14px 14px 12px; }
-          .amount-value { font-size: 24px; }
-          .qr-wrap img { width: 110px; height: 110px; }
-          .timer-value { font-size: 15px; }
-          .trust-row { gap: 14px; }
-        }
-      `}</style>
-
-      <div className="page-stack">
-
-        {/* 0. CANCELLED SCREEN */}
+        {/* 1. CANCELLED SCREEN */}
         {isCancelled ? (
-          <div className="error-card" style={{ borderColor: 'rgba(255,184,52,0.35)' }}>
-            <div className="error-icon" style={{ background: 'rgba(255,184,52,0.12)', color: '#ffb834', borderColor: 'rgba(255,184,52,0.35)' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="15" y1="9" x2="9" y2="15" />
-                <line x1="9" y1="9" x2="15" y2="15" />
-              </svg>
+          <div className="hp-card w-full p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-full mx-auto flex items-center justify-center hp-badge-warn">
+              <X className="w-7 h-7 stroke-[2.5]" />
             </div>
-            <div className="error-title">Payment Cancelled</div>
-            <p className="error-sub" style={{ maxWidth: '340px' }}>
-              Payment cancelled. Agar aapka paisa kat gaya hai to apne bank statement se UTR lekar merchant ko bhejein.
-            </p>
-
-            <div className="action-btn-row">
+            <div>
+              <h2 className="text-lg font-black tracking-tight">Payment Cancelled</h2>
+              <p className="text-xs hp-muted mt-1 leading-relaxed">
+                Payment cancelled. If money was debited from your account, please contact the merchant with your bank UTR.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-center pt-2">
               <button
                 type="button"
-                className="btn-clean btn-retry"
+                className="hp-btn px-4 py-2 text-xs font-bold"
                 onClick={startNewCheckout}
               >
                 Pay again
               </button>
               <button
                 type="button"
-                className="btn-clean btn-secondary"
+                className="hp-btn-ghost px-4 py-2 text-xs font-bold"
                 onClick={handleGoHome}
               >
                 Return Home
@@ -1577,46 +867,33 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             </div>
           </div>
         ) : failedState !== null ? (
-          /* 0.5. PAYMENT FAILED / INCOMPLETE SCREEN */
-          <div className="error-card" style={{ borderColor: 'rgba(255,45,85,0.45)' }}>
-            <div className="error-icon" style={{ background: 'rgba(255,30,75,0.14)', color: '#ff4d6d' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
+          /* 2. PAYMENT FAILED / INCOMPLETE SCREEN */
+          <div className="hp-card w-full p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-full mx-auto flex items-center justify-center hp-badge-bad">
+              <AlertCircle className="w-7 h-7 stroke-[2.5]" />
             </div>
-            <div className="error-title">Payment Incomplete</div>
-            <p className="error-sub" style={{ maxWidth: '360px', color: '#ffc2cc' }}>
-              We received your payment but could not complete it. Please contact the merchant with UTR: <strong style={{ color: '#fff', fontFamily: 'monospace' }}>{failedState.utr || utr || '—'}</strong>.
-            </p>
+            <div>
+              <h2 className="text-lg font-black tracking-tight">Payment Incomplete</h2>
+              <p className="text-xs hp-muted mt-1 leading-relaxed">
+                We received your payment but could not complete it automatically. Please contact the merchant with UTR: <strong className="font-mono">{failedState.utr || utr || '—'}</strong>.
+              </p>
+            </div>
             {failedState.message && (
-              <div style={{
-                fontSize: '11.5px',
-                color: '#ff8ca3',
-                background: 'rgba(255,45,85,0.08)',
-                border: '1px solid rgba(255,45,85,0.25)',
-                borderRadius: '10px',
-                padding: '8px 12px',
-                margin: '0 auto 16px',
-                maxWidth: '340px',
-                textAlign: 'center'
-              }}>
+              <div className="p-2.5 rounded-xl text-xs font-semibold hp-badge-bad">
                 {failedState.message}
               </div>
             )}
-
-            <div className="action-btn-row">
+            <div className="flex gap-2 justify-center pt-2">
               <button
                 type="button"
-                className="btn-clean btn-retry"
+                className="hp-btn px-4 py-2 text-xs font-bold"
                 onClick={startNewCheckout}
               >
                 Try again
               </button>
               <button
                 type="button"
-                className="btn-clean btn-secondary"
+                className="hp-btn-ghost px-4 py-2 text-xs font-bold"
                 onClick={handleGoHome}
               >
                 Return Home
@@ -1624,114 +901,93 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             </div>
           </div>
         ) : isSuccess ? (
-          /* 1. SUCCESS SCREEN */
-          <div className="success-card">
-            <div className="success-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
+          /* 3. SUCCESS SCREEN */
+          <div className="hp-card w-full p-6 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center hp-badge-ok">
+              <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
             </div>
-            <div className="success-title">Payment Verified!</div>
-            <div className="success-sub">Your transaction has been confirmed successfully</div>
+            <div>
+              <h2 className="text-xl font-black tracking-tight">Payment Verified!</h2>
+              <div className="text-xs hp-muted mt-1">Your payment has been successfully confirmed.</div>
+            </div>
 
-            {/* Test Payment Label */}
-            {(isTestMode || orderResult?.test || orderResult?.test_mode) && (
-              <div style={{
-                margin: '10px auto 14px',
-                padding: '6px 14px',
-                borderRadius: '10px',
-                background: 'rgba(255,184,52,0.15)',
-                border: '1px solid rgba(255,184,52,0.35)',
-                color: '#ffb834',
-                fontSize: '11.5px',
-                fontWeight: 800,
-                textAlign: 'center'
-              }}>
+            {isTestMode && (
+              <div className="p-2 rounded-xl text-xs font-bold hp-badge-warn">
                 Test payment successful (no real money moved)
               </div>
             )}
 
-            <div className="success-details">
-              <div className="success-row">
-                <span>Amount Paid</span>
-                <strong style={{ color: '#2bf29a', fontSize: '13.5px' }}>₹{displayAmount}</strong>
+            <div className="hp-panel w-full p-3.5 space-y-2 text-left rounded-xl">
+              <div className="flex items-center justify-between text-xs">
+                <span className="hp-muted font-medium">Amount Paid</span>
+                <span className="font-black font-mono" style={{ color: 'var(--hp-ok)' }}>₹{displayAmount}</span>
               </div>
-              <div className="success-row">
-                <span>UTR Reference</span>
-                <strong>{utr || orderResult?.utr || '—'}</strong>
+              <div className="flex items-center justify-between text-xs">
+                <span className="hp-muted font-medium">UTR Reference</span>
+                <span className="font-mono font-bold">{utr || orderResult?.utr || '—'}</span>
               </div>
               {orderResult?.order_id && (
-                <div className="success-row">
-                  <span>Order ID</span>
-                  <strong>{orderResult.order_id}</strong>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="hp-muted font-medium">Order ID</span>
+                  <span className="font-mono font-bold">{orderResult.order_id}</span>
                 </div>
               )}
-              <div className="success-row">
-                <span>Merchant</span>
-                <strong>{merchantName}</strong>
+              <div className="flex items-center justify-between text-xs">
+                <span className="hp-muted font-medium">Merchant</span>
+                <span className="font-bold truncate max-w-[180px]">{merchantName}</span>
               </div>
-              <div className="success-row">
-                <span>Title</span>
-                <strong>{title}</strong>
+              <div className="flex items-center justify-between text-xs">
+                <span className="hp-muted font-medium">Title</span>
+                <span className="font-semibold truncate max-w-[180px]">{title}</span>
               </div>
             </div>
 
             <button
-              className="refresh-btn"
+              type="button"
+              className="hp-btn w-full py-2.5 text-xs font-black"
               onClick={handleGoHome}
-              style={{
-                background: 'linear-gradient(135deg, #2bf29a 0%, #10b673 100%)',
-                boxShadow: '0 10px 26px rgba(43,242,154,0.35)',
-                color: '#07180e',
-                margin: '0 auto'
-              }}
             >
               Done
             </button>
           </div>
         ) : isLoading ? (
-          /* 2. LOADING SKELETON */
-          <div className="pay-card" style={{ padding: '28px 18px', textAlign: 'center' }}>
-            <div className="skeleton-box" style={{ width: '130px', height: '18px', margin: '0 auto 10px' }} />
-            <div className="skeleton-box" style={{ width: '80px', height: '12px', margin: '0 auto 20px' }} />
-            
-            <div className="skeleton-box" style={{ width: '100%', height: '48px', borderRadius: '12px', marginBottom: '10px' }} />
-            <div className="skeleton-box" style={{ width: '100%', height: '65px', borderRadius: '12px', marginBottom: '10px' }} />
-            <div className="skeleton-box" style={{ width: '100%', height: '40px', borderRadius: '10px', marginBottom: '12px' }} />
-            <div className="skeleton-box" style={{ width: '130px', height: '130px', margin: '0 auto 12px', borderRadius: '12px' }} />
-            <div className="skeleton-box" style={{ width: '100%', height: '90px', borderRadius: '12px' }} />
+          /* 4. LOADING SKELETON */
+          <div className="hp-card w-full p-6 text-center space-y-3 animate-pulse">
+            <div className="w-12 h-12 rounded-full mx-auto bg-white/10" />
+            <div className="w-32 h-4 rounded-md mx-auto bg-white/10" />
+            <div className="w-48 h-3 rounded-md mx-auto bg-white/10" />
+            <div className="w-full h-14 rounded-xl bg-white/10 mt-4" />
+            <div className="w-40 h-40 rounded-xl mx-auto bg-white/10 my-4" />
+            <div className="w-full h-11 rounded-xl bg-white/10" />
           </div>
         ) : errorKind !== null ? (
-          /* 3. ERROR SCREEN (404, 409, 429, NETWORK, NO_UPI, ORDER_UNSUPPORTED, INACTIVE) */
-          <div className="error-card">
-            <div className="error-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="15" y1="9" x2="9" y2="15" />
-                <line x1="9" y1="9" x2="15" y2="15" />
-              </svg>
+          /* 5. ERROR SCREEN */
+          <div className="hp-card w-full p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-full mx-auto flex items-center justify-center hp-badge-bad">
+              <AlertCircle className="w-7 h-7 stroke-[2.5]" />
             </div>
-            <div className="error-title">
-              {errorKind === '404' && 'Payment Link Not Found'}
-              {errorKind === '409' && 'Merchant Unavailable'}
-              {errorKind === '429' && 'Too Many Checkouts'}
-              {errorKind === 'network' && 'Connection Error'}
-              {errorKind === 'no_upi' && 'Payment Unavailable'}
-              {errorKind === 'order_unsupported' && 'Payment Link Required'}
-              {errorKind === 'inactive' && 'Payment Link Disabled'}
-              {errorKind === 'generic' && 'Unable to Load Payment'}
+            <div>
+              <h2 className="text-lg font-black tracking-tight">
+                {errorKind === '404' && 'Payment Link Not Found'}
+                {errorKind === '409' && 'Merchant Unavailable'}
+                {errorKind === '429' && 'Too Many Checkouts'}
+                {errorKind === 'network' && 'Connection Error'}
+                {errorKind === 'no_upi' && 'Payment Unavailable'}
+                {errorKind === 'order_unsupported' && 'Payment Link Required'}
+                {errorKind === 'inactive' && 'Payment Link Disabled'}
+                {errorKind === 'generic' && 'Unable to Load Payment'}
+              </h2>
+              <p className="text-xs hp-muted mt-1 leading-relaxed">
+                {errorKind === '429'
+                  ? (errorMessage || 'Too many people are paying right now. Please try again in a minute.')
+                  : errorMessage}
+              </p>
             </div>
-            <p className="error-sub">
-              {errorKind === '429'
-                ? (errorMessage || 'Too many people are paying right now. Please try again in a minute.')
-                : errorMessage}
-            </p>
-
-            <div className="action-btn-row">
+            <div className="flex gap-2 justify-center pt-2">
               {(errorKind === 'network' || errorKind === '429') && (
                 <button
                   type="button"
-                  className="btn-clean btn-retry"
+                  className="hp-btn px-4 py-2 text-xs font-bold"
                   onClick={loadPaymentData}
                 >
                   Retry Payment
@@ -1739,7 +995,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
               )}
               <button
                 type="button"
-                className="btn-clean btn-secondary"
+                className="hp-btn-ghost px-4 py-2 text-xs font-bold"
                 onClick={handleGoHome}
               >
                 Return Home
@@ -1747,37 +1003,9 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             </div>
           </div>
         ) : (
-          /* 4. ACTIVE PAYMENT CARD */
-          <div className="pay-card">
-
-            {/* Header */}
-            <div className="card-head">
-              <div className="card-brand">
-                <span>Direct Cashier Checkout</span>
-              </div>
-              <div className="card-title">{title}</div>
-              {data?.note && <div className="card-sub">{data.note}</div>}
-            </div>
-
-            {/* Test Mode Banner */}
-            {isTestMode && (
-              <div style={{
-                padding: '12px 14px',
-                borderRadius: '14px',
-                background: 'rgba(255,184,52,0.12)',
-                border: '1px solid rgba(255,184,52,0.35)',
-                color: '#ffb834',
-                fontSize: '12px',
-                fontWeight: 700,
-                textAlign: 'center',
-                lineHeight: '1.45',
-                marginBottom: '14px'
-              }}>
-                TEST MODE: no real money. Enter UTR 000000000000 to simulate a successful payment.
-              </div>
-            )}
-
-            {/* Countdown Timer */}
+          /* 6. ACTIVE CHECKOUT CARD */
+          <div className="w-full space-y-2.5">
+            {/* TIMER */}
             <PaymentCountdownTimer
               expiresAt={expiresAt}
               serverTimeOffset={serverTimeOffset}
@@ -1785,429 +1013,250 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
               onExpire={() => setIsExpired(true)}
             />
 
-            {/* Amount */}
-            <div className="amount-card">
-              <div className="amount-value">₹{displayAmount}</div>
-              <div className="amount-sub">Amount to Pay</div>
-              {hasUniqueAmount && (
-                <div style={{
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  color: '#ffb834',
-                  background: 'rgba(255,184,52,0.1)',
-                  border: '1px solid rgba(255,184,52,0.3)',
-                  borderRadius: '8px',
-                  padding: '5px 10px',
-                  marginTop: '6px',
-                  textAlign: 'center',
-                  lineHeight: '1.4'
-                }}>
-                  Please pay exactly ₹{displayAmount}. This exact amount identifies your payment.
+            {/* TEST MODE BANNER */}
+            {isTestMode && (
+              <div className="w-full p-2.5 rounded-xl border flex items-center justify-between gap-2 hp-badge-warn">
+                <div className="flex items-center gap-2 text-xs font-bold">
+                  <span>⚠️</span>
+                  <span>Test Mode (No Real Money)</span>
                 </div>
-              )}
-            </div>
+                <span className="text-[10px] font-extrabold uppercase">Simulator</span>
+              </div>
+            )}
 
-            {/* UPI & QR Section (Hidden in Test Mode so user does not accidentally send real money) */}
-            {!isTestMode && (
-              <>
-                {/* UPI ID & Merchant details */}
-                <div className="upi-info-box">
-                  <div className="upi-info-details">
-                    <div className="upi-id-text">{activeUpi}</div>
-                    <div className="upi-merchant-text">{merchantName}</div>
+            {/* MAIN CARD */}
+            <div className="hp-card w-full p-5 flex flex-col items-center text-center relative overflow-hidden">
+              
+              {/* Header Brand */}
+              <div className="flex flex-col items-center mb-3">
+                {branding.logo_url && !logoError ? (
+                  <img
+                    src={branding.logo_url}
+                    alt={merchantName}
+                    className="max-h-10 object-contain mb-2"
+                    onError={() => setLogoError(true)}
+                  />
+                ) : (
+                  <div className="w-11 h-11 rounded-full flex items-center justify-center text-base font-black shadow-md mb-2 hp-btn">
+                    {firstLetter}
                   </div>
-                  <button
-                    type="button"
-                    className="copy-upi-btn"
-                    onClick={() => copyToClipboard(activeUpi, 'UPI ID')}
-                    title="Copy UPI ID"
-                  >
-                    Copy ID
-                  </button>
+                )}
+                <h2 className="text-base font-extrabold tracking-tight truncate max-w-[280px]">
+                  {merchantName}
+                </h2>
+                <div className="text-xs hp-muted font-medium mt-0.5">
+                  {title}
                 </div>
+                {data?.note && (
+                  <div className="text-[11px] hp-muted mt-1 italic max-w-[280px]">
+                    {data.note}
+                  </div>
+                )}
+              </div>
 
-                {/* QR Section */}
-                <div className="qr-section">
-                  <div className="qr-wrap">
-                    <img
-                      src={qrImageSrc}
-                      alt="Scan QR code to pay"
-                      crossOrigin="anonymous"
-                    />
+              {/* Amount Card */}
+              <div className="hp-panel w-full py-3 px-4 mb-3.5 rounded-xl">
+                <span className="text-[10px] uppercase font-extrabold tracking-wider block mb-0.5 hp-muted">
+                  Amount to Pay
+                </span>
+                <div className="text-2xl font-black font-mono tracking-tight">
+                  ₹{displayAmount}
+                </div>
+                {hasUniqueAmount && (
+                  <div className="text-[11px] font-bold mt-1.5 p-1 rounded-lg hp-badge-warn">
+                    Please pay exactly ₹{displayAmount}. This exact amount identifies your payment.
+                  </div>
+                )}
+              </div>
+
+              {/* QR & UPI Section (Live mode) */}
+              {!isTestMode && (
+                <div className="w-full flex flex-col items-center mb-3 space-y-3">
+                  
+                  {/* QR Box (always pure white inside for scan reliability) */}
+                  <div className="flex flex-col items-center">
+                    <div className="hp-qr-box">
+                      <img
+                        src={qrImageSrc}
+                        alt="UPI Payment QR Code"
+                        className="w-40 h-40 object-contain"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDownloadQr}
+                      disabled={isDownloading}
+                      className="mt-2 text-[11px] font-bold hp-muted hover:hp-accent inline-flex items-center gap-1.5 cursor-pointer transition"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>{isDownloading ? 'Saving...' : 'Download QR'}</span>
+                    </button>
                   </div>
 
-                  {/* Direct UPI Intent Button */}
+                  {/* UPI ID Row */}
+                  {activeUpi && (
+                    <div className="hp-panel w-full p-2.5 px-3 flex items-center justify-between gap-2">
+                      <div className="min-w-0 text-left">
+                        <span className="text-[9px] uppercase font-bold hp-muted tracking-wider block">
+                          Merchant UPI ID
+                        </span>
+                        <span className="font-mono text-xs font-bold truncate block">
+                          {activeUpi}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(activeUpi, 'UPI ID')}
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg hp-btn-ghost flex items-center gap-1 cursor-pointer"
+                      >
+                        <Copy className="w-3 h-3 hp-accent" />
+                        <span>Copy</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Primary UPI Intent Button */}
                   {upiPayUrl && (
                     <a
                       href={upiPayUrl}
-                      className="pay-intent-primary"
-                      target="_blank"
-                      rel="noreferrer"
+                      className="hp-btn w-full py-3 px-4 text-xs font-black tracking-wide flex items-center justify-center gap-2 cursor-pointer no-underline"
                     >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="5" y="2" width="14" height="20" rx="2" />
-                        <path d="M12 18h.01" />
-                      </svg>
+                      <Smartphone className="w-4 h-4" />
                       <span>Pay via UPI App</span>
                     </a>
                   )}
 
-                  {/* Specific app intents for mobile devices */}
-                  {activeUpi && (
-                    <div className="app-intents-row">
-                      <a
-                        href={`fam://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`}
-                        className="intent-btn"
-                        title="Pay with FamPay"
-                      >
-                        FamPay
-                      </a>
-                      <a
-                        href={`gpay://upi/pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`}
-                        className="intent-btn"
-                        title="Pay with GPay"
-                      >
-                        GPay
-                      </a>
-                      <a
-                        href={`phonepe://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`}
-                        className="intent-btn"
-                        title="Pay with PhonePe"
-                      >
-                        PhonePe
-                      </a>
-                    </div>
-                  )}
-
-                  <div className="qr-hint">
-                    Scan with any UPI app or click button above
-                  </div>
-
-                  <button
-                    type="button"
-                    className="download-btn"
-                    onClick={handleDownloadQr}
-                    disabled={isDownloading}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 3v12M7 10l5 5 5-5" />
-                      <path d="M5 21h14" />
-                    </svg>
-                    {isDownloading ? 'Saving...' : 'Download QR'}
-                  </button>
-                </div>
-
-                {/* Auto payment detection status line */}
-                <div style={{
-                  margin: '14px 0',
-                  padding: '10px 14px',
-                  borderRadius: '12px',
-                  background: 'rgba(255,30,75,0.06)',
-                  border: '1px solid rgba(255,45,85,0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '10px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', fontWeight: 700 }}>
+                  {/* Status Indicator Pulse */}
+                  <div className="flex items-center justify-center gap-2 py-1 text-xs font-bold hp-muted">
                     {autoDetect === false ? (
                       <>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ffb834', flexShrink: 0 }} />
-                        <span style={{ color: '#ffb834' }}>
-                          Auto-detection unavailable. Enter your UTR below after paying.
-                        </span>
+                        <span className="w-2 h-2 rounded-full" style={{ background: 'var(--hp-warn)' }} />
+                        <span>Auto-detection unavailable. Enter UTR below.</span>
                       </>
                     ) : (
                       <>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2bf29a', flexShrink: 0, boxShadow: '0 0 10px #2bf29a' }} />
-                        <span style={{ color: '#fff2f4' }}>
-                          Waiting for your payment...
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--hp-ok)' }} />
+                          <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: 'var(--hp-ok)' }} />
                         </span>
+                        <span>Waiting for your payment...</span>
                       </>
                     )}
                   </div>
+                </div>
+              )}
 
-                  {isReconnecting && (
-                    <span style={{
-                      fontSize: '10px',
-                      fontWeight: 800,
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                      background: 'rgba(255,184,52,0.15)',
-                      color: '#ffb834',
-                      border: '1px solid rgba(255,184,52,0.3)',
-                      letterSpacing: '0.4px',
-                      textTransform: 'uppercase',
-                      flexShrink: 0
-                    }}>
-                      Reconnecting...
-                    </span>
+              {/* UTR Verification Section */}
+              <div className="w-full pt-2 border-t border-[rgba(255,255,255,0.08)] space-y-2 text-left">
+                <div className="text-[11px] font-extrabold hp-muted">
+                  {isTestMode ? 'Test UTR Simulator' : 'Paid already? Enter UTR number:'}
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={utr}
+                    onChange={handleUtrChange}
+                    placeholder={isTestMode ? '000000000000' : 'e.g. 623851978381'}
+                    maxLength={30}
+                    disabled={isExpired || isVerifying}
+                    className={`hp-input w-full px-3 py-2 text-xs font-mono ${isShaking ? 'animate-bounce' : ''}`}
+                  />
+                  {isTestMode && (
+                    <button
+                      type="button"
+                      onClick={() => setUtr('000000000000')}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded text-[10px] font-extrabold hp-btn-ghost cursor-pointer"
+                    >
+                      Fill test UTR
+                    </button>
                   )}
                 </div>
-              </>
-            )}
 
-            {/* UTR Verification Section */}
-            <div className="utr-section">
-              <div className="utr-header">
-                <div className="utr-header-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="5" y="3" width="14" height="18" rx="2" />
-                    <path d="M9 8h6M9 12h6M9 16h4" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="utr-header-title">
-                    {isTestMode ? 'Enter Test UTR' : 'Paid but not confirmed automatically? Enter your UTR.'}
+                {verifyError && (
+                  <div className="p-2 rounded-lg text-xs font-semibold hp-badge-bad flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{verifyError}</span>
                   </div>
-                  <div className="utr-header-sub">
-                    {isTestMode ? 'Use 000000000000 to simulate test verification' : 'Submit your 6-30 character UPI reference code to verify manually'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="utr-input-wrap">
-                <span className="utr-input-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="6" width="20" height="12" rx="2" />
-                    <path d="M6 10h4M6 14h8" />
-                  </svg>
-                </span>
-                <input
-                  type="text"
-                  value={utr}
-                  onChange={handleUtrChange}
-                  className={`utr-input ${isShaking ? 'shake' : ''}`}
-                  placeholder={isTestMode ? '000000000000' : 'e.g. 623851978381'}
-                  autoComplete="off"
-                  maxLength={30}
-                  disabled={isExpired || isVerifying}
-                />
-              </div>
-
-              {isTestMode && (
-                <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUtr('000000000000');
-                      if (verifyError) setVerifyError(null);
-                    }}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: '8px',
-                      background: 'rgba(255,184,52,0.18)',
-                      border: '1px solid rgba(255,184,52,0.4)',
-                      color: '#ffb834',
-                      fontSize: '11px',
-                      fontWeight: 800,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Fill test UTR
-                  </button>
-                </div>
-              )}
-
-              {verifyError && (
-                <div className="utr-alert">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  <span>{verifyError}</span>
-                </div>
-              )}
-
-              <button
-                type="button"
-                className="utr-verify-btn"
-                onClick={handleVerify}
-                disabled={isExpired || isVerifying || !isUtrValid}
-              >
-                {isVerifying ? (
-                  <>
-                    <svg className="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                    </svg>
-                    <span>Verifying UTR...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
-                    <span>Verify Payment</span>
-                  </>
                 )}
-              </button>
 
-              <div className="utr-help">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 16v-4M12 8h.01" />
-                </svg>
-                Find 6-30 digit Ref / UTR number in your UPI transaction receipt
+                <button
+                  type="button"
+                  onClick={handleVerify}
+                  disabled={isExpired || isVerifying || !isUtrValid}
+                  className="hp-btn w-full py-2 px-3 text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isVerifying ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Verifying...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Verify Payment</span>
+                    </>
+                  )}
+                </button>
               </div>
-            </div>
 
-            {/* Cancel payment secondary action */}
-            {!isExpired && !isSuccess && !isCancelled && (
-              <div style={{ textAlign: 'center', marginTop: '14px' }}>
+              {/* Cancel Action */}
+              {!isExpired && (
                 <button
                   type="button"
                   onClick={() => setShowCancelModal(true)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#83686e',
-                    fontSize: '11.5px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    textDecoration: 'underline',
-                    transition: 'color 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ff4d6d')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = '#83686e')}
+                  className="mt-3 text-[11px] font-bold hp-muted hover:hp-accent transition cursor-pointer"
                 >
                   Cancel payment
                 </button>
-              </div>
-            )}
+              )}
 
-            {/* Expired Overlay */}
-            <div className={`expired-overlay ${isExpired ? 'show' : ''}`}>
-              <div className="expired-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v5l3 2" />
-                </svg>
-              </div>
-              <div className="expired-title">This checkout expired</div>
-              <div className="expired-sub">This payment checkout has expired. Start a new checkout to get a fresh QR code and timer.</div>
-              <button type="button" className="refresh-btn" onClick={startNewCheckout}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5" />
-                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" />
-                </svg>
-                Start new checkout
-              </button>
             </div>
-
           </div>
         )}
 
-        {/* Security badges */}
-        <div className="trust-row">
-          <div className="trust-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-              <path d="m9 12 2 2 4-4" />
-            </svg>
-            <span>PCI DSS</span>
+        {/* FOOTER */}
+        <div className="w-full mt-4 text-center space-y-1.5">
+          {branding.footer && branding.footer.trim() && (
+            <div className="text-xs hp-muted font-medium break-words px-2">
+              {branding.footer.trim()}
+            </div>
+          )}
+          <div className="flex items-center justify-center gap-1.5 text-[11px] hp-muted font-bold tracking-wider">
+            <ShieldCheck className="w-3.5 h-3.5 opacity-70" />
+            <span>Powered by {branding.powered_by || 'Hamro Pay'}</span>
           </div>
-          <div className="trust-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="4" y="11" width="16" height="10" rx="2" />
-              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-            </svg>
-            <span>SSL 256-BIT</span>
-          </div>
-          <div className="trust-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="9" />
-              <path d="m9 12 2 2 4-4" />
-            </svg>
-            <span>VERIFIED</span>
-          </div>
-          <div className="trust-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="6" y="2" width="12" height="20" rx="2" />
-              <path d="M12 18h.01" />
-            </svg>
-            <span>UPI AUTO</span>
-          </div>
-        </div>
-
-        <div className="powered-by">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-          </svg>
-          Powered by <b>HamroPay</b>
         </div>
 
       </div>
 
-      {/* Cancel Confirmation Modal */}
+      {/* CANCEL PAYMENT CONFIRMATION MODAL */}
       {showCancelModal && (
         <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-            background: 'rgba(4, 1, 2, 0.85)',
-            backdropFilter: 'blur(8px)'
-          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(0,0,0,0.8)] backdrop-blur-xs"
           onClick={() => setShowCancelModal(false)}
         >
           <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              maxWidth: '420px',
-              borderRadius: '20px',
-              background: 'linear-gradient(135deg, rgba(28, 6, 12, 0.98), rgba(14, 2, 6, 0.99))',
-              border: '1px solid rgba(255, 45, 85, 0.3)',
-              padding: '24px',
-              boxShadow: '0 40px 90px rgba(0,0,0,0.85)',
-              color: '#fff2f4'
-            }}
-            onClick={(e) => e.stopPropagation()}
+            className="hp-card w-full max-w-sm p-6 shadow-2xl space-y-4"
+            onClick={e => e.stopPropagation()}
           >
-            <div style={{ fontSize: '15px', fontWeight: 900, marginBottom: '8px', color: '#fff' }}>
-              Cancel this payment?
-            </div>
-            <p style={{ fontSize: '12px', color: '#d4c2c7', lineHeight: '1.6', marginBottom: '20px' }}>
-              Cancel this payment? Agar aap paisa bhej chuke hain to apna UTR sambhal ke rakhein aur merchant se sampark karein.
+            <div className="text-base font-black">Cancel this payment?</div>
+            <p className="text-xs hp-muted leading-relaxed">
+              If you have already sent money, keep your bank UTR and contact the merchant.
             </p>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <div className="flex gap-2 justify-end pt-2">
               <button
                 type="button"
                 onClick={() => setShowCancelModal(false)}
-                style={{
-                  padding: '9px 16px',
-                  borderRadius: '10px',
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  color: '#fff',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
+                className="hp-btn-ghost px-4 py-2 text-xs font-bold cursor-pointer"
               >
                 Keep paying
               </button>
               <button
                 type="button"
                 onClick={handleCancelPayment}
-                style={{
-                  padding: '9px 16px',
-                  borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #ff1e4b, #d8002f)',
-                  border: 'none',
-                  color: '#fff',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  boxShadow: '0 6px 16px rgba(255,30,75,0.35)'
-                }}
+                className="hp-btn px-4 py-2 text-xs font-black cursor-pointer"
               >
                 Yes, cancel
               </button>
@@ -2216,20 +1265,21 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         </div>
       )}
 
-      {/* Toast Notification */}
-      <div className={`toast ${toastShow ? 'show' : ''} ${toastType === 'error' ? 'toast-error' : toastType === 'success' ? 'toast-success' : ''}`}>
-        <div className="toast-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
-            {toastType === 'error' ? (
-              <path d="M18 6 6 18M6 6l12 12" />
-            ) : (
-              <path d="M20 6 9 17l-5-5" />
-            )}
-          </svg>
+      {/* TOAST OVERLAY */}
+      {toastShow && (
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-2 ${
+            toastType === 'error' ? 'hp-badge-bad' : toastType === 'success' ? 'hp-badge-ok' : 'hp-panel'
+          }`}
+        >
+          {toastType === 'error' ? (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          )}
+          <span>{toastMsg}</span>
         </div>
-        <span>{toastMsg}</span>
-      </div>
-
+      )}
     </div>
   );
 };
