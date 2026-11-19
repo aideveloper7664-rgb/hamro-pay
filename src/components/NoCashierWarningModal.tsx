@@ -3,16 +3,26 @@ import { AlertTriangle, ShieldAlert, ArrowRight, X } from 'lucide-react';
 
 interface NoCashierWarningModalProps {
   isOpen: boolean;
-  onConnectFamPay: () => void;
+  onSelectProvider?: (view: 'fampay' | 'amazon' | 'paytm') => void;
+  onConnectFamPay?: () => void;
   onClose: () => void;
 }
 
 export default function NoCashierWarningModal({
   isOpen,
+  onSelectProvider,
   onConnectFamPay,
   onClose
 }: NoCashierWarningModalProps) {
   if (!isOpen) return null;
+
+  const handlePick = (provider: 'fampay' | 'amazon' | 'paytm') => {
+    if (onSelectProvider) {
+      onSelectProvider(provider);
+    } else if (onConnectFamPay) {
+      onConnectFamPay();
+    }
+  };
 
   return (
     <div
@@ -43,35 +53,44 @@ export default function NoCashierWarningModal({
             <span>No Payment Account Connected</span>
           </h3>
           <p className="text-xs text-[#d4c2c7] leading-relaxed">
-            Please connect your FamPay account first to create payment links. Without a connected cashier, customer payments cannot be processed.
+            Please connect a FamPay, Amazon Pay, or Paytm account first to create payment links. Without an active cashier, customer payments cannot be processed.
           </p>
         </div>
 
         {/* Notice Card */}
         <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11.5px] text-amber-200 font-medium flex items-center gap-2.5">
           <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-          <span>Connecting your FamPay UPI account gives you instant direct settlements.</span>
+          <span>Connecting your UPI cashier account gives you instant direct settlements.</span>
         </div>
 
-        {/* Actions: Connect FamPay, Paytm (Coming soon), or Cancel */}
+        {/* Actions: Connect FamPay, Amazon Pay, Paytm, or Cancel */}
         <div className="flex flex-col gap-2 pt-2">
-          <div className="flex flex-col sm:flex-row gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
               type="button"
-              onClick={onConnectFamPay}
-              className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-extrabold shadow-md shadow-rose-600/30 hover:shadow-lg hover:shadow-rose-600/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              onClick={() => handlePick('fampay')}
+              className="py-2.5 px-3 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-extrabold shadow-md shadow-rose-600/30 hover:shadow-lg hover:shadow-rose-600/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1"
             >
-              <span>Connect FamPay</span>
+              <span>FamPay</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
 
             <button
               type="button"
-              disabled
-              className="flex-1 py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-400 text-xs font-bold transition opacity-60 cursor-not-allowed flex items-center justify-center gap-2"
+              onClick={() => handlePick('amazon')}
+              className="py-2.5 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-200 text-xs font-extrabold active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1"
+            >
+              <span>Amazon Pay</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handlePick('paytm')}
+              className="py-2.5 px-3 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 text-sky-200 text-xs font-extrabold active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1"
             >
               <span>Paytm</span>
-              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">Coming soon</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 

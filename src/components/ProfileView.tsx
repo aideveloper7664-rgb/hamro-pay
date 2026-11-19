@@ -20,6 +20,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { MerchantProfile } from '../types';
+import { CashierAccount, getCashierProviderMeta } from '../services/cashier.service';
 
 interface ProfileViewProps {
   profile: MerchantProfile;
@@ -27,14 +28,23 @@ interface ProfileViewProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onOpenSidebar?: () => void;
   onViewChange?: (view: string) => void;
+  activeCashier?: CashierAccount | null;
 }
 
 export default function ProfileView({
   profile,
   onProfileSave,
   showToast,
-  onViewChange
+  onViewChange,
+  activeCashier
 }: ProfileViewProps) {
+  const providerMeta = activeCashier ? getCashierProviderMeta(activeCashier.type) : null;
+  const connectTargetView = (() => {
+    const t = (activeCashier?.type || '').toLowerCase();
+    if (t === 'amazon') return 'amazon';
+    if (t === 'paytm' || t === 'paytm_mid') return 'paytm';
+    return 'fampay';
+  })();
   const getStoredMerchant = () => {
     try {
       return JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
@@ -165,11 +175,11 @@ export default function ProfileView({
             </button>
             <button
               type="button"
-              onClick={() => onViewChange('fampay')}
+              onClick={() => onViewChange(connectTargetView)}
               className="px-3.5 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
               <CreditCard className="w-4 h-4 text-rose-400" />
-              <span>FamPay Connect</span>
+              <span>{providerMeta ? `${providerMeta.label} Connect` : 'Payment Accounts'}</span>
             </button>
           </div>
         )}
@@ -444,7 +454,9 @@ export default function ProfileView({
               </div>
               <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[11px]">
                 <span className="text-slate-400">Direct Settlements</span>
-                <span className="text-white font-bold">FamPay Cashier</span>
+                <span className="text-white font-bold">
+                  {providerMeta ? `${providerMeta.label} Cashier` : 'Not Connected'}
+                </span>
               </div>
             </div>
           </div>

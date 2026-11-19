@@ -220,6 +220,65 @@ export default function Sidebar({
               <span className="hp-new-badge">Cashier</span>
             </div>
 
+            {/* Amazon Pay Connect */}
+            <div
+              className={`hp-nav-item ${currentView === 'amazon' ? 'active' : ''}`}
+              onClick={() => handleNavClick('amazon')}
+            >
+              <span
+                className="hp-nav-icon"
+                style={{
+                  background: 'linear-gradient(135deg, #ff9900, #d97706)',
+                  boxShadow: '0 4px 14px rgba(255,153,0,0.35)',
+                }}
+              >
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                  <path d="M3 6h18" />
+                  <path d="M16 10a4 4 0 0 1-8 0" />
+                </svg>
+              </span>
+              <span className="flex-1 min-w-0 truncate">Amazon Pay</span>
+              <span className="hp-new-badge">New</span>
+            </div>
+
+            {/* Paytm Connect */}
+            <div
+              className={`hp-nav-item ${currentView === 'paytm' ? 'active' : ''}`}
+              onClick={() => handleNavClick('paytm')}
+            >
+              <span
+                className="hp-nav-icon"
+                style={{
+                  background: 'linear-gradient(135deg, #00baf2, #007eb8)',
+                  boxShadow: '0 4px 14px rgba(0,186,242,0.35)',
+                }}
+              >
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="2" y="5" width="20" height="14" rx="2" />
+                  <path d="M2 10h20" />
+                </svg>
+              </span>
+              <span className="flex-1 min-w-0 truncate">Paytm Connect</span>
+              <span className="hp-new-badge">MID</span>
+            </div>
+
             {/* Developer Portal Group */}
             <div className={`hp-nav-group flex flex-col ${expandedGroups.dev ? 'expanded' : ''}`}>
               <div

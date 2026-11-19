@@ -160,6 +160,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [payAmount, setPayAmount] = useState<number>(0);
   const [baseAmount, setBaseAmount] = useState<number>(0);
   const [sessionQrCode, setSessionQrCode] = useState<string>('');
+  const [sessionUpiUri, setSessionUpiUri] = useState<string>('');
   const [expiresAt, setExpiresAt] = useState<string>('');
   const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
 
@@ -383,6 +384,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
       setData(paymentData);
       setActiveUpi(upi);
+      if (paymentData.upi_uri) setSessionUpiUri(paymentData.upi_uri);
       setPayAmount(Number(paymentData.amount || 0));
       setBaseAmount(Number(paymentData.amount || 0));
 
@@ -462,6 +464,10 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             setPayAmount(Number(sData.pay_amount || sData.base_amount || paymentData.amount || 0));
             setBaseAmount(Number(sData.base_amount || paymentData.amount || 0));
             if (sData.upi_id) setActiveUpi(sData.upi_id);
+            if (sData.upi_uri) setSessionUpiUri(sData.upi_uri);
+            if (sData.cashier_type) {
+              setData(prev => (prev ? { ...prev, cashier_type: sData.cashier_type } : prev));
+            }
             if (sData.qr_code) setSessionQrCode(sData.qr_code);
 
             const serverTimeMs = sData.server_time ? Date.parse(sData.server_time) : Date.now();
@@ -677,6 +683,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     setIsCancelled(false);
     setFailedState(null);
     setOrderResult(null);
+    setSessionUpiUri('');
     setUtr('');
     setVerifyError(null);
     loadPaymentData();
@@ -822,9 +829,11 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const displayAmount = payAmount > 0 ? payAmount.toFixed(2) : (data?.amount ? data.amount.toFixed(2) : '0.00');
   const hasUniqueAmount = baseAmount > 0 && payAmount > 0 && payAmount !== baseAmount;
 
-  const upiPayUrl = activeUpi
+  const upiPayUrl = sessionUpiUri || (activeUpi
     ? `upi://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`
-    : '';
+    : '');
+
+  const isPaytmMid = data?.cashier_type === 'paytm_mid' || Boolean(sessionUpiUri && /[?&]tr=/.test(sessionUpiUri));
 
   const qrImageSrc = sessionQrCode || `${API_URL}/api/payment-link/${encodeURIComponent(id)}/qr`;
   const firstLetter = merchantName.charAt(0).toUpperCase() || 'M';
@@ -1173,6 +1182,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                     </button>
                   )}
                 </div>
+
+                {isPaytmMid && !isTestMode && (
+                  <p className="text-[10.5px] hp-muted leading-snug">
+                    Enter your <strong className="font-bold">Paytm bank transaction ID / transaction ID</strong> (12-digit UTR from your UPI app receipt).
+                  </p>
+                )}
 
                 {verifyError && (
                   <div className="p-2 rounded-lg text-xs font-semibold hp-badge-bad flex items-center gap-1.5">

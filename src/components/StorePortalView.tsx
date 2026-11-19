@@ -183,7 +183,7 @@ export default function StorePortalView({ showToast }: StorePortalViewProps) {
             Designed for Nepali Businesses &amp; Retailers
           </h3>
           <p className="text-xs text-slate-300 leading-relaxed max-w-lg mt-1">
-            Whether you sell clothing, electronics, handicrafts, or services — HamroPay Store Portal gives you a professional e-commerce site with integrated eSewa, Khalti, Fonepay, and FamPay options.
+            Whether you sell clothing, electronics, handicrafts, or services — HamroPay Store Portal gives you a professional e-commerce site with integrated eSewa, Khalti, Fonepay, FamPay, Amazon Pay, and Paytm options.
           </p>
         </div>
 

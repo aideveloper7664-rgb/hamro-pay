@@ -4,9 +4,10 @@ import { getStatus } from '../services/fampay.service';
 import FamPayConnectView from './FamPayConnectView';
 import StorePortalView from './StorePortalView';
 import PaytmConnectView from './PaytmConnectView';
+import AmazonConnectView from './AmazonConnectView';
 
 interface ConnectViewProps {
-  viewId: 'fampay' | 'paytm' | 'developer' | 'store' | string;
+  viewId: 'fampay' | 'amazon' | 'paytm' | 'developer' | 'store' | string;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   isApiSimulated: boolean;
   apiBaseUrl: string;
@@ -31,6 +32,15 @@ export default function ConnectView({
   if (viewId === 'paytm') {
     return (
       <PaytmConnectView
+        onViewChange={onViewChange}
+        showToast={showToast}
+      />
+    );
+  }
+
+  if (viewId === 'amazon') {
+    return (
+      <AmazonConnectView
         onViewChange={onViewChange}
         showToast={showToast}
       />

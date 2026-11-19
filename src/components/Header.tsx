@@ -47,6 +47,8 @@ export default function Header({
       case 'profile': return 'Account Profile';
       case 'pricing': return 'Upgrade Plan';
       case 'fampay': return 'FamPay Connect';
+      case 'amazon': return 'Amazon Pay';
+      case 'paytm': return 'Paytm Connect';
       case 'support': return 'Support Desk';
       case 'referral': return 'Refer & Earn';
       case 'promo': return 'Promo Code';

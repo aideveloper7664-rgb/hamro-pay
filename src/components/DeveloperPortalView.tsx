@@ -1,5 +1,6 @@
 import { PanelLeft, RefreshCw, Copy, Check, Eye, EyeOff, AlertTriangle, ExternalLink, Loader2, KeyRound, Globe, Radio, Plus, Trash2, ArrowUpRight } from 'lucide-react';
 import { getTokenInfo, regenerateKey, setMode, getApiOrders, getWebhooks, addWebhook, deleteWebhook, createApiOrder } from '../services/developer.service';
+import { CashierAccount, getCashierProviderMeta } from '../services/cashier.service';
 import { useState, useEffect, useRef } from 'react';
 
 interface DeveloperPortalViewProps {
@@ -8,6 +9,7 @@ interface DeveloperPortalViewProps {
   onViewChange?: (view: string) => void;
   gatewayMode: 'live' | 'test';
   setGatewayMode: (mode: 'live' | 'test') => void;
+  activeCashier?: CashierAccount | null;
 }
 
 export interface DeveloperOrder {
@@ -27,8 +29,12 @@ export default function DeveloperPortalView({
   onOpenSidebar,
   onViewChange,
   gatewayMode,
-  setGatewayMode
+  setGatewayMode,
+  activeCashier
 }: DeveloperPortalViewProps) {
+  const activeProviderName = activeCashier
+    ? getCashierProviderMeta(activeCashier.type).label
+    : 'connected payment account';
   const getStoredApiKey = () => {
     try {
       const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
@@ -195,7 +201,7 @@ export default function DeveloperPortalView({
   const handleModeSelect = async (mode: 'live' | 'test') => {
     if (mode === gatewayMode || isSwitchingMode) return;
     const confirmMsg = mode === 'live'
-      ? 'Switch to LIVE mode?\n\nCustomers will make real UPI payments directly into your connected FamPay account.'
+      ? `Switch to LIVE mode?\n\nCustomers will make real UPI payments directly into your active ${activeProviderName}.`
       : 'Switch to TEST mode?\n\nReal payments will stop for API orders. Customers will see a test simulator instead.';
 
     if (!window.confirm(confirmMsg)) return;
@@ -520,7 +526,7 @@ export default function DeveloperPortalView({
 
           <div className="gateway-desc text-xs text-slate-300 leading-relaxed mb-4">
             Applies to API orders created with <code>/api/developer/create-order</code>.<br />
-            <strong>Live:</strong> real UPI checkout, real money, payment auto-detected from your connected FamPay account.<br />
+            <strong>Live:</strong> real UPI checkout, real money, payment auto-detected from your active {activeProviderName}.<br />
             <strong>Test:</strong> no real money; customer sees a simulator and can select Success, Failed, or Cancelled directly.
           </div>
 
@@ -539,7 +545,9 @@ export default function DeveloperPortalView({
                   <span>Live Mode</span>
                   {gatewayMode === 'live' && <span className="text-[10px] bg-emerald-500/30 text-emerald-200 px-1.5 py-0.5 rounded">Active</span>}
                 </div>
-                <div className="mode-sub text-xs text-slate-400">Real UPI collections into your FamPay account</div>
+                <div className="mode-sub text-xs text-slate-400">
+                  Real UPI collections into your {activeProviderName}
+                </div>
               </div>
             </button>
 

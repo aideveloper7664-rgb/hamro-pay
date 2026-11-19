@@ -273,7 +273,7 @@ export const ApiDocsPage: React.FC<ApiDocsPageProps> = ({ onBackToDashboard }) =
             <p>
               Accept UPI payments on your website or app with three calls: create an order,
               send your customer to pay, then confirm the result from your server. Payments are
-              detected automatically from your connected FamPay account.
+              detected automatically from your active cashier (FamPay, Amazon Pay, or Paytm).
             </p>
 
             <div className="row" style={{ display: 'flex', gap: '10px', marginTop: '18px', flexWrap: 'wrap' }}>
@@ -296,7 +296,7 @@ export const ApiDocsPage: React.FC<ApiDocsPageProps> = ({ onBackToDashboard }) =
               </div>
               <div>
                 <b>3 · Auto-detected</b>
-                <span>Hamro Pay spots the payment in your FamPay emails within seconds.</span>
+                <span>Hamro Pay detects the payment via your active cashier (Gmail or Paytm Business API).</span>
               </div>
               <div>
                 <b>4 · You verify</b>
@@ -326,7 +326,7 @@ export const ApiDocsPage: React.FC<ApiDocsPageProps> = ({ onBackToDashboard }) =
 
               <h3>Before you take live payments</h3>
               <ul>
-                <li>Connect a <strong>FamPay account</strong> (UPI ID + Gmail App Password). Payments are detected from that Gmail.</li>
+                <li>Connect a <strong>payment account</strong> (FamPay, Amazon Pay, or Paytm via MID &amp; Key or Gmail App Password).</li>
                 <li>Keep some <strong>Hamro Credits</strong>. Commission is deducted from credits on every successful payment.</li>
                 <li>Stay in <strong>Live mode</strong> (see <a onClick={() => scrollTo('testmode')} style={{ cursor: 'pointer' }}>Test &amp; Live mode</a>).</li>
               </ul>
@@ -677,7 +677,7 @@ export const ApiDocsPage: React.FC<ApiDocsPageProps> = ({ onBackToDashboard }) =
                 </li>
               </ul>
               <p>
-                In Test mode you don't need a FamPay account, credits or wallet room, and <code>pay_amount</code> always
+                In Test mode you don't need an active payment account, credits or wallet room, and <code>pay_amount</code> always
                 equals <code>amount</code>. Nothing else changes shape: <code>order-status</code> returns the same
                 <code>pending</code> / <code>success</code> / <code>failed</code> values (plus <code>"mode": "test"</code>),
                 so the code you write for testing is the code you ship.

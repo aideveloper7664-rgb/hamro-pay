@@ -4,6 +4,7 @@ import { PaymentLink, Transaction } from '../types';
 import { getPayments } from '../services/wallet.service';
 import { getCreditBalance } from '../services/credits.service';
 import { useAuth } from '../context/AuthContext';
+import PaymentRoutingCard from './PaymentRoutingCard';
 
 interface DashboardViewProps {
   profileName: string;
@@ -17,6 +18,8 @@ interface DashboardViewProps {
   currentPlan?: string;
   onOpenSidebar?: () => void;
   unreadNotifications?: number;
+  showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onCashierChanged?: () => void;
 }
 
 export default function DashboardView({
@@ -30,6 +33,8 @@ export default function DashboardView({
   currentPlan = 'Blaze Free',
   onOpenSidebar,
   unreadNotifications = 0,
+  showToast,
+  onCashierChanged,
 }: DashboardViewProps) {
   const { user } = useAuth();
   const [creditBalance, setCreditBalance] = useState<number>(0);
@@ -1025,6 +1030,13 @@ export default function DashboardView({
             Upgrade Plan
           </button>
         </div>
+
+        {/* Payment Routing Selector */}
+        <PaymentRoutingCard
+          onViewChange={onViewChange}
+          showToast={showToast}
+          onCashierChanged={() => onCashierChanged?.()}
+        />
 
         {/* Row 1: 4 cards */}
         <div className="stats-grid">
