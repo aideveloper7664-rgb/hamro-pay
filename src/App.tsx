@@ -27,8 +27,9 @@ import DeveloperPortalView from './components/DeveloperPortalView';
 import ApiIntegrationView from './components/ApiIntegrationView';
 import StorePortalView from './components/StorePortalView';
 import FamPayConnectView from './components/FamPayConnectView';
+import AmazonConnectView from './components/AmazonConnectView';
 import CustomizePageView from './components/CustomizePageView';
-import { getActiveCashier } from './services/cashier.service';
+import { CashierAccount, getActiveCashier } from './services/cashier.service';
 import { getCreditBalance } from './services/credits.service';
 import { setMode } from './services/developer.service';
 import Modal from './components/Modal';
@@ -49,11 +50,25 @@ export default function App() {
 
   const [authMode, setAuthMode] = useState<'login' | 'signup' | null>(null);
 
+  const VALID_VIEWS = new Set([
+    'dashboard', 'links', 'wallet', 'transactions', 'notifications', 'pricing',
+    'profile', 'referral', 'promo', 'support', 'developer', 'api-docs',
+    'api-integration', 'store', 'fampay', 'amazon', 'paytm', 'customize'
+  ]);
+
   const [currentView, setCurrentView] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname;
       if (p.startsWith('/api/docs') || p.startsWith('/api/dosc') || p === '/docs' || p.startsWith('/docs')) {
         return 'api-docs';
+      }
+      try {
+        const saved = localStorage.getItem('hamro_current_view');
+        if (saved && VALID_VIEWS.has(saved)) {
+          return saved;
+        }
+      } catch {
+        // Ignore storage errors
       }
     }
     return 'dashboard';
@@ -84,9 +99,25 @@ export default function App() {
     }
   };
 
+  const [activeCashier, setActiveCashier] = useState<CashierAccount | null>(null);
+
+  const refreshActiveCashier = async () => {
+    try {
+      const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+      const apiKey = merchant.api_key || localStorage.getItem('hamropay_api_key') || '';
+      const active = await getActiveCashier(apiKey || undefined);
+      setActiveCashier(active);
+    } catch {
+      // Ignore transient errors
+    }
+  };
+
   useEffect(() => {
     refreshCredits();
-  }, []);
+    if (isLoggedIn) {
+      refreshActiveCashier();
+    }
+  }, [isLoggedIn]);
 
   const [currentPlan, setCurrentPlan] = useState<PlanType>(() => {
     return (localStorage.getItem('hamro_plan') as PlanType) || 'Blaze Free';
@@ -282,6 +313,24 @@ export default function App() {
     restoreSession();
   }, [apiBaseUrl]);
 
+  useEffect(() => {
+    let handling401 = false;
+    const onUnauthorized = () => {
+      if (handling401 || !isLoggedIn) return;
+      handling401 = true;
+      localStorage.removeItem('hamropay_token');
+      localStorage.removeItem('hamropay_merchant');
+      localStorage.removeItem('hamropay_api_key');
+      localStorage.removeItem('hamro_is_logged_in');
+      setApiToken('');
+      setIsLoggedIn(false);
+      setAuthMode('login');
+      showToast('Session expired or invalid API key. Please sign in again.', 'error');
+    };
+    window.addEventListener('hamropay:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('hamropay:unauthorized', onUnauthorized);
+  }, [isLoggedIn]);
+
   // Try to sync with remote API on login/mount
   useEffect(() => {
     if (isLoggedIn) {
@@ -415,6 +464,7 @@ export default function App() {
     }
     localStorage.removeItem('hamropay_token');
     localStorage.removeItem('hamropay_merchant');
+    localStorage.removeItem('hamropay_api_key');
     localStorage.removeItem('hamro_is_logged_in');
     setApiToken('');
     saveApiConfig({
@@ -432,6 +482,8 @@ export default function App() {
     });
     setIsLoggedIn(false);
     setAuthMode(null);
+    setActiveCashier(null);
+    try { localStorage.removeItem('hamro_current_view'); } catch {}
     showToast('You have been signed out of your merchant workspace.', 'info');
   };
 
@@ -618,6 +670,7 @@ export default function App() {
         const errMsg = err?.message || 'Unknown error';
         if (
           errMsg.toLowerCase().includes('connect fampay') || 
+          errMsg.toLowerCase().includes('connect amazon') || 
           errMsg.toLowerCase().includes('connect paytm') || 
           errMsg.toLowerCase().includes('payment account first')
         ) {
@@ -726,6 +779,8 @@ export default function App() {
             linkLimit={linkLimit}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             unreadNotifications={unreadNotificationsCount}
+            showToast={showToast}
+            onCashierChanged={refreshActiveCashier}
           />
         );
       case 'links':
@@ -781,6 +836,8 @@ export default function App() {
             profile={profile}
             onProfileSave={handleProfileSave}
             showToast={showToast}
+            onViewChange={setCurrentView}
+            activeCashier={activeCashier}
           />
         );
       case 'referral':
@@ -804,6 +861,7 @@ export default function App() {
             onViewChange={setCurrentView}
             gatewayMode={gatewayMode}
             setGatewayMode={setGatewayMode}
+            activeCashier={activeCashier}
           />
         );
 
@@ -832,6 +890,16 @@ export default function App() {
           <PaytmConnectView
             onViewChange={setCurrentView}
             showToast={showToast}
+            onCashierChanged={refreshActiveCashier}
+          />
+        );
+
+      case 'amazon':
+        return (
+          <AmazonConnectView
+            showToast={showToast}
+            onViewChange={setCurrentView}
+            onCashierChanged={refreshActiveCashier}
           />
         );
 
@@ -842,6 +910,7 @@ export default function App() {
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}
             unreadNotifications={unreadNotificationsCount}
+            onCashierChanged={refreshActiveCashier}
           />
         );
 
@@ -856,6 +925,7 @@ export default function App() {
         );
 
       default:
+        console.warn('Unknown view:', currentView);
         return (
           <DashboardView
             profileName={profile.name}
@@ -868,6 +938,8 @@ export default function App() {
             linkLimit={linkLimit}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             unreadNotifications={unreadNotificationsCount}
+            showToast={showToast}
+            onCashierChanged={refreshActiveCashier}
           />
         );
     }
@@ -1115,6 +1187,7 @@ export default function App() {
               const errMsg = err?.message || 'Unknown error';
               if (
                 errMsg.toLowerCase().includes('connect fampay') || 
+                errMsg.toLowerCase().includes('connect amazon') || 
                 errMsg.toLowerCase().includes('connect paytm') || 
                 errMsg.toLowerCase().includes('payment account first')
               ) {
@@ -1159,9 +1232,9 @@ export default function App() {
       <NoCashierWarningModal
         isOpen={isNoCashierModalOpen}
         onClose={() => setIsNoCashierModalOpen(false)}
-        onConnectFamPay={() => {
+        onSelectProvider={(view) => {
           setIsNoCashierModalOpen(false);
-          setCurrentView('fampay');
+          setCurrentView(view);
         }}
       />
 

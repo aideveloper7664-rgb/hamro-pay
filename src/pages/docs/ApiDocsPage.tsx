@@ -273,7 +273,7 @@ export const ApiDocsPage: React.FC<ApiDocsPageProps> = ({ onBackToDashboard }) =
             <p>
               Accept UPI payments on your website or app with three calls: create an order,
               send your customer to pay, then confirm the result from your server. Payments are
-              detected automatically from your active cashier (FamPay, Amazon Pay, or Paytm).
+              detected automatically from your active cashier (FamPay, Amazon Pay, or Paytm MID).
             </p>
 
             <div className="row" style={{ display: 'flex', gap: '10px', marginTop: '18px', flexWrap: 'wrap' }}>
@@ -326,7 +326,7 @@ export const ApiDocsPage: React.FC<ApiDocsPageProps> = ({ onBackToDashboard }) =
 
               <h3>Before you take live payments</h3>
               <ul>
-                <li>Connect a <strong>payment account</strong> (FamPay, Amazon Pay, or Paytm via MID &amp; Key or Gmail App Password).</li>
+                <li>Connect a <strong>payment account</strong> (FamPay or Amazon Pay via Gmail App Password, or Paytm via MID &amp; Merchant Key).</li>
                 <li>Keep some <strong>Hamro Credits</strong>. Commission is deducted from credits on every successful payment.</li>
                 <li>Stay in <strong>Live mode</strong> (see <a onClick={() => scrollTo('testmode')} style={{ cursor: 'pointer' }}>Test &amp; Live mode</a>).</li>
               </ul>

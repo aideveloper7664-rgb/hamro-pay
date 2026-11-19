@@ -26,6 +26,7 @@ interface DeveloperOrderData {
   server_time?: string;
   redirect_url?: string | null;
   upi_id?: string;
+  upi_uri?: string;
   qr_code?: string;
   message?: string;
   utr?: string | null;
@@ -461,9 +462,19 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
   const isAmountDifferent = payAmountNum > 0 && baseAmountNum > 0 && Math.abs(payAmountNum - baseAmountNum) > 0.001;
   const isTestMode = Boolean(data?.is_test);
 
-  const upiIntentUrl = data?.upi_id
-    ? `upi://pay?pa=${encodeURIComponent(data.upi_id)}&pn=${encodeURIComponent(brandName)}&am=${payAmountNum.toFixed(2)}&cu=INR&tn=${encodeURIComponent(data?.title || orderId)}`
-    : '';
+  const upiIntentUrl = (() => {
+    const orderNote = data?.title || orderId;
+    if (data?.upi_uri) {
+      const hasTn = /[?&]tn=/i.test(data.upi_uri);
+      if (hasTn || !orderNote) return data.upi_uri;
+      const sep = data.upi_uri.includes('?') ? '&' : '?';
+      return `${data.upi_uri}${sep}tn=${encodeURIComponent(orderNote)}`;
+    }
+    if (data?.upi_id) {
+      return `upi://pay?pa=${encodeURIComponent(data.upi_id)}&pn=${encodeURIComponent(brandName)}&am=${payAmountNum.toFixed(2)}&cu=INR&tn=${encodeURIComponent(orderNote)}`;
+    }
+    return '';
+  })();
 
   // Render Skeleton while loading
   if (isLoading) {
@@ -844,7 +855,7 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
               )}
 
               {/* Pay via UPI App Intent Button */}
-              {data?.upi_id && (
+              {upiIntentUrl && (
                 <a
                   href={upiIntentUrl}
                   className="hp-btn w-full py-3 px-4 text-xs font-black tracking-wide flex items-center justify-center gap-2 cursor-pointer no-underline"

@@ -1,4 +1,8 @@
-const API_URL = import.meta.env.VITE_API_URL || 'https://hamropay-backends-54xp.onrender.com';
+const rawApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+const API_URL =
+  !rawApiUrl || rawApiUrl === 'https://hamropay-backends.onrender.com'
+    ? 'https://hamropay-backends-54xp.onrender.com'
+    : rawApiUrl;
 
 const getMerchant = () => {
   try {
@@ -77,6 +81,16 @@ export const apiCall = async (
 
   if (!res.ok || (data && data.success === false)) {
     const errorMsg = data?.message || data?.error || res.statusText || 'API Error';
+    if (
+      res.status === 401 &&
+      typeof window !== 'undefined' &&
+      !extraHeaders?.['x-api-key'] &&
+      !extraHeaders?.['X-HamroAPI-Key']
+    ) {
+      window.dispatchEvent(
+        new CustomEvent('hamropay:unauthorized', { detail: { message: errorMsg } })
+      );
+    }
     const errorObj: any = new Error(errorMsg);
     errorObj.status = res.status;
     errorObj.code = data?.code;

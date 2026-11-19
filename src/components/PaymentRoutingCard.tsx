@@ -51,7 +51,8 @@ export default function PaymentRoutingCard({
 
   const handleSelectAccount = async (target: CashierAccount) => {
     const targetId = target.id || target._id;
-    if (!targetId || switchingId) return;
+    const isLegacyPaytm = (target.type || '').toLowerCase() === 'paytm';
+    if (!targetId || switchingId || isLegacyPaytm) return;
 
     const alreadyActive = Boolean(target.is_active ?? target.isActive);
     if (alreadyActive) return;
@@ -153,7 +154,8 @@ export default function PaymentRoutingCard({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {accounts.map(acc => {
             const accId = acc.id || acc._id || '';
-            const isActive = Boolean(acc.is_active ?? acc.isActive);
+            const isLegacyPaytm = (acc.type || '').toLowerCase() === 'paytm';
+            const isActive = !isLegacyPaytm && Boolean(acc.is_active ?? acc.isActive);
             const isSwitching = switchingId === accId;
             const meta = getCashierProviderMeta(acc.type);
             const ProviderIcon = getProviderIcon(acc.type);
@@ -165,19 +167,25 @@ export default function PaymentRoutingCard({
                 type="button"
                 role="radio"
                 aria-checked={isActive}
-                disabled={Boolean(switchingId)}
+                disabled={Boolean(switchingId) || isLegacyPaytm}
                 onClick={() => handleSelectAccount(acc)}
-                className={`w-full text-left p-3 rounded-xl border transition-all duration-150 flex items-center justify-between gap-2.5 cursor-pointer ${
-                  isActive
-                    ? 'bg-[rgba(43,242,154,0.08)] border-[#2bf29a]/45 shadow-[0_4px_18px_rgba(43,242,154,0.12)]'
-                    : 'bg-black/40 border-[rgba(255,45,85,0.14)] hover:border-[rgba(255,45,85,0.35)] hover:bg-black/60'
+                className={`w-full text-left p-3 rounded-xl border transition-all duration-150 flex items-center justify-between gap-2.5 ${
+                  isLegacyPaytm
+                    ? 'bg-black/25 border-white/10 opacity-60 cursor-not-allowed'
+                    : isActive
+                    ? 'bg-[rgba(43,242,154,0.08)] border-[#2bf29a]/45 shadow-[0_4px_18px_rgba(43,242,154,0.12)] cursor-pointer'
+                    : 'bg-black/40 border-[rgba(255,45,85,0.14)] hover:border-[rgba(255,45,85,0.35)] hover:bg-black/60 cursor-pointer'
                 } disabled:opacity-70`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   {/* Radio indicator */}
                   <span
                     className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                      isActive ? 'border-[#2bf29a]' : 'border-[#83686e]'
+                      isLegacyPaytm
+                        ? 'border-slate-700'
+                        : isActive
+                        ? 'border-[#2bf29a]'
+                        : 'border-[#83686e]'
                     }`}
                   >
                     {isSwitching ? (
@@ -204,19 +212,21 @@ export default function PaymentRoutingCard({
                       <span>{meta.badgeLabel}</span>
                     </div>
                     <div className="text-[11px] font-mono text-[#b89fa5] truncate">
-                      {maskUpiId(upi)}
+                      {isLegacyPaytm ? `${maskUpiId(upi)} · Reconnect with MID` : maskUpiId(upi)}
                     </div>
                   </div>
                 </div>
 
                 <span
                   className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full shrink-0 ${
-                    isActive
+                    isLegacyPaytm
+                      ? 'bg-amber-500/10 text-amber-300 border border-amber-500/25'
+                      : isActive
                       ? 'bg-[#2bf29a]/15 text-[#2bf29a] border border-[#2bf29a]/35'
                       : 'bg-white/5 text-[#83686e] border border-white/10'
                   }`}
                 >
-                  {isActive ? 'Active' : 'Standby'}
+                  {isLegacyPaytm ? 'Unsupported' : isActive ? 'Active' : 'Standby'}
                 </span>
               </button>
             );

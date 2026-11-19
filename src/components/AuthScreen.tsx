@@ -88,7 +88,7 @@ export default function AuthScreen({
         <div className="relative z-10 my-auto max-w-md space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-950/60 backdrop-blur-md border border-rose-500/20 text-xs font-bold text-rose-200">
             <Zap className="w-3.5 h-3.5 text-rose-400 fill-current" />
-            <span>Instant FamPay Settlements</span>
+            <span>Instant UPI Settlements</span>
           </div>
 
           <h1 className="text-4xl xl:text-5xl font-black tracking-tight leading-[1.1]">
@@ -116,7 +116,7 @@ export default function AuthScreen({
         {/* Bottom Curved Loop Marquee */}
         <div className="relative z-10 w-full pt-4 border-t border-rose-900/30">
           <CurvedLoop
-            marqueeText="HAMROPAY ✦ INSTANT UPI ✦ FAMPAY ✦ AUTOMATIC UTR MATCH ✦ REST API ✦ T+0 SETTLEMENT"
+            marqueeText="HAMROPAY ✦ INSTANT UPI ✦ FAMPAY · AMAZON PAY · PAYTM ✦ AUTOMATIC MATCH ✦ REST API ✦ T+0 SETTLEMENT"
             speed={1.5}
             curveAmount={40}
             className="fill-rose-300/80 font-mono text-xs font-bold tracking-widest uppercase"

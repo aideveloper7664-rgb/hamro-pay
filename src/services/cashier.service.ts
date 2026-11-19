@@ -55,24 +55,24 @@ export const getCashierProviderMeta = (type?: string): CashierProviderMeta => {
     case 'paytm':
       return {
         type: 'paytm',
-        label: 'Paytm',
-        shortLabel: 'Paytm',
-        badgeLabel: 'Paytm · Gmail',
-        isGmailBased: true,
-        accentColor: '#00baf2',
+        label: 'Paytm (Legacy)',
+        shortLabel: 'Paytm (Legacy)',
+        badgeLabel: 'Paytm · Unsupported',
+        isGmailBased: false,
+        accentColor: '#64748b',
       };
     case 'paytm_mid':
       return {
         type: 'paytm_mid',
-        label: 'Paytm Business',
+        label: 'Paytm (MID)',
         shortLabel: 'Paytm MID',
-        badgeLabel: 'Paytm · MID API',
+        badgeLabel: 'Paytm (MID)',
         isGmailBased: false,
         accentColor: '#00baf2',
       };
     default:
       return {
-        type: normalized || 'fampay',
+        type: normalized || 'unknown',
         label: 'Payment Account',
         shortLabel: 'UPI',
         badgeLabel: 'UPI Cashier',
@@ -162,19 +162,6 @@ export const addAmazonAccount = async (
     data: account,
     cashier: account,
     message: res?.message || 'Amazon Pay account verified & connected successfully!'
-  };
-};
-
-export const addPaytmGmailAccount = async (
-  data: GmailCashierPayload
-): Promise<AddCashierResponse> => {
-  const res = await apiCall('/api/cashier/paytm/add', 'POST', data);
-  const account = res?.data || res?.cashier || res;
-  return {
-    success: true,
-    data: account,
-    cashier: account,
-    message: res?.message || 'Paytm account verified & connected successfully!'
   };
 };
 

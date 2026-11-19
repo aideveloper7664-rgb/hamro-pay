@@ -370,7 +370,7 @@ export default function CashierHistoryPanel({
     );
   }
 
-  if (error?.code === 'NO_CASHIER' || error?.code === 'NOT_FAMPAY' || !activeAccount) {
+  if (error?.code === 'NO_CASHIER' || !activeAccount) {
     if (hasOtherActiveAccount) {
       return (
         <div className="mt-6 p-4 rounded-xl bg-black/40 border border-white/5 text-center text-xs text-[#b89fa5]">

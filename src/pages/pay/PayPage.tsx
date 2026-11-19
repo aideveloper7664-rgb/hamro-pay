@@ -160,6 +160,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [payAmount, setPayAmount] = useState<number>(0);
   const [baseAmount, setBaseAmount] = useState<number>(0);
   const [sessionQrCode, setSessionQrCode] = useState<string>('');
+  const [sessionUpiUri, setSessionUpiUri] = useState<string>('');
   const [expiresAt, setExpiresAt] = useState<string>('');
   const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
 
@@ -298,6 +299,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     setErrorMessage(null);
     setVerifyError(null);
     setFailedState(null);
+    setSessionUpiUri('');
 
     try {
       const res = await fetch(`${API_URL}/api/payment-link/${encodeURIComponent(id)}`);
@@ -383,6 +385,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
       setData(paymentData);
       setActiveUpi(upi);
+      if (paymentData.upi_uri) setSessionUpiUri(paymentData.upi_uri);
       setPayAmount(Number(paymentData.amount || 0));
       setBaseAmount(Number(paymentData.amount || 0));
 
@@ -463,6 +466,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             setBaseAmount(Number(sData.base_amount || paymentData.amount || 0));
             if (sData.upi_id) setActiveUpi(sData.upi_id);
             if (sData.qr_code) setSessionQrCode(sData.qr_code);
+            if (sData.upi_uri) setSessionUpiUri(sData.upi_uri);
 
             const serverTimeMs = sData.server_time ? Date.parse(sData.server_time) : Date.now();
             const offset = isNaN(serverTimeMs) ? 0 : serverTimeMs - Date.now();
@@ -667,6 +671,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       } catch {}
     }
     try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
+    setSessionUpiUri('');
     setIsCancelled(true);
   };
 
@@ -677,6 +682,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     setIsCancelled(false);
     setFailedState(null);
     setOrderResult(null);
+    setSessionUpiUri('');
     setUtr('');
     setVerifyError(null);
     loadPaymentData();
@@ -822,9 +828,18 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const displayAmount = payAmount > 0 ? payAmount.toFixed(2) : (data?.amount ? data.amount.toFixed(2) : '0.00');
   const hasUniqueAmount = baseAmount > 0 && payAmount > 0 && payAmount !== baseAmount;
 
-  const upiPayUrl = activeUpi
-    ? `upi://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`
-    : '';
+  const upiPayUrl = (() => {
+    if (sessionUpiUri) {
+      const hasTn = /[?&]tn=/i.test(sessionUpiUri);
+      if (hasTn || !title) return sessionUpiUri;
+      const sep = sessionUpiUri.includes('?') ? '&' : '?';
+      return `${sessionUpiUri}${sep}tn=${encodeURIComponent(title)}`;
+    }
+    if (activeUpi) {
+      return `upi://pay?pa=${encodeURIComponent(activeUpi)}&pn=${encodeURIComponent(merchantName)}&am=${displayAmount}&cu=INR&tn=${encodeURIComponent(title)}`;
+    }
+    return '';
+  })();
 
   const qrImageSrc = sessionQrCode || `${API_URL}/api/payment-link/${encodeURIComponent(id)}/qr`;
   const firstLetter = merchantName.charAt(0).toUpperCase() || 'M';
@@ -1173,6 +1188,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                     </button>
                   )}
                 </div>
+
+                {!isTestMode && (sessionUpiUri.includes('tr=') || upiPayUrl.includes('tr=')) && (
+                  <p className="text-[10.5px] hp-muted">
+                    Enter the UTR / Paytm transaction ID shown in your Paytm app after paying.
+                  </p>
+                )}
 
                 {verifyError && (
                   <div className="p-2 rounded-lg text-xs font-semibold hp-badge-bad flex items-center gap-1.5">

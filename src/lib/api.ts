@@ -1,9 +1,9 @@
-import { apiCall, publicApiCall } from '../services/api';
+import { API_URL, apiCall, publicApiCall } from '../services/api';
 import { PaymentLink, Transaction, Notification, MerchantProfile } from '../types';
 
 export { apiCall, publicApiCall };
 
-export const DEFAULT_API_BASE = (import.meta as any).env.VITE_API_URL || 'https://hamropay-backends-54xp.onrender.com';
+export const DEFAULT_API_BASE = API_URL;
 
 export interface ApiConfig {
   baseUrl: string;
@@ -59,7 +59,7 @@ export const ApiService = {
       const mapped: Transaction[] = list.map((item: any, idx: number) => ({
         id: item.id || item.transaction_id || `tx-${idx}`,
         ref: item.ref || item.order_id || item.utr || `TXN${1000 + idx}`,
-        name: item.customer_name || item.name || item.upi_id || 'FamPay Customer',
+        name: item.customer_name || item.name || item.upi_id || 'UPI Customer',
         amount: Number(item.amount || item.net_amount || 0),
         type: item.type === 'withdraw' || item.type === 'withdrawal' ? 'withdrawal' : 'received',
         status: item.status === 'success' || item.status === 'PAID' ? 'Success' : item.status === 'failed' ? 'Failed' : 'Pending',

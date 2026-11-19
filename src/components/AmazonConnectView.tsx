@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ShoppingBag, Plus, Trash2, ShieldCheck, ArrowRight, ArrowLeft,
-  X, Check, RefreshCw, Eye, EyeOff
+  X, Check, RefreshCw, Eye, EyeOff, Info
 } from 'lucide-react';
 import {
   CashierAccount,
@@ -122,8 +122,8 @@ export default function AmazonConnectView({
       showToast('Please enter a valid Amazon Pay UPI ID (e.g. 9876543210@apl)', 'error');
       return;
     }
-    if (!/^\d{10}$/.test(phoneClean)) {
-      showToast('Please enter a valid 10-digit registered mobile number', 'error');
+    if (!/^[6-9]\d{9}$/.test(phoneClean)) {
+      showToast('Enter a valid 10-digit Indian mobile number starting with 6–9', 'error');
       return;
     }
     setStep(2);
@@ -263,6 +263,16 @@ export default function AmazonConnectView({
             </button>
           </div>
         </div>
+
+        {/* ACTIVE OTHER PROVIDER BANNER */}
+        {otherActiveAccount && (
+          <div className="mb-5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2.5 text-xs text-amber-200">
+            <Info className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              <strong className="text-white">{otherLabel}</strong> is currently active — switching will route customers to this account.
+            </span>
+          </div>
+        )}
 
         {/* MAIN GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_1fr] gap-5 items-start">
