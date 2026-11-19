@@ -27,9 +27,8 @@ import DeveloperPortalView from './components/DeveloperPortalView';
 import ApiIntegrationView from './components/ApiIntegrationView';
 import StorePortalView from './components/StorePortalView';
 import FamPayConnectView from './components/FamPayConnectView';
-import AmazonConnectView from './components/AmazonConnectView';
 import CustomizePageView from './components/CustomizePageView';
-import { CashierAccount, getActiveCashier } from './services/cashier.service';
+import { getActiveCashier } from './services/cashier.service';
 import { getCreditBalance } from './services/credits.service';
 import { setMode } from './services/developer.service';
 import Modal from './components/Modal';
@@ -73,18 +72,6 @@ export default function App() {
 
   const [credits, setCredits] = useState<number>(0);
   const [balance, setBalance] = useState<number>(0);
-  const [activeCashier, setActiveCashier] = useState<CashierAccount | null>(null);
-
-  const refreshActiveCashier = async () => {
-    try {
-      const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-      const apiKey = merchant.api_key || localStorage.getItem('hamropay_api_key') || '';
-      const active = await getActiveCashier(apiKey);
-      setActiveCashier(active && (active.upi_id || active.upiId || active.id) ? active : null);
-    } catch {
-      setActiveCashier(null);
-    }
-  };
 
   const refreshCredits = async () => {
     try {
@@ -367,9 +354,6 @@ export default function App() {
       };
       
       syncInitialData();
-      refreshActiveCashier();
-    } else {
-      setActiveCashier(null);
     }
   }, [isLoggedIn, apiBaseUrl]);
 
@@ -632,14 +616,10 @@ export default function App() {
       } catch (err: any) {
         console.error('Link create failed:', err);
         const errMsg = err?.message || 'Unknown error';
-        const errLower = errMsg.toLowerCase();
-        const errCode = (err?.code || '').toLowerCase();
         if (
-          errLower.includes('connect fampay') || 
-          errLower.includes('connect amazon') || 
-          errLower.includes('connect paytm') || 
-          errLower.includes('payment account') ||
-          errCode === 'no_cashier'
+          errMsg.toLowerCase().includes('connect fampay') || 
+          errMsg.toLowerCase().includes('connect paytm') || 
+          errMsg.toLowerCase().includes('payment account first')
         ) {
           setActiveModal(null);
           setIsNoCashierModalOpen(true);
@@ -746,8 +726,6 @@ export default function App() {
             linkLimit={linkLimit}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             unreadNotifications={unreadNotificationsCount}
-            showToast={showToast}
-            onCashierChanged={refreshActiveCashier}
           />
         );
       case 'links':
@@ -803,8 +781,6 @@ export default function App() {
             profile={profile}
             onProfileSave={handleProfileSave}
             showToast={showToast}
-            onViewChange={setCurrentView}
-            activeCashier={activeCashier}
           />
         );
       case 'referral':
@@ -828,7 +804,6 @@ export default function App() {
             onViewChange={setCurrentView}
             gatewayMode={gatewayMode}
             setGatewayMode={setGatewayMode}
-            activeCashier={activeCashier}
           />
         );
 
@@ -857,16 +832,6 @@ export default function App() {
           <PaytmConnectView
             onViewChange={setCurrentView}
             showToast={showToast}
-            onCashierChanged={refreshActiveCashier}
-          />
-        );
-
-      case 'amazon':
-        return (
-          <AmazonConnectView
-            showToast={showToast}
-            onViewChange={setCurrentView}
-            onCashierChanged={refreshActiveCashier}
           />
         );
 
@@ -877,7 +842,6 @@ export default function App() {
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}
             unreadNotifications={unreadNotificationsCount}
-            onCashierChanged={refreshActiveCashier}
           />
         );
 
@@ -904,8 +868,6 @@ export default function App() {
             linkLimit={linkLimit}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             unreadNotifications={unreadNotificationsCount}
-            showToast={showToast}
-            onCashierChanged={refreshActiveCashier}
           />
         );
     }
@@ -1151,14 +1113,10 @@ export default function App() {
             } catch (err: any) {
               console.error('Link create failed:', err);
               const errMsg = err?.message || 'Unknown error';
-              const errLower = errMsg.toLowerCase();
-              const errCode = (err?.code || '').toLowerCase();
               if (
-                errLower.includes('connect fampay') || 
-                errLower.includes('connect amazon') || 
-                errLower.includes('connect paytm') || 
-                errLower.includes('payment account') ||
-                errCode === 'no_cashier'
+                errMsg.toLowerCase().includes('connect fampay') || 
+                errMsg.toLowerCase().includes('connect paytm') || 
+                errMsg.toLowerCase().includes('payment account first')
               ) {
                 setActiveModal(null);
                 setIsNoCashierModalOpen(true);
@@ -1201,9 +1159,9 @@ export default function App() {
       <NoCashierWarningModal
         isOpen={isNoCashierModalOpen}
         onClose={() => setIsNoCashierModalOpen(false)}
-        onSelectProvider={(view) => {
+        onConnectFamPay={() => {
           setIsNoCashierModalOpen(false);
-          setCurrentView(view);
+          setCurrentView('fampay');
         }}
       />
 

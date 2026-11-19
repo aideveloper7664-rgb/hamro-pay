@@ -26,8 +26,6 @@ interface DeveloperOrderData {
   server_time?: string;
   redirect_url?: string | null;
   upi_id?: string;
-  upi_uri?: string;
-  cashier_type?: string;
   qr_code?: string;
   message?: string;
   utr?: string | null;
@@ -463,9 +461,9 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
   const isAmountDifferent = payAmountNum > 0 && baseAmountNum > 0 && Math.abs(payAmountNum - baseAmountNum) > 0.001;
   const isTestMode = Boolean(data?.is_test);
 
-  const upiIntentUrl = data?.upi_uri || (data?.upi_id
+  const upiIntentUrl = data?.upi_id
     ? `upi://pay?pa=${encodeURIComponent(data.upi_id)}&pn=${encodeURIComponent(brandName)}&am=${payAmountNum.toFixed(2)}&cu=INR&tn=${encodeURIComponent(data?.title || orderId)}`
-    : '');
+    : '';
 
   // Render Skeleton while loading
   if (isLoading) {
@@ -846,7 +844,7 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
               )}
 
               {/* Pay via UPI App Intent Button */}
-              {upiIntentUrl && (
+              {data?.upi_id && (
                 <a
                   href={upiIntentUrl}
                   className="hp-btn w-full py-3 px-4 text-xs font-black tracking-wide flex items-center justify-center gap-2 cursor-pointer no-underline"

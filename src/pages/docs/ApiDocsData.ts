@@ -236,10 +236,10 @@ export const ERRORS: ErrorItem[] = [
     "cat": "limits",
     "code": "400",
     "name": "No payment account connected",
-    "msg": "Please connect a payment account first...",
-    "why": "Live mode needs an active connected payment account (FamPay, Amazon Pay, or Paytm) to receive payments. Test mode does not.",
-    "fix": "Connect a FamPay, Amazon Pay, or Paytm (MID API or Gmail) account in the dashboard, or switch to Test mode while developing.",
-    "payload": "{ \"success\": false, \"message\": \"Please connect a payment account first to accept payments\" }"
+    "msg": "Please connect a FamPay account first...",
+    "why": "Live mode needs a connected, active FamPay account to receive payments. Test mode does not.",
+    "fix": "Connect a FamPay account in the dashboard (UPI ID + Gmail App Password), or switch to Test mode while developing.",
+    "payload": "{ \"success\": false, \"message\": \"Please connect a FamPay account first to accept payments\" }"
   },
   {
     "cat": "limits",
@@ -374,12 +374,12 @@ export function generateFullDoc(filterLang?: LangKey): string {
     '===================================',
     '',
     'WHAT THIS IS',
-    "Hamro Pay accepts UPI payments. Your server creates an order, the customer pays the exact amount shown from any UPI app, Hamro Pay detects the payment automatically from the merchant's active cashier (FamPay, Amazon Pay, or Paytm), and you confirm the result server-side before fulfilling.",
+    "Hamro Pay accepts UPI payments. Your server creates an order, the customer pays the exact amount shown from any UPI app, Hamro Pay detects the payment automatically from the merchant's connected FamPay account, and you confirm the result server-side before fulfilling.",
     '',
     'HOW TO GET STARTED',
     '1. Open your Hamro Pay dashboard -> Developer.',
     '2. Copy your HamroAPI key (starts with hmpay_).',
-    '3. Connect a payment account in the dashboard (FamPay, Amazon Pay, or Paytm via MID & Key or Gmail App Password) so incoming payments can be detected.',
+    '3. Connect a FamPay account in the dashboard (UPI ID + Gmail App Password) so incoming payments can be spotted.',
     '4. Add Hamro Credits: commission is deducted from credits on each successful payment.',
     '5. Create orders from your server, redirect the customer to payment_url, and confirm status with order-status before fulfilling.',
     '',
@@ -417,7 +417,7 @@ export function generateFullDoc(filterLang?: LangKey): string {
     '',
     'TEST MODE vs LIVE MODE:',
     'Each account has a mode (Dashboard -> Developer).',
-    '- In Test mode, create-order returns a simulator payment_url with Success / Failed / Cancelled buttons. No money moves and no connected payment account / credits are needed.',
+    '- In Test mode, create-order returns a simulator payment_url with Success / Failed / Cancelled buttons. No money moves and no connected FamPay account / credits are needed.',
     '- In Live mode, real UPI checkout is created.',
     '',
     'CODE IMPLEMENTATION SAMPLES:'
