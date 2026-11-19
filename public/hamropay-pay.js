@@ -11,7 +11,7 @@
 (function (global) {
   'use strict';
 
-  var BASE = 'https://hamropay-backends.onrender.com';
+  var BASE = 'https://hamropay-backends-54xp.onrender.com';
   try {
     var cs = document.currentScript;
     if (cs && cs.src) BASE = new URL(cs.src).origin;   // script jahan se aayi, API wahin hai

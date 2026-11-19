@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  var BASE = /^https?:/.test(location.protocol) ? location.origin : 'https://hamropay-backends.onrender.com';
+  var BASE = /^https?:/.test(location.protocol) ? location.origin : 'https://hamropay-backends-54xp.onrender.com';
   var KEY = 'YOUR_HAMRO_API_KEY';
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };

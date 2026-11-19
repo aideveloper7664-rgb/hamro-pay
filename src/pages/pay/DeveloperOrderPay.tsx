@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { BrandingObject, DEFAULT_BRANDING } from '../../services/customize.service';
 
-const API_URL = 'https://hamropay-backends.onrender.com';
+const API_URL = 'https://hamropay-backends-54xp.onrender.com';
 
 interface DeveloperOrderPayProps {
   orderId: string;

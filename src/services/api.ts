@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'https://hamropay-backends.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://hamropay-backends-54xp.onrender.com';
 
 const getMerchant = () => {
   try {

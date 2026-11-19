@@ -29,7 +29,7 @@ export const AuthCallback: React.FC = () => {
           if (isMounted) setStatus('Exchanging credentials with HamroPay backend...');
           
           // Send to our backend
-          const res = await fetch('https://hamropay-backends.onrender.com/auth/google', {
+          const res = await fetch('https://hamropay-backends-54xp.onrender.com/auth/google', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ access_token: session.access_token })
@@ -57,7 +57,7 @@ export const AuthCallback: React.FC = () => {
               subscription.unsubscribe();
               if (isMounted) setStatus('Exchanging credentials with HamroPay backend...');
               
-              const res = await fetch('https://hamropay-backends.onrender.com/auth/google', {
+              const res = await fetch('https://hamropay-backends-54xp.onrender.com/auth/google', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ access_token: currentSession.access_token })

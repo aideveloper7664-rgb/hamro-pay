@@ -219,7 +219,7 @@ export default function AuthScreen({
           <div className="pt-6 border-t border-rose-950/60 flex items-center justify-center gap-2 text-[11px] text-slate-500 font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span>
-              Connected to <span className="font-mono text-rose-300 font-semibold">hamropay-backends.onrender.com</span>
+              Connected to <span className="font-mono text-rose-300 font-semibold">hamropay-backends-54xp.onrender.com</span>
             </span>
           </div>
         </div>

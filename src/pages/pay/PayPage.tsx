@@ -6,7 +6,7 @@ import {
   CheckCircle2, X, RefreshCw, ShieldCheck, Lock, ExternalLink
 } from 'lucide-react';
 
-const API_URL = 'https://hamropay-backends.onrender.com';
+const API_URL = 'https://hamropay-backends-54xp.onrender.com';
 const TOTAL_SECONDS = 8 * 60;
 
 export const isPaymentLinkId = (idStr: string): boolean => {

@@ -3,7 +3,7 @@ import { PaymentLink, Transaction, Notification, MerchantProfile } from '../type
 
 export { apiCall, publicApiCall };
 
-export const DEFAULT_API_BASE = (import.meta as any).env.VITE_API_URL || 'https://hamropay-backends.onrender.com';
+export const DEFAULT_API_BASE = (import.meta as any).env.VITE_API_URL || 'https://hamropay-backends-54xp.onrender.com';
 
 export interface ApiConfig {
   baseUrl: string;

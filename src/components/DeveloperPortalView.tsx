@@ -353,7 +353,7 @@ export default function DeveloperPortalView({
           </div>
           <div className="flex items-center gap-2">
             <a
-              href="https://hamropay-backends.onrender.com/docs"
+              href="https://hamropay-backends-54xp.onrender.com/docs"
               target="_blank"
               rel="noopener noreferrer"
               className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
