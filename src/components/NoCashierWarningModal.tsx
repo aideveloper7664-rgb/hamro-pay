@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, ShieldAlert, ArrowRight, X } from 'lucide-react';
+import { FamPayIcon, PaytmIcon, AmazonPayIcon } from './BrandIcons';
 
 interface NoCashierWarningModalProps {
   isOpen: boolean;
@@ -69,27 +70,32 @@ export default function NoCashierWarningModal({
             <button
               type="button"
               onClick={() => handlePick('fampay')}
-              className="py-2.5 px-3 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-extrabold shadow-md shadow-rose-600/30 hover:shadow-lg hover:shadow-rose-600/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1"
+              className="py-2.5 px-3 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-extrabold shadow-md shadow-rose-600/30 hover:shadow-lg hover:shadow-rose-600/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
             >
+              <FamPayIcon className="w-3.5 h-3.5 shrink-0" variant="mono" />
               <span>FamPay</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
 
             <button
               type="button"
-              onClick={() => handlePick('amazon')}
-              className="py-2.5 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-200 text-xs font-extrabold active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1"
+              onClick={() => handlePick('paytm')}
+              className="py-2.5 px-3 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 text-sky-200 text-xs font-extrabold active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <span>Amazon Pay</span>
+              <span className="w-4 h-4 rounded bg-white inline-flex items-center justify-center shrink-0">
+                <PaytmIcon className="w-3 h-3" />
+              </span>
+              <span>Paytm</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
 
             <button
               type="button"
-              onClick={() => handlePick('paytm')}
-              className="py-2.5 px-3 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 text-sky-200 text-xs font-extrabold active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1"
+              onClick={() => handlePick('amazon')}
+              className="py-2.5 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-200 text-xs font-extrabold active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <span>Paytm</span>
+              <AmazonPayIcon className="w-3.5 h-3.5 shrink-0" />
+              <span>Amazon Pay</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

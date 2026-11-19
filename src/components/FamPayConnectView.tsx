@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Smartphone, Plus, Trash2, ShieldCheck, ArrowRight, ArrowLeft,
+  Plus, Trash2, ShieldCheck, ArrowRight, ArrowLeft,
   X, Check, Play, RefreshCw, Eye, EyeOff, Info
 } from 'lucide-react';
+import { FamPayIcon } from './BrandIcons';
 import {
   CashierAccount,
   getCashierList,
@@ -231,8 +232,8 @@ export default function FamPayConnectView({
         {/* PAGE HEADER */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3.5">
-            <div className="w-[46px] h-[46px] rounded-[13px] bg-gradient-to-br from-[#ff7a00] to-[#e06300] flex items-center justify-center shrink-0 shadow-[0_0_22px_rgba(255,122,0,0.5),inset_0_1px_0_rgba(255,255,255,0.18)]">
-              <Smartphone className="w-[22px] h-[22px] text-white stroke-[2.4]" />
+            <div className="w-[46px] h-[46px] rounded-[13px] bg-gradient-to-br from-[#17171c] to-[#0c0c10] border border-[#ff8a00]/45 flex items-center justify-center shrink-0 shadow-[0_0_22px_rgba(255,122,0,0.35),inset_0_1px_0_rgba(255,255,255,0.12)]">
+              <FamPayIcon className="w-[24px] h-[24px]" />
             </div>
             <div>
               <div className="flex items-center gap-2.5">
@@ -306,8 +307,8 @@ export default function FamPayConnectView({
               </div>
             ) : accounts.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center py-14 px-4 gap-3.5">
-                <div className="w-[60px] h-[60px] rounded-2xl bg-[rgba(255,30,75,0.05)] border border-[rgba(255,45,85,0.15)] flex items-center justify-center text-[rgba(255,45,85,0.4)] mb-1">
-                  <Smartphone className="w-8 h-8 stroke-[1.5]" />
+                <div className="w-[60px] h-[60px] rounded-2xl bg-[#141418] border border-[#ff8a00]/30 flex items-center justify-center mb-1">
+                  <FamPayIcon className="w-8 h-8" />
                 </div>
                 <p className="text-[13.5px] font-bold text-[#b89fa5] leading-relaxed max-w-[340px]">
                   No FamPay accounts connected yet — add one to start receiving UPI customer payments.
@@ -340,12 +341,12 @@ export default function FamPayConnectView({
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
                             isActive
-                              ? 'bg-[#2bf29a]/15 text-[#2bf29a] border border-[#2bf29a]/30'
-                              : 'bg-slate-800 text-[#b89fa5]'
+                              ? 'bg-[#17171c] border-[#2bf29a]/45'
+                              : 'bg-[#141418] border-[#ff8a00]/25'
                           }`}>
-                            <Smartphone className="w-4 h-4" />
+                            <FamPayIcon className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
                             <span className="text-sm font-extrabold text-[#fff2f4] font-mono block truncate">
@@ -471,8 +472,8 @@ export default function FamPayConnectView({
           <div className="bg-[#120306] border border-[rgba(255,45,85,0.3)] w-full max-w-md rounded-2xl p-6 shadow-2xl relative space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[rgba(255,45,85,0.15)]">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#ff7a00]/15 text-[#ff7a00] flex items-center justify-center">
-                  <Smartphone className="w-4 h-4" />
+                <div className="w-8 h-8 rounded-lg bg-[#17171c] border border-[#ff8a00]/35 flex items-center justify-center">
+                  <FamPayIcon className="w-4.5 h-4.5" />
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-[#fff2f4]">Add FamPay Account</h3>

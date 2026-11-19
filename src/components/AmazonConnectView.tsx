@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ShoppingBag, Plus, Trash2, ShieldCheck, ArrowRight, ArrowLeft,
+  Plus, Trash2, ShieldCheck, ArrowRight, ArrowLeft,
   X, Check, RefreshCw, Eye, EyeOff, Info
 } from 'lucide-react';
+import { AmazonPayIcon } from './BrandIcons';
 import {
   CashierAccount,
   getCashierList,
@@ -224,8 +225,8 @@ export default function AmazonConnectView({
         {/* PAGE HEADER */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3.5">
-            <div className="w-[46px] h-[46px] rounded-[13px] bg-gradient-to-br from-[#ff9900] to-[#d97706] flex items-center justify-center shrink-0 shadow-[0_0_22px_rgba(255,153,0,0.45),inset_0_1px_0_rgba(255,255,255,0.18)]">
-              <ShoppingBag className="w-[22px] h-[22px] text-white stroke-[2.4]" />
+            <div className="w-[46px] h-[46px] rounded-[13px] bg-[#232f3e] border border-[#ff9900]/45 flex items-center justify-center shrink-0 shadow-[0_0_22px_rgba(255,153,0,0.3),inset_0_1px_0_rgba(255,255,255,0.12)]">
+              <AmazonPayIcon className="w-[24px] h-[24px]" />
             </div>
             <div>
               <div className="flex items-center gap-2.5">
@@ -299,8 +300,8 @@ export default function AmazonConnectView({
               </div>
             ) : accounts.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center py-14 px-4 gap-3.5">
-                <div className="w-[60px] h-[60px] rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400/60 mb-1">
-                  <ShoppingBag className="w-8 h-8 stroke-[1.5]" />
+                <div className="w-[60px] h-[60px] rounded-2xl bg-[#232f3e] border border-[#ff9900]/30 flex items-center justify-center mb-1">
+                  <AmazonPayIcon className="w-8 h-8" />
                 </div>
                 <p className="text-[13.5px] font-bold text-[#b89fa5] leading-relaxed max-w-[340px]">
                   No Amazon Pay accounts connected yet — add one to start receiving UPI payments into your wallet.
@@ -333,12 +334,12 @@ export default function AmazonConnectView({
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
                             isActive
-                              ? 'bg-[#2bf29a]/15 text-[#2bf29a] border border-[#2bf29a]/30'
-                              : 'bg-slate-800 text-[#b89fa5]'
+                              ? 'bg-[#232f3e] border-[#2bf29a]/45'
+                              : 'bg-[#232f3e] border-[#ff9900]/25'
                           }`}>
-                            <ShoppingBag className="w-4 h-4" />
+                            <AmazonPayIcon className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
                             <span className="text-sm font-extrabold text-[#fff2f4] font-mono block truncate">
@@ -454,8 +455,8 @@ export default function AmazonConnectView({
           <div className="bg-[#120306] border border-[rgba(255,45,85,0.3)] w-full max-w-md rounded-2xl p-6 shadow-2xl relative space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[rgba(255,45,85,0.15)]">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center">
-                  <ShoppingBag className="w-4 h-4" />
+                <div className="w-8 h-8 rounded-lg bg-[#232f3e] border border-[#ff9900]/35 flex items-center justify-center">
+                  <AmazonPayIcon className="w-4.5 h-4.5" />
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-[#fff2f4]">Add Amazon Pay Account</h3>

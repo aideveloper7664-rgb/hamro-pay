@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
-  CreditCard, Plus, Trash2, ShieldCheck,
+  Plus, Trash2, ShieldCheck,
   X, Check, RefreshCw, Eye, EyeOff, Lock, Info, AlertTriangle
 } from 'lucide-react';
+import { PaytmIcon } from './BrandIcons';
 import {
   CashierAccount,
   getCashierList,
@@ -208,8 +209,8 @@ export default function PaytmConnectView({
         {/* PAGE HEADER */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3.5">
-            <div className="w-[46px] h-[46px] rounded-[13px] bg-gradient-to-br from-[#00baf2] to-[#007eb8] flex items-center justify-center shrink-0 shadow-[0_0_22px_rgba(0,186,242,0.45),inset_0_1px_0_rgba(255,255,255,0.18)]">
-              <CreditCard className="w-[22px] h-[22px] text-white stroke-[2.4]" />
+            <div className="w-[46px] h-[46px] rounded-[13px] bg-white border border-sky-400/50 flex items-center justify-center shrink-0 shadow-[0_0_22px_rgba(0,186,242,0.35)]">
+              <PaytmIcon className="w-[24px] h-[24px]" />
             </div>
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -284,8 +285,8 @@ export default function PaytmConnectView({
                 </div>
               ) : midAccounts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-center py-14 px-4 gap-3.5">
-                  <div className="w-[60px] h-[60px] rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400/60 mb-1">
-                    <CreditCard className="w-8 h-8 stroke-[1.5]" />
+                  <div className="w-[60px] h-[60px] rounded-2xl bg-white border border-sky-400/40 flex items-center justify-center mb-1 shadow-[0_0_18px_rgba(0,186,242,0.2)]">
+                    <PaytmIcon className="w-8 h-8" />
                   </div>
                   <p className="text-[13.5px] font-bold text-[#b89fa5] leading-relaxed max-w-[360px]">
                     No Paytm MID accounts connected yet — add your Paytm Business MID and Merchant Key to accept UPI payments.
@@ -317,12 +318,12 @@ export default function PaytmConnectView({
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
                               isActive
-                                ? 'bg-[#2bf29a]/15 text-[#2bf29a] border border-[#2bf29a]/30'
-                                : 'bg-slate-800 text-[#b89fa5]'
+                                ? 'bg-white border-[#2bf29a]/60 shadow-[0_0_12px_rgba(43,242,154,0.25)]'
+                                : 'bg-white border-sky-400/35'
                             }`}>
-                              <CreditCard className="w-4 h-4" />
+                              <PaytmIcon className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -502,8 +503,8 @@ export default function PaytmConnectView({
           <div className="bg-[#120306] border border-[rgba(255,45,85,0.3)] w-full max-w-md rounded-2xl p-6 shadow-2xl relative space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[rgba(255,45,85,0.15)]">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center">
-                  <CreditCard className="w-4 h-4" />
+                <div className="w-8 h-8 rounded-lg bg-white border border-sky-400/45 flex items-center justify-center">
+                  <PaytmIcon className="w-4.5 h-4.5" />
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-[#fff2f4]">Add Paytm (MID) Account</h3>

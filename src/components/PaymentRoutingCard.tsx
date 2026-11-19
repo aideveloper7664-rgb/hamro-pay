@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Smartphone, ShoppingBag, CreditCard, RefreshCw, Plus, ArrowUpRight, CheckCircle2
+  RefreshCw, Plus, ArrowUpRight, CheckCircle2
 } from 'lucide-react';
+import { FamPayIcon, PaytmIcon, AmazonPayIcon } from './BrandIcons';
 import {
   CashierAccount,
   getCashierList,
@@ -17,11 +18,27 @@ interface PaymentRoutingCardProps {
   refreshTrigger?: number;
 }
 
-const getProviderIcon = (type?: string) => {
+const getProviderBrandBadge = (type?: string) => {
   const norm = (type || '').toLowerCase();
-  if (norm === 'amazon') return ShoppingBag;
-  if (norm === 'paytm' || norm === 'paytm_mid') return CreditCard;
-  return Smartphone;
+  if (norm === 'amazon') {
+    return {
+      Icon: AmazonPayIcon,
+      bg: '#232f3e',
+      border: 'rgba(255, 153, 0, 0.45)',
+    };
+  }
+  if (norm === 'paytm' || norm === 'paytm_mid') {
+    return {
+      Icon: PaytmIcon,
+      bg: '#ffffff',
+      border: 'rgba(0, 186, 242, 0.5)',
+    };
+  }
+  return {
+    Icon: FamPayIcon,
+    bg: 'linear-gradient(135deg, #17171c, #0c0c10)',
+    border: 'rgba(255, 138, 0, 0.45)',
+  };
 };
 
 export default function PaymentRoutingCard({
@@ -104,25 +121,30 @@ export default function PaymentRoutingCard({
           <button
             type="button"
             onClick={() => onViewChange('fampay')}
-            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-bold text-[#ff9933] transition cursor-pointer inline-flex items-center gap-1"
+            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-bold text-[#ff9933] transition cursor-pointer inline-flex items-center gap-1.5"
           >
+            <FamPayIcon className="w-3.5 h-3.5 shrink-0" />
             <span>FamPay</span>
             <ArrowUpRight className="w-3 h-3" />
           </button>
           <button
             type="button"
-            onClick={() => onViewChange('amazon')}
-            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-bold text-amber-400 transition cursor-pointer inline-flex items-center gap-1"
+            onClick={() => onViewChange('paytm')}
+            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-bold text-sky-400 transition cursor-pointer inline-flex items-center gap-1.5"
           >
-            <span>Amazon Pay</span>
+            <span className="w-4 h-4 rounded bg-white inline-flex items-center justify-center shrink-0">
+              <PaytmIcon className="w-3 h-3" />
+            </span>
+            <span>Paytm</span>
             <ArrowUpRight className="w-3 h-3" />
           </button>
           <button
             type="button"
-            onClick={() => onViewChange('paytm')}
-            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-bold text-sky-400 transition cursor-pointer inline-flex items-center gap-1"
+            onClick={() => onViewChange('amazon')}
+            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-bold text-amber-400 transition cursor-pointer inline-flex items-center gap-1.5"
           >
-            <span>Paytm</span>
+            <AmazonPayIcon className="w-3.5 h-3.5 shrink-0" />
+            <span>Amazon Pay</span>
             <ArrowUpRight className="w-3 h-3" />
           </button>
         </div>
@@ -158,7 +180,8 @@ export default function PaymentRoutingCard({
             const isActive = !isLegacyPaytm && Boolean(acc.is_active ?? acc.isActive);
             const isSwitching = switchingId === accId;
             const meta = getCashierProviderMeta(acc.type);
-            const ProviderIcon = getProviderIcon(acc.type);
+            const brandBadge = getProviderBrandBadge(acc.type);
+            const BrandIcon = brandBadge.Icon;
             const upi = acc.upi_id || acc.upiId || '';
 
             return (
@@ -199,12 +222,11 @@ export default function PaymentRoutingCard({
                   <span
                     className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border"
                     style={{
-                      backgroundColor: `${meta.accentColor}1a`,
-                      borderColor: `${meta.accentColor}40`,
-                      color: meta.accentColor,
+                      background: brandBadge.bg,
+                      borderColor: brandBadge.border,
                     }}
                   >
-                    <ProviderIcon className="w-4 h-4" />
+                    <BrandIcon className="w-4.5 h-4.5" />
                   </span>
 
                   <div className="min-w-0">
