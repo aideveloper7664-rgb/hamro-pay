@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   Plus, Trash2, ShieldCheck, ArrowRight, ArrowLeft,
-  X, Check, RefreshCw, Eye, EyeOff, Info
+  X, Check, RefreshCw, Eye, EyeOff, Info, Lock
 } from 'lucide-react';
 import { AmazonPayIcon } from './BrandIcons';
+import { CurrentPlanState, PlanDefinition } from '../types';
+import {
+  ShowToastFn,
+  getRequiredPlanName,
+  notifyApiOrPlanError
+} from '../services/plans.service';
 import {
   CashierAccount,
   getCashierList,
@@ -15,9 +21,11 @@ import {
 import CashierHistoryPanel from './CashierHistoryPanel';
 
 interface AmazonConnectViewProps {
-  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  showToast: ShowToastFn;
   onViewChange?: (view: string) => void;
   onCashierChanged?: () => void;
+  planState?: CurrentPlanState | null;
+  plansCatalog?: PlanDefinition[];
 }
 
 const isValidUpiId = (val: string): boolean => {
@@ -27,7 +35,10 @@ const isValidUpiId = (val: string): boolean => {
 
 export default function AmazonConnectView({
   showToast,
+  onViewChange,
   onCashierChanged,
+  planState,
+  plansCatalog,
 }: AmazonConnectViewProps) {
   const [accounts, setAccounts] = useState<CashierAccount[]>([]);
   const [otherActiveAccount, setOtherActiveAccount] = useState<CashierAccount | null>(null);
@@ -75,6 +86,15 @@ export default function AmazonConnectView({
   }, []);
 
   const activeAccount = accounts.find(acc => Boolean(acc.is_active ?? acc.isActive)) || null;
+  const maxAccounts: number | null = planState?.plan?.accounts
+    ? planState.plan.accounts.amazon
+    : 1;
+  const isAtLimit = maxAccounts !== null && accounts.length >= maxAccounts;
+  const nextPlanName = getRequiredPlanName(
+    plansCatalog || [],
+    (p) => p.accounts?.amazon === null || Number(p.accounts?.amazon || 0) > (maxAccounts ?? 0),
+    'BASIC'
+  );
 
   const closeAddModal = () => {
     setIsAddModalOpen(false);
@@ -83,8 +103,12 @@ export default function AmazonConnectView({
   };
 
   const openAddModal = () => {
-    if (accounts.length >= 3) {
-      showToast('Maximum 3 Amazon Pay accounts allowed.', 'error');
+    if (isAtLimit) {
+      showToast(
+        `Your ${planState?.plan?.name || 'FREE'} plan allows ${maxAccounts} Amazon Pay account${maxAccounts === 1 ? '' : 's'}.`,
+        'error',
+        onViewChange ? { label: 'Upgrade', onClick: () => onViewChange('pricing') } : undefined
+      );
       return;
     }
     setStep(1);
@@ -167,8 +191,12 @@ export default function AmazonConnectView({
       setHistoryRefreshKey(k => k + 1);
       onCashierChanged?.();
     } catch (err: unknown) {
-      const msg = (err as { message?: string })?.message || 'Failed to verify & save Amazon Pay account';
-      showToast(msg, 'error');
+      notifyApiOrPlanError(
+        err,
+        'Failed to verify & save Amazon Pay account',
+        showToast,
+        onViewChange ? () => onViewChange('pricing') : undefined
+      );
     } finally {
       setGmailAppPassword('');
       setIsSubmitting(false);
@@ -245,23 +273,41 @@ export default function AmazonConnectView({
 
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[rgba(255,45,85,0.08)] border border-[rgba(255,45,85,0.25)] text-xs font-bold text-[#ff8ca3]">
-              <span>Max 3 Accounts</span>
-              <span className="text-white/40">•</span>
-              <span className="text-white font-mono">{accounts.length}/3</span>
+              <span>
+                {maxAccounts === null
+                  ? 'Unlimited Accounts'
+                  : `${accounts.length} of ${maxAccounts} account${maxAccounts === 1 ? '' : 's'}`}
+              </span>
+              {maxAccounts === null && (
+                <>
+                  <span className="text-white/40">•</span>
+                  <span className="text-white font-mono">{accounts.length}</span>
+                </>
+              )}
             </div>
 
-            <button
-              onClick={openAddModal}
-              disabled={accounts.length >= 3}
-              className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[11px] text-[13.5px] font-extrabold text-white transition-all duration-200 whitespace-nowrap tracking-tight ${
-                accounts.length >= 3
-                  ? 'opacity-50 cursor-not-allowed bg-slate-800'
-                  : 'bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] shadow-[0_8px_24px_rgba(255,30,75,0.4),inset_0_1px_0_rgba(255,255,255,0.18)] hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(255,30,75,0.55)] active:translate-y-0 cursor-pointer'
-              }`}
-            >
-              <Plus className="w-[15px] h-[15px] stroke-[2.8]" />
-              Add Amazon Pay Account
-            </button>
+            {isAtLimit && onViewChange ? (
+              <button
+                onClick={() => onViewChange('pricing')}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[11px] text-[13.5px] font-extrabold text-amber-200 bg-amber-500/15 border border-amber-500/35 hover:bg-amber-500/25 transition-all duration-200 whitespace-nowrap tracking-tight cursor-pointer"
+              >
+                <Lock className="w-[14px] h-[14px]" />
+                Upgrade to {nextPlanName}
+              </button>
+            ) : (
+              <button
+                onClick={openAddModal}
+                disabled={isAtLimit}
+                className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[11px] text-[13.5px] font-extrabold text-white transition-all duration-200 whitespace-nowrap tracking-tight ${
+                  isAtLimit
+                    ? 'opacity-50 cursor-not-allowed bg-slate-800'
+                    : 'bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] shadow-[0_8px_24px_rgba(255,30,75,0.4),inset_0_1px_0_rgba(255,255,255,0.18)] hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(255,30,75,0.55)] active:translate-y-0 cursor-pointer'
+                }`}
+              >
+                <Plus className="w-[15px] h-[15px] stroke-[2.8]" />
+                Add Amazon Pay Account
+              </button>
+            )}
           </div>
         </div>
 
@@ -289,7 +335,7 @@ export default function AmazonConnectView({
                 </span>
               </div>
               <span className="text-[11.5px] font-extrabold px-3 py-1 rounded-full bg-[rgba(255,30,75,0.08)] border border-[rgba(255,45,85,0.28)] text-[#b89fa5] tracking-wide">
-                Max 3 accounts
+                {maxAccounts === null ? 'Unlimited accounts' : `${accounts.length} of ${maxAccounts} account${maxAccounts === 1 ? '' : 's'}`}
               </span>
             </div>
 

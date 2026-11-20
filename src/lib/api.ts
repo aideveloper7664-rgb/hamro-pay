@@ -41,9 +41,9 @@ export const ApiService = {
           withdrawalAlerts: true,
           availableBalance: 0,
           pendingPayout: 0,
-          plan: 'Blaze Free',
-          feePercent: 1.5,
-          linkLimit: 100,
+          plan: 'FREE',
+          feePercent: 5,
+          linkLimit: 20,
         },
         error: undefined as string | undefined
       };

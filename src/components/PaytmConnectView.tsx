@@ -4,6 +4,12 @@ import {
   X, Check, RefreshCw, Eye, EyeOff, Lock, Info, AlertTriangle
 } from 'lucide-react';
 import { PaytmIcon } from './BrandIcons';
+import { CurrentPlanState, PlanDefinition } from '../types';
+import {
+  ShowToastFn,
+  getRequiredPlanName,
+  notifyApiOrPlanError
+} from '../services/plans.service';
 import {
   CashierAccount,
   getCashierList,
@@ -16,8 +22,10 @@ import CashierHistoryPanel from './CashierHistoryPanel';
 
 interface PaytmConnectViewProps {
   onViewChange?: (view: string) => void;
-  showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  showToast?: ShowToastFn;
   onCashierChanged?: () => void;
+  planState?: CurrentPlanState | null;
+  plansCatalog?: PlanDefinition[];
 }
 
 const isValidUpiId = (val: string): boolean => {
@@ -26,11 +34,14 @@ const isValidUpiId = (val: string): boolean => {
 };
 
 export default function PaytmConnectView({
+  onViewChange,
   showToast,
   onCashierChanged,
+  planState,
+  plansCatalog,
 }: PaytmConnectViewProps) {
-  const notify = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
-    showToast?.(msg, type);
+  const notify: ShowToastFn = (msg, type = 'info', action) => {
+    showToast?.(msg, type, action);
   };
 
   const [accounts, setAccounts] = useState<CashierAccount[]>([]);
@@ -83,6 +94,15 @@ export default function PaytmConnectView({
   const midAccounts = accounts.filter(a => (a.type || '').toLowerCase() === 'paytm_mid');
   const legacyAccounts = accounts.filter(a => (a.type || '').toLowerCase() === 'paytm');
   const activeMidAccount = midAccounts.find(acc => Boolean(acc.is_active ?? acc.isActive)) || null;
+  const maxAccounts: number | null = planState?.plan?.accounts
+    ? planState.plan.accounts.paytm_mid
+    : 1;
+  const isAtLimit = maxAccounts !== null && midAccounts.length >= maxAccounts;
+  const nextPlanName = getRequiredPlanName(
+    plansCatalog || [],
+    (p) => p.accounts?.paytm_mid === null || Number(p.accounts?.paytm_mid || 0) > (maxAccounts ?? 0),
+    'BASIC'
+  );
 
   const clearSecrets = () => {
     setPaytmMerchantKey('');
@@ -95,8 +115,12 @@ export default function PaytmConnectView({
   };
 
   const openAddModal = () => {
-    if (midAccounts.length >= 3) {
-      notify('Maximum 3 Paytm MID accounts allowed.', 'error');
+    if (isAtLimit) {
+      notify(
+        `Your ${planState?.plan?.name || 'FREE'} plan allows ${maxAccounts} Paytm MID account${maxAccounts === 1 ? '' : 's'}.`,
+        'error',
+        onViewChange ? { label: 'Upgrade', onClick: () => onViewChange('pricing') } : undefined
+      );
       return;
     }
     setUpiId('');
@@ -108,8 +132,12 @@ export default function PaytmConnectView({
 
   const handleMidSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (midAccounts.length >= 3) {
-      notify('Maximum 3 Paytm MID accounts allowed.', 'error');
+    if (isAtLimit) {
+      notify(
+        `Your ${planState?.plan?.name || 'FREE'} plan allows ${maxAccounts} Paytm MID account${maxAccounts === 1 ? '' : 's'}.`,
+        'error',
+        onViewChange ? { label: 'Upgrade', onClick: () => onViewChange('pricing') } : undefined
+      );
       return;
     }
 
@@ -151,8 +179,12 @@ export default function PaytmConnectView({
       setHistoryRefreshKey(k => k + 1);
       onCashierChanged?.();
     } catch (err: unknown) {
-      const msg = (err as { message?: string })?.message || 'Failed to verify Paytm MID credentials';
-      notify(msg, 'error');
+      notifyApiOrPlanError(
+        err,
+        'Failed to verify Paytm MID credentials',
+        showToast,
+        onViewChange ? () => onViewChange('pricing') : undefined
+      );
     } finally {
       clearSecrets();
       setIsSubmitting(false);
@@ -229,23 +261,41 @@ export default function PaytmConnectView({
 
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[rgba(255,45,85,0.08)] border border-[rgba(255,45,85,0.25)] text-xs font-bold text-[#ff8ca3]">
-              <span>Max 3 Accounts</span>
-              <span className="text-white/40">•</span>
-              <span className="text-white font-mono">{midAccounts.length}/3</span>
+              <span>
+                {maxAccounts === null
+                  ? 'Unlimited Accounts'
+                  : `${midAccounts.length} of ${maxAccounts} account${maxAccounts === 1 ? '' : 's'}`}
+              </span>
+              {maxAccounts === null && (
+                <>
+                  <span className="text-white/40">•</span>
+                  <span className="text-white font-mono">{midAccounts.length}</span>
+                </>
+              )}
             </div>
 
-            <button
-              onClick={openAddModal}
-              disabled={midAccounts.length >= 3}
-              className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[11px] text-[13.5px] font-extrabold text-white transition-all duration-200 whitespace-nowrap tracking-tight ${
-                midAccounts.length >= 3
-                  ? 'opacity-50 cursor-not-allowed bg-slate-800'
-                  : 'bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] shadow-[0_8px_24px_rgba(255,30,75,0.4),inset_0_1px_0_rgba(255,255,255,0.18)] hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(255,30,75,0.55)] active:translate-y-0 cursor-pointer'
-              }`}
-            >
-              <Plus className="w-[15px] h-[15px] stroke-[2.8]" />
-              Add Paytm Account
-            </button>
+            {isAtLimit && onViewChange ? (
+              <button
+                onClick={() => onViewChange('pricing')}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[11px] text-[13.5px] font-extrabold text-amber-200 bg-amber-500/15 border border-amber-500/35 hover:bg-amber-500/25 transition-all duration-200 whitespace-nowrap tracking-tight cursor-pointer"
+              >
+                <Lock className="w-[14px] h-[14px]" />
+                Upgrade to {nextPlanName}
+              </button>
+            ) : (
+              <button
+                onClick={openAddModal}
+                disabled={isAtLimit}
+                className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[11px] text-[13.5px] font-extrabold text-white transition-all duration-200 whitespace-nowrap tracking-tight ${
+                  isAtLimit
+                    ? 'opacity-50 cursor-not-allowed bg-slate-800'
+                    : 'bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] shadow-[0_8px_24px_rgba(255,30,75,0.4),inset_0_1px_0_rgba(255,255,255,0.18)] hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(255,30,75,0.55)] active:translate-y-0 cursor-pointer'
+                }`}
+              >
+                <Plus className="w-[15px] h-[15px] stroke-[2.8]" />
+                Add Paytm Account
+              </button>
+            )}
           </div>
         </div>
 
@@ -274,7 +324,7 @@ export default function PaytmConnectView({
                   </span>
                 </div>
                 <span className="text-[11.5px] font-extrabold px-3 py-1 rounded-full bg-[rgba(255,30,75,0.08)] border border-[rgba(255,45,85,0.28)] text-[#b89fa5] tracking-wide">
-                  Max 3 accounts
+                  {maxAccounts === null ? 'Unlimited accounts' : `${midAccounts.length} of ${maxAccounts} account${maxAccounts === 1 ? '' : 's'}`}
                 </span>
               </div>
 

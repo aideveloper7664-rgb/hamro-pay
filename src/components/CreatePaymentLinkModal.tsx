@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, Link as LinkIcon, DollarSign, Settings, ChevronDown } from 'lucide-react';
+import { X, Link as LinkIcon, DollarSign, Settings, ChevronDown, Lock } from 'lucide-react';
+import { ShowToastFn } from '../services/plans.service';
 
 interface CreatePaymentLinkModalProps {
   isOpen: boolean;
@@ -23,8 +24,14 @@ interface CreatePaymentLinkModalProps {
     usageLimit?: number;
   } | null;
   isEditing: boolean;
-  linkLimit: number;
-  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  linkLimit: number | null;
+  linksUsed?: number;
+  commission?: number;
+  maxAmount?: number | null;
+  linkExpiryDays?: number | null;
+  planName?: string;
+  onUpgradeClick?: () => void;
+  showToast: ShowToastFn;
 }
 
 export default function CreatePaymentLinkModal({
@@ -34,6 +41,12 @@ export default function CreatePaymentLinkModal({
   initialData,
   isEditing,
   linkLimit,
+  linksUsed = 0,
+  commission = 5,
+  maxAmount = null,
+  linkExpiryDays = null,
+  planName = 'FREE',
+  onUpgradeClick,
   showToast
 }: CreatePaymentLinkModalProps) {
   const [amount, setAmount] = useState(initialData ? String(initialData.amount) : '');
@@ -80,6 +93,15 @@ export default function CreatePaymentLinkModal({
     const num = parseFloat(amount);
     if (!title.trim() || isNaN(num) || num <= 0) {
       showToast('Please specify a valid title and amount.', 'error');
+      return;
+    }
+
+    if (maxAmount !== null && maxAmount !== undefined && num > maxAmount) {
+      showToast(
+        `${planName} plan max amount is ₹${maxAmount.toLocaleString('en-IN')} per link.`,
+        'error',
+        onUpgradeClick ? { label: 'Upgrade', onClick: onUpgradeClick } : undefined
+      );
       return;
     }
 
@@ -148,14 +170,22 @@ export default function CreatePaymentLinkModal({
 
           {/* Amount Field */}
           <div className="space-y-2">
-            <label className="block text-xs font-bold text-[#fce4e8] tracking-wide">
-              Amount (₹) <span className="text-[#ff1e4b]">*</span>
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-xs font-bold text-[#fce4e8] tracking-wide">
+                Amount (₹) <span className="text-[#ff1e4b]">*</span>
+              </label>
+              <span className="text-[11px] font-bold text-[#b89fa5]">
+                {maxAmount === null || maxAmount === undefined
+                  ? 'Unlimited amount'
+                  : `Max ₹${maxAmount.toLocaleString('en-IN')} (${planName})`}
+              </span>
+            </div>
             <div className="relative flex items-center">
               <span className="absolute left-3.5 text-[15px] font-black text-[#ff4d6d]">₹</span>
               <input
                 type="number"
                 min="1"
+                max={maxAmount ?? undefined}
                 placeholder="0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
@@ -278,27 +308,45 @@ export default function CreatePaymentLinkModal({
 
                 {/* Expiry */}
                 <div className="space-y-1.5">
-                  <label className="block text-[11.5px] font-bold text-[#fce4e8]">Link Expiry</label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-[11.5px] font-bold text-[#fce4e8]">Link Expiry</label>
+                    <span className="text-[10.5px] font-bold text-[#2bf29a]">
+                      {linkExpiryDays === null || linkExpiryDays === undefined
+                        ? 'Never expires'
+                        : `Link valid for ${linkExpiryDays} days`}
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { id: '7d', label: '7 Days' },
-                      { id: '30d', label: '30 Days' },
-                      { id: '90d', label: '90 Days' },
-                      { id: 'never', label: 'Never Expire' }
-                    ].map(item => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setExpiry(item.id)}
-                        className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                          expiry === item.id
-                            ? 'bg-gradient-to-br from-[rgba(255,30,75,0.28)] to-[rgba(255,30,75,0.1)] border-[rgba(255,60,95,0.6)] text-white shadow-sm'
-                            : 'bg-[rgba(12,2,6,0.75)] border-[rgba(255,45,85,0.16)] text-[#d4c2c7] hover:border-[rgba(255,60,95,0.42)] hover:text-white'
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
+                      { id: '7d', label: '7 Days', days: 7 },
+                      { id: '30d', label: '30 Days', days: 30 },
+                      { id: '90d', label: '90 Days', days: 90 },
+                      { id: 'never', label: 'Never Expire', days: Infinity }
+                    ].map(item => {
+                      const isLockedByPlan =
+                        linkExpiryDays !== null &&
+                        linkExpiryDays !== undefined &&
+                        item.days > linkExpiryDays;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          disabled={isLockedByPlan}
+                          onClick={() => !isLockedByPlan && setExpiry(item.id)}
+                          title={isLockedByPlan ? `Upgrade plan for ${item.label} expiry` : undefined}
+                          className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                            isLockedByPlan
+                              ? 'bg-black/40 border-white/5 text-[#83686e] opacity-55 cursor-not-allowed'
+                              : expiry === item.id
+                                ? 'bg-gradient-to-br from-[rgba(255,30,75,0.28)] to-[rgba(255,30,75,0.1)] border-[rgba(255,60,95,0.6)] text-white shadow-sm cursor-pointer'
+                                : 'bg-[rgba(12,2,6,0.75)] border-[rgba(255,45,85,0.16)] text-[#d4c2c7] hover:border-[rgba(255,60,95,0.42)] hover:text-white cursor-pointer'
+                          }`}
+                        >
+                          {isLockedByPlan && <Lock className="w-3 h-3 text-amber-400" />}
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -326,11 +374,19 @@ export default function CreatePaymentLinkModal({
           <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[rgba(20,5,10,0.7)] border border-[rgba(255,45,85,0.14)] text-xs">
             <div>
               <span className="block text-[10px] font-bold text-[#83686e] uppercase">Commission</span>
-              <span className="font-extrabold text-[#ff5274]">1.5%</span>
+              <span className="font-extrabold text-[#ff5274]">{commission}%</span>
+            </div>
+            <div className="text-center">
+              <span className="block text-[10px] font-bold text-[#83686e] uppercase">Validity</span>
+              <span className="font-extrabold text-white">
+                {linkExpiryDays === null || linkExpiryDays === undefined ? 'Never expires' : `${linkExpiryDays} days`}
+              </span>
             </div>
             <div className="text-right">
               <span className="block text-[10px] font-bold text-[#83686e] uppercase">Links Remaining</span>
-              <span className="font-extrabold text-[#2bf29a]">{linkLimit} remaining</span>
+              <span className="font-extrabold text-[#2bf29a]">
+                {linkLimit === null ? 'Unlimited' : `${Math.max(0, linkLimit - linksUsed)} of ${linkLimit}`}
+              </span>
             </div>
           </div>
 

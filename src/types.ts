@@ -55,4 +55,51 @@ export interface MerchantProfile {
   withdrawalAlerts: boolean;
 }
 
-export type PlanType = 'Blaze Free' | 'Pulse' | 'Summit';
+export type PlanType =
+  | 'FREE'
+  | 'BASIC'
+  | 'STARTER'
+  | 'GROWTH'
+  | 'BUSINESS'
+  | 'ADVANCE'
+  | 'ELITE';
+
+export interface PlanAccountsLimit {
+  fampay: number | null;
+  paytm_mid: number | null;
+  amazon: number | null;
+}
+
+export interface PlanDefinition {
+  name: PlanType | string;
+  price: number;
+  duration_days: number;
+  links_per_month: number | null;
+  link_expiry_days: number | null;
+  max_amount: number | null;
+  commission: number;
+  webhooks: number | null;
+  api_orders: boolean;
+  api_docs: boolean;
+  advanced_api: boolean;
+  accounts: PlanAccountsLimit;
+  custom_pages: boolean;
+  qr_theme: boolean;
+  branding: boolean;
+  multiple_pages: boolean;
+}
+
+export interface PlanUsage {
+  links_used: number;
+  links_limit: number | null;
+  webhooks_used: number;
+  webhooks_limit: number | null;
+  accounts_used: number;
+  accounts_limit?: number | null;
+}
+
+export interface CurrentPlanState {
+  plan: PlanDefinition;
+  expires_at: string | null;
+  usage: PlanUsage;
+}

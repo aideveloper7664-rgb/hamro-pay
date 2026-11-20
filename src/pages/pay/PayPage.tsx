@@ -28,7 +28,7 @@ interface PayPageProps {
   onBackToDashboard?: () => void;
 }
 
-type ErrorKind = '404' | '409' | '429' | 'network' | 'no_upi' | 'order_unsupported' | 'inactive' | 'generic';
+type ErrorKind = '404' | '409' | '429' | 'link_expired' | 'network' | 'no_upi' | 'order_unsupported' | 'inactive' | 'generic';
 
 interface PaymentCountdownTimerProps {
   expiresAt?: string;
@@ -304,6 +304,13 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     try {
       const res = await fetch(`${API_URL}/api/payment-link/${encodeURIComponent(id)}`);
 
+      if (res.status === 410) {
+        setErrorKind('link_expired');
+        setErrorMessage('This payment link has expired and can no longer accept payments.');
+        setIsLoading(false);
+        return;
+      }
+
       if (res.status === 403) {
         setErrorKind('inactive');
         setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
@@ -329,6 +336,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         let msg = `Payment error (${res.status})`;
         try {
           const errData = await res.json();
+          if (errData?.code === 'LINK_EXPIRED') {
+            setErrorKind('link_expired');
+            setErrorMessage(errData?.message || 'This payment link has expired and can no longer accept payments.');
+            setIsLoading(false);
+            return;
+          }
           if (errData?.code === 'LINK_DISABLED') {
             setErrorKind('inactive');
             setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
@@ -344,6 +357,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       }
 
       const resData = await res.json();
+      if (resData?.code === 'LINK_EXPIRED') {
+        setErrorKind('link_expired');
+        setErrorMessage(resData?.message || 'This payment link has expired and can no longer accept payments.');
+        setIsLoading(false);
+        return;
+      }
       if (resData?.code === 'LINK_DISABLED') {
         setErrorKind('inactive');
         setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
@@ -362,6 +381,14 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       if (!paymentData || paymentData.amount === undefined || paymentData.amount === null) {
         setErrorKind('404');
         setErrorMessage('This payment link is invalid or has been removed');
+        setIsLoading(false);
+        return;
+      }
+
+      if (paymentData.status === 'expired') {
+        setErrorKind('link_expired');
+        setErrorMessage('This payment link has expired and can no longer accept payments.');
+        setData(paymentData);
         setIsLoading(false);
         return;
       }
@@ -403,6 +430,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             body: JSON.stringify(existingSid ? { session_id: existingSid } : {})
           });
 
+          if (sRes.status === 410) {
+            setErrorKind('link_expired');
+            setErrorMessage('This payment link has expired and can no longer accept payments.');
+            setIsLoading(false);
+            return;
+          }
           if (sRes.status === 403) {
             setErrorKind('inactive');
             setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
@@ -437,6 +470,12 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             let msg = 'Unable to start checkout session';
             try {
               const errData = await sRes.json();
+              if (errData?.code === 'LINK_EXPIRED') {
+                setErrorKind('link_expired');
+                setErrorMessage(errData?.message || 'This payment link has expired and can no longer accept payments.');
+                setIsLoading(false);
+                return;
+              }
               if (errData?.code === 'LINK_DISABLED') {
                 setErrorKind('inactive');
                 setErrorMessage('This payment link is currently disabled by the merchant. Please contact the merchant.');
@@ -574,12 +613,26 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
           return;
         }
 
+        if (res.status === 410) {
+          try { sessionStorage.removeItem(`hamropay_session_${idRef.current}`); } catch {}
+          setErrorKind('link_expired');
+          setErrorMessage('This payment link has expired and can no longer accept payments.');
+          return;
+        }
+
         if (res.ok) {
           consecutiveFailuresRef.current = 0;
           setIsReconnecting(false);
 
           const statusJson = await res.json();
           const stData = statusJson?.data;
+
+          if (statusJson?.code === 'LINK_EXPIRED' || stData?.code === 'LINK_EXPIRED') {
+            try { sessionStorage.removeItem(`hamropay_session_${idRef.current}`); } catch {}
+            setErrorKind('link_expired');
+            setErrorMessage(statusJson?.message || 'This payment link has expired and can no longer accept payments.');
+            return;
+          }
 
           if (stData) {
             if (stData.auto_detect !== undefined) {
@@ -770,6 +823,14 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         resData = await res.json();
       } catch {
         resData = {};
+      }
+
+      if (res.status === 410 || resData?.code === 'LINK_EXPIRED') {
+        try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
+        setErrorKind('link_expired');
+        setErrorMessage(resData?.message || 'This payment link has expired and can no longer accept payments.');
+        setIsVerifying(false);
+        return;
       }
 
       if (res.status === 403 || resData?.code === 'LINK_DISABLED') {
@@ -986,6 +1047,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                 {errorKind === '404' && 'Payment Link Not Found'}
                 {errorKind === '409' && 'Merchant Unavailable'}
                 {errorKind === '429' && 'Too Many Checkouts'}
+                {errorKind === 'link_expired' && 'This link has expired'}
                 {errorKind === 'network' && 'Connection Error'}
                 {errorKind === 'no_upi' && 'Payment Unavailable'}
                 {errorKind === 'order_unsupported' && 'Payment Link Required'}

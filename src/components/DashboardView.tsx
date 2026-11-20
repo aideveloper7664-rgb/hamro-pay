@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { PanelLeft } from 'lucide-react';
-import { PaymentLink, Transaction } from '../types';
+import { CurrentPlanState, PaymentLink, Transaction } from '../types';
 import { getPayments } from '../services/wallet.service';
 import { getCreditBalance } from '../services/credits.service';
+import { getDaysLeftFromExpiry } from '../services/plans.service';
 import { useAuth } from '../context/AuthContext';
 import PaymentRoutingCard from './PaymentRoutingCard';
 
@@ -14,8 +15,9 @@ interface DashboardViewProps {
   onViewChange: (view: string) => void;
   onCreatePaymentLink: () => void;
   feePercent?: number;
-  linkLimit?: number;
+  linkLimit?: number | null;
   currentPlan?: string;
+  currentPlanState?: CurrentPlanState | null;
   onOpenSidebar?: () => void;
   unreadNotifications?: number;
   showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -29,8 +31,9 @@ export default function DashboardView({
   onViewChange,
   onCreatePaymentLink,
   feePercent = 5,
-  linkLimit = 100,
-  currentPlan = 'Blaze Free',
+  linkLimit = 20,
+  currentPlan = 'FREE',
+  currentPlanState,
   onOpenSidebar,
   unreadNotifications = 0,
   showToast,
@@ -129,17 +132,23 @@ export default function DashboardView({
     }
   }, [propTransactions]);
 
-  // Calculations for stats cards
-  const activeLinksCount = paymentLinks.filter(l => l.active).length;
-
   // Plan formatting
-  const planTag = currentPlan.toLowerCase().includes('enterprise') 
-    ? 'Enterprise' 
-    : currentPlan.toLowerCase().includes('pro') 
-      ? 'Pro' 
-      : 'Free';
-
-  const planBaseName = currentPlan.replace(/(Free|Pro|Enterprise)/i, '').trim() || 'Blaze';
+  const activePlanName = (
+    currentPlanState?.plan?.name ||
+    (currentPlan && !currentPlan.toLowerCase().includes('blaze') ? currentPlan : 'FREE')
+  ).toUpperCase();
+  const effectiveCommission = currentPlanState?.plan?.commission ?? feePercent ?? 5;
+  const linksUsedThisMonth = currentPlanState?.usage?.links_used ?? paymentLinks.length;
+  const effectiveLinkLimit =
+    currentPlanState?.usage?.links_limit !== undefined
+      ? currentPlanState.usage.links_limit
+      : linkLimit;
+  const isPaidPlan = activePlanName !== 'FREE';
+  const daysLeft = isPaidPlan
+    ? getDaysLeftFromExpiry(currentPlanState?.expires_at || null)
+    : null;
+  const planTag = isPaidPlan ? 'Active' : 'Free';
+  const planBaseName = activePlanName;
 
   // Card hover 3D tilt
   const handleCardMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -1014,9 +1023,15 @@ export default function DashboardView({
                 <span className="plan-tag">{planTag}</span>
               </strong>
               <p>
-                {paymentLinks.length}/{linkLimit} links used this month
+                {linksUsedThisMonth}/{effectiveLinkLimit === null ? 'Unlimited' : effectiveLinkLimit} links used this month
                 <span className="dot-sep"></span>
-                {feePercent}% commission
+                {effectiveCommission}% commission
+                {daysLeft !== null && (
+                  <>
+                    <span className="dot-sep"></span>
+                    {daysLeft} day{daysLeft === 1 ? '' : 's'} left
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -1107,8 +1122,10 @@ export default function DashboardView({
               </div>
             </div>
             <div className="stat-label">Links Used</div>
-            <div className="stat-value">{activeLinksCount}</div>
-            <div className="stat-foot">of {linkLimit}/month</div>
+            <div className="stat-value">{linksUsedThisMonth}</div>
+            <div className="stat-foot">
+              {effectiveLinkLimit === null ? 'Unlimited / month' : `of ${effectiveLinkLimit}/month`}
+            </div>
           </div>
 
           <div 
@@ -1187,11 +1204,13 @@ export default function DashboardView({
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                 </svg>
               </div>
-              <span className="stat-badge badge-green">Active</span>
+              <span className="stat-badge badge-green">
+                {daysLeft !== null ? `${daysLeft}d left` : 'Active'}
+              </span>
             </div>
             <div className="stat-label">Current Plan</div>
-            <div className="stat-value">{currentPlan}</div>
-            <div className="stat-foot">{feePercent}% platform fee</div>
+            <div className="stat-value">{planBaseName}</div>
+            <div className="stat-foot">{effectiveCommission}% platform fee</div>
           </div>
 
           <div 

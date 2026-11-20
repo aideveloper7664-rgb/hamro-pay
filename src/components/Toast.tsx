@@ -5,6 +5,8 @@ export interface ToastItem {
   id: string | number;
   message: string;
   type: 'success' | 'error' | 'info';
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 interface ToastProps {
@@ -34,11 +36,12 @@ interface ToastCardProps {
 
 function ToastCard({ toast, onRemove }: ToastCardProps) {
   useEffect(() => {
+    const duration = toast.actionLabel ? 6500 : 4000;
     const timer = setTimeout(() => {
       onRemove(toast.id);
-    }, 4000);
+    }, duration);
     return () => clearTimeout(timer);
-  }, [toast.id, onRemove]);
+  }, [toast.id, toast.actionLabel, onRemove]);
 
   const icons = {
     success: <CheckCircle className="w-5 h-5 text-white fill-emerald-600" />,
@@ -55,7 +58,7 @@ function ToastCard({ toast, onRemove }: ToastCardProps) {
   return (
     <div 
       className={`
-        pointer-events-auto flex items-center justify-between gap-3 p-4 rounded-xl text-white shadow-xl
+        pointer-events-auto flex items-center justify-between gap-2.5 p-3.5 rounded-xl text-white shadow-xl
         animate-[toast-in_0.25s_cubic-bezier(0.16,1,0.3,1)_both] border border-white/10
         ${bgColors[toast.type]}
       `}
@@ -63,17 +66,32 @@ function ToastCard({ toast, onRemove }: ToastCardProps) {
     >
       <div className="flex items-center gap-2.5 min-w-0 flex-1">
         <span className="shrink-0">{icons[toast.type]}</span>
-        <span className="text-xs font-bold leading-normal break-words truncate max-w-[250px] whitespace-normal">
+        <span className="text-xs font-bold leading-normal break-words whitespace-normal">
           {toast.message}
         </span>
       </div>
-      <button 
-        onClick={() => onRemove(toast.id)}
-        className="p-1 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0 outline-none"
-        aria-label="Dismiss toast"
-      >
-        <X className="w-4 h-4" />
-      </button>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {toast.actionLabel && toast.onAction && (
+          <button
+            type="button"
+            onClick={() => {
+              toast.onAction?.();
+              onRemove(toast.id);
+            }}
+            className="px-2.5 py-1 rounded-lg bg-white text-rose-700 hover:bg-rose-50 text-[11px] font-black shadow-sm transition cursor-pointer"
+          >
+            {toast.actionLabel}
+          </button>
+        )}
+        <button 
+          type="button"
+          onClick={() => onRemove(toast.id)}
+          className="p-1 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer outline-none"
+          aria-label="Dismiss toast"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 }

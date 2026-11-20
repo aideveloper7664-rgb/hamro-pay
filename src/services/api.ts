@@ -37,8 +37,17 @@ const sanitizeForLog = (obj: any): any => {
   return copy;
 };
 
-// For merchant API calls (uses x-api-key)
-export const apiCall = async (
+export const PLAN_ERROR_CODES = new Set([
+  'PLAN_AMOUNT_LIMIT',
+  'PLAN_LINK_LIMIT',
+  'PLAN_API_DISABLED',
+  'PLAN_WEBHOOK_LIMIT',
+  'PLAN_ACCOUNT_LIMIT',
+  'PLAN_FEATURE',
+  'LINK_EXPIRED',
+]);
+
+const performApiCall = async (
   path: string,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
   body?: object,
@@ -81,8 +90,10 @@ export const apiCall = async (
 
   if (!res.ok || (data && data.success === false)) {
     const errorMsg = data?.message || data?.error || res.statusText || 'API Error';
+    const isPlanCode = Boolean(data?.code && PLAN_ERROR_CODES.has(String(data.code)));
     if (
       res.status === 401 &&
+      !isPlanCode &&
       typeof window !== 'undefined' &&
       !extraHeaders?.['x-api-key'] &&
       !extraHeaders?.['X-HamroAPI-Key']
@@ -97,8 +108,27 @@ export const apiCall = async (
     errorObj.data = data;
     throw errorObj;
   }
+  return data;
+};
+
+// For merchant API calls (uses x-api-key)
+export const apiCall = async (
+  path: string,
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
+  body?: object,
+  extraHeaders?: Record<string, string>
+) => {
+  const data = await performApiCall(path, method, body, extraHeaders);
   return data.data !== undefined ? data.data : data;
 };
+
+// Preserves full JSON payload when top-level metadata (e.g. limit, enabled) sits beside data
+export const apiCallFull = async (
+  path: string,
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
+  body?: object,
+  extraHeaders?: Record<string, string>
+) => performApiCall(path, method, body, extraHeaders);
 
 // For public API calls (no auth)
 export const publicApiCall = async (

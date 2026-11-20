@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { PlanType } from '../types';
-import { X, User, LogOut, Wallet } from 'lucide-react';
+import { CurrentPlanState, PlanType } from '../types';
+import { X, User, LogOut, Wallet, Lock } from 'lucide-react';
 import { FamPayIcon, PaytmIcon, AmazonPayIcon } from './BrandIcons';
 
 interface SidebarProps {
@@ -13,6 +13,7 @@ interface SidebarProps {
   profileEmail: string;
   unreadNotifications?: number;
   currentPlan?: PlanType;
+  planState?: CurrentPlanState | null;
   onSignOut: () => void;
   isOpen: boolean;
   onClose: () => void;
@@ -25,12 +26,15 @@ export default function Sidebar({
   balance = 0,
   profileName,
   profileEmail,
+  planState,
   onSignOut,
   isOpen,
   onClose,
 }: SidebarProps) {
   const { user } = useAuth();
   const displayCredits = credits !== undefined ? credits : balance;
+  const apiOrdersLocked = planState ? !planState.plan.api_orders : false;
+  const apiDocsLocked = planState ? !planState.plan.api_docs : false;
 
   // Collapsible groups state - default collapsed so subsections do not open automatically
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
@@ -311,7 +315,11 @@ export default function Sidebar({
                   </svg>
                 </span>
                 <span className="flex-1 min-w-0 truncate">Developer Portal</span>
-                <span className="hp-new-badge">New</span>
+                {apiOrdersLocked ? (
+                  <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                ) : (
+                  <span className="hp-new-badge">New</span>
+                )}
                 <svg
                   className={`w-3.5 h-3.5 hp-chevron transition-transform duration-200 ${expandedGroups.dev ? 'rotate-180' : ''}`}
                   viewBox="0 0 24 24"
@@ -349,6 +357,7 @@ export default function Sidebar({
                         </svg>
                       </span>
                       <span className="flex-1 min-w-0 truncate">Hamro API</span>
+                      {apiOrdersLocked && <Lock className="w-3 h-3 text-amber-400 shrink-0" />}
                     </div>
 
                     {/* API Integration */}
@@ -374,6 +383,7 @@ export default function Sidebar({
                         </svg>
                       </span>
                       <span className="flex-1 min-w-0 truncate">API Integration</span>
+                      {apiDocsLocked && <Lock className="w-3 h-3 text-amber-400 shrink-0" />}
                     </div>
                   </div>
                 </div>

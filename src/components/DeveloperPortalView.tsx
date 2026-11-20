@@ -1,15 +1,19 @@
-import { PanelLeft, RefreshCw, Copy, Check, Eye, EyeOff, AlertTriangle, ExternalLink, Loader2, KeyRound, Globe, Radio, Plus, Trash2, ArrowUpRight } from 'lucide-react';
+import { PanelLeft, RefreshCw, Copy, Check, Eye, EyeOff, AlertTriangle, ExternalLink, Loader2, KeyRound, Globe, Radio, Plus, Trash2, ArrowUpRight, Lock, Zap } from 'lucide-react';
 import { getTokenInfo, regenerateKey, setMode, getApiOrders, getWebhooks, addWebhook, deleteWebhook, createApiOrder } from '../services/developer.service';
 import { CashierAccount, getCashierProviderMeta } from '../services/cashier.service';
+import { CurrentPlanState, PlanDefinition } from '../types';
+import { getRequiredPlanName, notifyApiOrPlanError, ShowToastFn } from '../services/plans.service';
 import { useState, useEffect, useRef } from 'react';
 
 interface DeveloperPortalViewProps {
-  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  showToast: ShowToastFn;
   onOpenSidebar?: () => void;
   onViewChange?: (view: string) => void;
   gatewayMode: 'live' | 'test';
   setGatewayMode: (mode: 'live' | 'test') => void;
   activeCashier?: CashierAccount | null;
+  planState?: CurrentPlanState | null;
+  plansCatalog?: PlanDefinition[];
 }
 
 export interface DeveloperOrder {
@@ -30,8 +34,21 @@ export default function DeveloperPortalView({
   onViewChange,
   gatewayMode,
   setGatewayMode,
-  activeCashier
+  activeCashier,
+  planState,
+  plansCatalog = [],
 }: DeveloperPortalViewProps) {
+  const activePlan = planState?.plan;
+  const apiOrdersEnabled = activePlan ? Boolean(activePlan.api_orders) : true;
+  const apiDocsEnabled = activePlan ? Boolean(activePlan.api_docs) : true;
+  const reqApiPlan = getRequiredPlanName(plansCatalog, (p) => Boolean(p.api_orders), 'BUSINESS');
+  const reqDocsPlan = getRequiredPlanName(plansCatalog, (p) => Boolean(p.api_docs), 'BUSINESS');
+  const reqWebhookPlan = getRequiredPlanName(
+    plansCatalog,
+    (p) => p.webhooks === null || Number(p.webhooks) > 0,
+    'GROWTH'
+  );
+
   const activeAccountLabel = activeCashier
     ? `${getCashierProviderMeta(activeCashier.type).label} account`
     : 'connected payment account';
@@ -62,11 +79,18 @@ export default function DeveloperPortalView({
   const [isCreatingTryOrder, setIsCreatingTryOrder] = useState(false);
   const [lastCreatedOrder, setLastCreatedOrder] = useState<{ id: string; url: string } | null>(null);
 
-  // Webhooks state (max 1 webhook supported by backend)
+  // Webhooks state (multiple supported by backend based on plan limit)
   const [webhooksList, setWebhooksList] = useState<{ url: string }[]>([]);
+  const [webhookLimit, setWebhookLimit] = useState<number | null>(
+    activePlan?.webhooks !== undefined ? activePlan.webhooks : null
+  );
+  const [webhooksEnabled, setWebhooksEnabled] = useState<boolean>(
+    activePlan ? activePlan.webhooks !== 0 : true
+  );
   const [whInput, setWhInput] = useState('');
   const [isSavingWebhook, setIsSavingWebhook] = useState(false);
-  const [isDeletingWebhook, setIsDeletingWebhook] = useState(false);
+  const [deletingUrl, setDeletingUrl] = useState<string | null>(null);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   // Developer orders state
   const [orders, setOrders] = useState<DeveloperOrder[]>([]);
@@ -107,15 +131,10 @@ export default function DeveloperPortalView({
   // 2. Fetch webhooks
   const fetchWebhooks = async () => {
     try {
-      const res = await getWebhooks();
-      const payload = res?.data !== undefined ? res.data : res;
-      if (Array.isArray(payload)) {
-        setWebhooksList(payload.map((item: any) => typeof item === 'string' ? { url: item } : item));
-      } else if (payload?.url) {
-        setWebhooksList([{ url: payload.url }]);
-      } else {
-        setWebhooksList([]);
-      }
+      const { webhooks, limit, enabled } = await getWebhooks();
+      setWebhooksList(webhooks);
+      setWebhookLimit(limit !== undefined ? limit : (activePlan?.webhooks ?? null));
+      setWebhooksEnabled(enabled);
     } catch {
       // Graceful fallback
     }
@@ -168,7 +187,24 @@ export default function DeveloperPortalView({
     });
   };
 
+  const effectiveWebhookLimit =
+    webhookLimit !== undefined ? webhookLimit : (activePlan?.webhooks ?? null);
+  const isWebhookLocked = !webhooksEnabled || effectiveWebhookLimit === 0;
+  const canAddMoreWebhooks =
+    !isWebhookLocked &&
+    (effectiveWebhookLimit === null || webhooksList.length < effectiveWebhookLimit);
+
+  const goToPlans = () => onViewChange?.('pricing');
+
   const handleRegenerate = async () => {
+    if (!apiOrdersEnabled) {
+      showToast(`API keys & orders require ${reqApiPlan} plan.`, 'error', {
+        label: 'Upgrade',
+        onClick: goToPlans,
+      });
+      return;
+    }
+
     const confirmed = window.confirm(
       'Are you sure you want to regenerate your API key?\n\nThe existing key will stop working immediately. Update all your websites and servers that use it.'
     );
@@ -192,13 +228,25 @@ export default function DeveloperPortalView({
         throw new Error(res?.message || 'Failed to regenerate key');
       }
     } catch (err: any) {
-      showToast(err?.message || 'Could not regenerate key. Your active key remains valid.', 'error');
+      notifyApiOrPlanError(
+        err,
+        'Could not regenerate key. Your active key remains valid.',
+        showToast,
+        goToPlans
+      );
     } finally {
       setRegenerating(false);
     }
   };
 
   const handleModeSelect = async (mode: 'live' | 'test') => {
+    if (!apiOrdersEnabled) {
+      showToast(`Gateway API mode switching requires ${reqApiPlan} plan.`, 'error', {
+        label: 'Upgrade',
+        onClick: goToPlans,
+      });
+      return;
+    }
     if (mode === gatewayMode || isSwitchingMode) return;
     const confirmMsg = mode === 'live'
       ? `Switch to LIVE mode?\n\nCustomers will make real UPI payments directly into your ${activeAccountLabel}.`
@@ -213,16 +261,31 @@ export default function DeveloperPortalView({
       setGatewayMode(data?.mode || mode);
       showToast(`Gateway mode switched to ${mode.toUpperCase()}`, 'success');
     } catch (e: any) {
-      showToast(e?.message || 'Failed to switch gateway mode.', 'error');
+      notifyApiOrPlanError(e, 'Failed to switch gateway mode.', showToast, goToPlans);
     } finally {
       setIsSwitchingMode(false);
     }
   };
 
   const handleTryIt = async () => {
+    if (!apiOrdersEnabled) {
+      showToast(`Developer API orders require ${reqApiPlan} plan.`, 'error', {
+        label: 'Upgrade',
+        onClick: goToPlans,
+      });
+      return;
+    }
     const amt = Number(tryAmount);
-    if (isNaN(amt) || amt < 1 || amt > 5000) {
-      showToast('Enter an amount between ₹1 and ₹5,000.', 'error');
+    if (isNaN(amt) || amt < 1) {
+      showToast('Enter an amount of at least ₹1.', 'error');
+      return;
+    }
+    if (activePlan?.max_amount !== null && activePlan?.max_amount !== undefined && amt > activePlan.max_amount) {
+      showToast(
+        `Your ${activePlan.name} plan allows up to ₹${activePlan.max_amount.toLocaleString('en-IN')} per order.`,
+        'error',
+        { label: 'Upgrade', onClick: goToPlans }
+      );
       return;
     }
     if (!realKey) {
@@ -243,46 +306,67 @@ export default function DeveloperPortalView({
         throw new Error(resp?.message || 'Could not retrieve payment checkout URL.');
       }
     } catch (e: any) {
-      showToast(e?.message || 'Failed to create try order.', 'error');
+      notifyApiOrPlanError(e, 'Failed to create try order.', showToast, goToPlans);
     } finally {
       setIsCreatingTryOrder(false);
     }
   };
 
   const handleAddWebhook = async () => {
+    if (isWebhookLocked) {
+      showToast(`Webhooks require ${reqWebhookPlan} plan.`, 'error', {
+        label: 'Upgrade',
+        onClick: goToPlans,
+      });
+      return;
+    }
     const url = whInput.trim();
     if (!url || !url.startsWith('http')) {
       showToast('Please enter a valid HTTP/HTTPS URL.', 'error');
       return;
     }
-    if (webhooksList.length >= 1) {
-      showToast('Maximum 1 webhook supported. Delete existing webhook first.', 'error');
+    if (effectiveWebhookLimit !== null && webhooksList.length >= effectiveWebhookLimit) {
+      showToast(
+        `Webhook limit (${effectiveWebhookLimit}) reached on your plan.`,
+        'error',
+        { label: 'Upgrade', onClick: goToPlans }
+      );
       return;
     }
 
     setIsSavingWebhook(true);
     try {
       await addWebhook(url);
-      setWebhooksList([{ url }]);
       setWhInput('');
+      await fetchWebhooks();
       showToast('Webhook URL saved successfully!', 'success');
     } catch (err: any) {
-      showToast(err?.message || 'Failed to save webhook.', 'error');
+      notifyApiOrPlanError(err, 'Failed to save webhook.', showToast, goToPlans);
     } finally {
       setIsSavingWebhook(false);
     }
   };
 
-  const handleDeleteWebhook = async () => {
-    setIsDeletingWebhook(true);
+  const handleDeleteWebhook = async (targetUrl?: string) => {
+    if (targetUrl) {
+      setDeletingUrl(targetUrl);
+    } else {
+      setIsDeletingAll(true);
+    }
     try {
-      await deleteWebhook();
-      setWebhooksList([]);
-      showToast('Webhook removed.', 'info');
+      await deleteWebhook(targetUrl);
+      if (targetUrl) {
+        setWebhooksList((prev) => prev.filter((w) => w.url !== targetUrl));
+        showToast('Webhook removed.', 'info');
+      } else {
+        setWebhooksList([]);
+        showToast('All webhooks removed.', 'info');
+      }
     } catch (err: any) {
-      showToast(err?.message || 'Failed to delete webhook.', 'error');
+      notifyApiOrPlanError(err, 'Failed to delete webhook.', showToast, goToPlans);
     } finally {
-      setIsDeletingWebhook(false);
+      setDeletingUrl(null);
+      setIsDeletingAll(false);
     }
   };
 
@@ -351,32 +435,73 @@ export default function DeveloperPortalView({
               <p>Accept direct UPI payments via API on your custom website or app</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <a
-              href="https://hamropay-backends-54xp.onrender.com/docs"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-              title="Open Backend API Docs"
-            >
-              <span>Swagger Docs</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-            <button
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.history.pushState({}, '', '/api/docs');
-                }
-                onViewChange?.('api-docs');
-              }}
-              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#b80028] text-white text-xs font-black tracking-wide flex items-center gap-1.5 shadow-[0_4px_14px_rgba(255,30,75,0.3)] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer shrink-0"
-              title="Open API Integration Docs"
-            >
-              <span>API Integration Docs</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {apiDocsEnabled ? (
+              <>
+                <a
+                  href="https://hamropay-backends-54xp.onrender.com/docs"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Open Backend API Docs"
+                >
+                  <span>Swagger Docs</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      window.history.pushState({}, '', '/api/docs');
+                    }
+                    onViewChange?.('api-docs');
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#b80028] text-white text-xs font-black tracking-wide flex items-center gap-1.5 shadow-[0_4px_14px_rgba(255,30,75,0.3)] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer shrink-0"
+                  title="Open API Integration Docs"
+                >
+                  <span>API Integration Docs</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={goToPlans}
+                className="px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-200 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                title={`API Docs require ${reqDocsPlan}`}
+              >
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                <span>API Docs · Upgrade to {reqDocsPlan}</span>
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Plan Lock Banner for FREE or non-API tiers */}
+        {!apiOrdersEnabled && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-[rgba(255,30,75,0.14)] to-[rgba(255,184,52,0.08)] border border-[rgba(255,45,85,0.35)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[rgba(255,30,75,0.18)] border border-[rgba(255,45,85,0.35)] flex items-center justify-center text-[#ff4d6d] shrink-0">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-black text-white">
+                  Developer API &amp; Orders Locked on {activePlan?.name || 'FREE'}
+                </div>
+                <p className="text-[11.5px] text-[#e5b8c4] mt-0.5">
+                  Upgrade to <strong className="text-white">{reqApiPlan}</strong> to create API payment orders, switch gateway mode, and configure webhooks.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={goToPlans}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30 hover:brightness-110 cursor-pointer shrink-0"
+            >
+              <Zap className="w-3.5 h-3.5 fill-current" />
+              <span>Upgrade to {reqApiPlan}</span>
+            </button>
+          </div>
+        )}
 
         {/* Stat Cards - 2 rows (2 cards per row) */}
         <div className="stats-grid !grid-cols-1 sm:!grid-cols-2">
@@ -488,9 +613,22 @@ export default function DeveloperPortalView({
                 <div className="key-created text-xs text-slate-400">
                   Created: <strong style={{ color: '#fff', marginLeft: '4px' }}>{keyCreatedAt}</strong>
                 </div>
-                <button className="btn-danger" onClick={handleRegenerate} disabled={regenerating}>
-                  {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                  <span>{regenerating ? 'Regenerating...' : 'Regenerate Key'}</span>
+                <button
+                  className="btn-danger disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleRegenerate}
+                  disabled={regenerating || !apiOrdersEnabled}
+                >
+                  {!apiOrdersEnabled ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Upgrade to {reqApiPlan}</span>
+                    </>
+                  ) : (
+                    <>
+                      {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      <span>{regenerating ? 'Regenerating...' : 'Regenerate Key'}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </>
@@ -514,6 +652,16 @@ export default function DeveloperPortalView({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {!apiOrdersEnabled && (
+                <button
+                  type="button"
+                  onClick={goToPlans}
+                  className="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-500/15 text-amber-300 border border-amber-500/35 flex items-center gap-1 cursor-pointer"
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>Upgrade to {reqApiPlan}</span>
+                </button>
+              )}
               <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
                 gatewayMode === 'live'
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
@@ -533,9 +681,9 @@ export default function DeveloperPortalView({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
             <button 
               type="button"
-              className={`mode-option text-left w-full transition cursor-pointer ${gatewayMode === 'live' ? 'active ring-2 ring-emerald-500/40 bg-emerald-500/10' : 'opacity-70 hover:opacity-100'}`} 
+              className={`mode-option text-left w-full transition cursor-pointer disabled:opacity-50 ${gatewayMode === 'live' ? 'active ring-2 ring-emerald-500/40 bg-emerald-500/10' : 'opacity-70 hover:opacity-100'}`} 
               onClick={() => handleModeSelect('live')}
-              disabled={isSwitchingMode}
+              disabled={isSwitchingMode || !apiOrdersEnabled}
             >
               <div className="mode-icon text-emerald-400">
                 <Globe className="w-5 h-5" />
@@ -551,9 +699,9 @@ export default function DeveloperPortalView({
 
             <button 
               type="button"
-              className={`mode-option text-left w-full transition cursor-pointer ${gatewayMode === 'test' ? 'active ring-2 ring-amber-500/40 bg-amber-500/10' : 'opacity-70 hover:opacity-100'}`} 
+              className={`mode-option text-left w-full transition cursor-pointer disabled:opacity-50 ${gatewayMode === 'test' ? 'active ring-2 ring-amber-500/40 bg-amber-500/10' : 'opacity-70 hover:opacity-100'}`} 
               onClick={() => handleModeSelect('test')}
-              disabled={isSwitchingMode}
+              disabled={isSwitchingMode || !apiOrdersEnabled}
             >
               <div className="mode-icon text-amber-400">
                 <Radio className="w-5 h-5" />
@@ -575,26 +723,42 @@ export default function DeveloperPortalView({
                 <span>Try It Out</span>
                 <span className="text-[10px] uppercase font-bold text-slate-400">Interactive Order Test</span>
               </h3>
+              {activePlan?.max_amount !== null && activePlan?.max_amount !== undefined && (
+                <span className="text-[10.5px] font-bold text-slate-400">
+                  Max ₹{activePlan.max_amount.toLocaleString('en-IN')}
+                </span>
+              )}
             </div>
             
             <div className="flex flex-col sm:flex-row gap-2">
               <input 
                 type="number" 
                 min="1"
-                max="5000"
                 value={tryAmount}
                 onChange={(e) => setTryAmount(e.target.value)}
-                className="flex-1 bg-black/60 border border-white/15 rounded-xl px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-rose-500" 
+                disabled={!apiOrdersEnabled}
+                className="flex-1 bg-black/60 border border-white/15 rounded-xl px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-rose-500 disabled:opacity-50" 
                 placeholder="Amount (₹)" 
               />
-              <button 
-                className="btn-primary flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold shrink-0 cursor-pointer" 
-                onClick={handleTryIt}
-                disabled={isCreatingTryOrder}
-              >
-                {isCreatingTryOrder ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                <span>Create Order &amp; Open Checkout</span>
-              </button>
+              {apiOrdersEnabled ? (
+                <button 
+                  className="btn-primary flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold shrink-0 cursor-pointer" 
+                  onClick={handleTryIt}
+                  disabled={isCreatingTryOrder}
+                >
+                  {isCreatingTryOrder ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                  <span>Create Order &amp; Open Checkout</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={goToPlans}
+                  className="px-4 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-extrabold flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Upgrade to {reqApiPlan}</span>
+                </button>
+              )}
             </div>
 
             <p className="text-[11.5px] text-slate-400 leading-relaxed">
@@ -620,7 +784,7 @@ export default function DeveloperPortalView({
           </div>
         </div>
 
-        {/* WEBHOOKS PANEL (Max 1) */}
+        {/* WEBHOOKS PANEL */}
         <div className="panel">
           <div className="panel-head">
             <div className="panel-title-wrap">
@@ -632,49 +796,111 @@ export default function DeveloperPortalView({
                 <p>Instant server-to-server notifications for order status changes</p>
               </div>
             </div>
-            <span className="wh-badge">{webhooksList.length} / 1 configured</span>
+            <div className="flex items-center gap-2">
+              {isWebhookLocked ? (
+                <button
+                  type="button"
+                  onClick={goToPlans}
+                  className="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-500/15 text-amber-300 border border-amber-500/35 flex items-center gap-1 cursor-pointer"
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>Upgrade to {reqWebhookPlan}</span>
+                </button>
+              ) : (
+                <span className="wh-badge">
+                  {webhooksList.length} / {effectiveWebhookLimit === null ? 'Unlimited' : effectiveWebhookLimit} used
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="wh-desc text-xs text-slate-400">
             Hamro Pay dispatches an instant HTTP POST to your webhook endpoint whenever an API order updates to <code>success</code>, <code>failed</code>, or <code>cancelled</code>.
           </div>
 
-          {webhooksList.length === 0 ? (
-            <div className="wh-input-row flex gap-2">
-              <div className="input-wrap flex-1">
-                <input 
-                  className="wh-input w-full bg-black/60 border border-white/15 rounded-xl px-3 py-2.5 text-xs font-mono text-white" 
-                  type="url" 
-                  value={whInput} 
-                  onChange={(e) => setWhInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
-                  placeholder="https://yourdomain.com/api/hamropay/webhook" 
-                />
+          {isWebhookLocked ? (
+            <div className="p-4 rounded-xl bg-black/45 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2.5 text-xs text-amber-200">
+                <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  Webhooks are locked on <strong className="text-white">{activePlan?.name || 'FREE'}</strong>. Upgrade to add webhook URLs.
+                </span>
               </div>
-              <button 
-                className="btn-primary px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer" 
-                onClick={handleAddWebhook}
-                disabled={isSavingWebhook}
+              <button
+                type="button"
+                onClick={goToPlans}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
               >
-                {isSavingWebhook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                <span>Save Webhook</span>
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                <span>Upgrade to {reqWebhookPlan}</span>
               </button>
             </div>
           ) : (
-            <div className="space-y-2 mb-4">
-              {webhooksList.map((wh, i) => (
-                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-black/50 border border-emerald-500/30 text-xs font-mono">
-                  <span className="text-emerald-400 font-semibold truncate mr-2">✓ {wh.url}</span>
+            <div className="space-y-3 mb-4">
+              {webhooksList.length > 0 && (
+                <div className="space-y-2">
+                  {webhooksList.map((wh, i) => (
+                    <div key={`${wh.url}-${i}`} className="flex items-center justify-between gap-2 p-3 rounded-xl bg-black/50 border border-emerald-500/30 text-xs font-mono">
+                      <span className="text-emerald-400 font-semibold truncate mr-2">✓ {wh.url}</span>
+                      <button 
+                        type="button"
+                        onClick={() => handleDeleteWebhook(wh.url)}
+                        disabled={deletingUrl === wh.url || isDeletingAll}
+                        className="text-rose-400 hover:text-white transition font-sans font-bold text-xs flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        {deletingUrl === wh.url ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  ))}
+                  {webhooksList.length > 1 && (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteWebhook()}
+                        disabled={isDeletingAll}
+                        className="text-[11px] font-bold text-rose-400 hover:text-rose-300 underline cursor-pointer disabled:opacity-50"
+                      >
+                        {isDeletingAll ? 'Removing all...' : 'Remove all webhooks'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {canAddMoreWebhooks ? (
+                <div className="wh-input-row flex flex-col sm:flex-row gap-2">
+                  <div className="input-wrap flex-1">
+                    <input 
+                      className="wh-input w-full bg-black/60 border border-white/15 rounded-xl px-3 py-2.5 text-xs font-mono text-white" 
+                      type="url" 
+                      value={whInput} 
+                      onChange={(e) => setWhInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
+                      placeholder="https://yourdomain.com/api/hamropay/webhook" 
+                    />
+                  </div>
                   <button 
-                    onClick={handleDeleteWebhook}
-                    disabled={isDeletingWebhook}
-                    className="text-rose-400 hover:text-white transition font-sans font-bold text-xs flex items-center gap-1 cursor-pointer"
+                    className="btn-primary px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shrink-0" 
+                    onClick={handleAddWebhook}
+                    disabled={isSavingWebhook}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete</span>
+                    {isSavingWebhook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    <span>Add Webhook</span>
                   </button>
                 </div>
-              ))}
+              ) : (
+                <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-300">
+                  <span>All {effectiveWebhookLimit} webhook slot{effectiveWebhookLimit === 1 ? '' : 's'} used.</span>
+                  <button
+                    type="button"
+                    onClick={goToPlans}
+                    className="text-rose-400 hover:text-rose-300 font-extrabold cursor-pointer"
+                  >
+                    Upgrade for more
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { 
   Palette, Smartphone, Monitor, Maximize2, RotateCcw, Save, Undo2, 
   Search, Check, AlertCircle, RefreshCw, Sparkles, CheckCircle2, 
-  Image as ImageIcon, Type, Square, X, PanelLeft
+  Image as ImageIcon, Type, Square, X, PanelLeft, Lock
 } from 'lucide-react';
 import { 
   CustomizeThemesCatalog, 
@@ -16,21 +16,41 @@ import {
   previewCustomizeConfig, 
   resetCustomizeConfig 
 } from '../services/customize.service';
+import { CurrentPlanState, PlanDefinition } from '../types';
+import { getRequiredPlanName, notifyApiOrPlanError, ShowToastFn } from '../services/plans.service';
 import { CheckoutPreview } from './CheckoutPreview';
 
 interface CustomizePageViewProps {
-  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  showToast: ShowToastFn;
   onOpenSidebar?: () => void;
   onViewChange?: (view: string) => void;
   merchantName?: string;
+  planState?: CurrentPlanState | null;
+  plansCatalog?: PlanDefinition[];
 }
 
 export default function CustomizePageView({
   showToast,
   onOpenSidebar,
   onViewChange,
-  merchantName = 'Demo Merchant'
+  merchantName = 'Demo Merchant',
+  planState,
+  plansCatalog = [],
 }: CustomizePageViewProps) {
+  const activePlan = planState?.plan;
+  const canCustomizeThemes = activePlan ? Boolean(activePlan.custom_pages || activePlan.qr_theme) : true;
+  const canCustomizeBranding = activePlan ? Boolean(activePlan.branding) : true;
+  const reqThemePlan = getRequiredPlanName(
+    plansCatalog,
+    (p) => Boolean(p.custom_pages || p.qr_theme),
+    'BUSINESS'
+  );
+  const reqBrandingPlan = getRequiredPlanName(
+    plansCatalog,
+    (p) => Boolean(p.branding),
+    'ADVANCE'
+  );
+  const goToPlans = () => onViewChange?.('pricing');
   // Page data states
   const [catalog, setCatalog] = useState<CustomizeThemesCatalog | null>(null);
   const [savedSettings, setSavedSettings] = useState<CustomizeSettings | null>(null);
@@ -196,7 +216,7 @@ export default function CustomizePageView({
       setShowResetModal(false);
       showToast('Reset to default checkout look successfully', 'success');
     } catch (err: any) {
-      showToast(err.message || 'Failed to reset settings', 'error');
+      notifyApiOrPlanError(err, 'Failed to reset settings', showToast, goToPlans);
     } finally {
       setIsResetting(false);
     }
@@ -259,7 +279,7 @@ export default function CustomizePageView({
         setFieldErrors(errMap);
         showToast('Please fix the highlighted fields', 'error');
       } else {
-        showToast(err.message || 'Failed to save customization', 'error');
+        notifyApiOrPlanError(err, 'Failed to save customization', showToast, goToPlans);
       }
     } finally {
       setIsSaving(false);
@@ -398,11 +418,23 @@ export default function CustomizePageView({
                     <p>Select a curated color palette for your payment page</p>
                   </div>
                 </div>
-                <div className="text-xs font-bold text-[#ff94a7] bg-[rgba(255,30,75,0.12)] border border-[rgba(255,45,85,0.3)] px-2.5 py-1 rounded-full">
-                  {catalog?.themes ? `${catalog.themes.length} themes` : '20 themes'}
-                </div>
+                {!canCustomizeThemes ? (
+                  <button
+                    type="button"
+                    onClick={goToPlans}
+                    className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 px-3 py-1.5 rounded-full cursor-pointer transition"
+                  >
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    <span>Upgrade to {reqThemePlan}</span>
+                  </button>
+                ) : (
+                  <div className="text-xs font-bold text-[#ff94a7] bg-[rgba(255,30,75,0.12)] border border-[rgba(255,45,85,0.3)] px-2.5 py-1 rounded-full">
+                    {catalog?.themes ? `${catalog.themes.length} themes` : '20 themes'}
+                  </div>
+                )}
               </div>
 
+              <div className={!canCustomizeThemes ? 'opacity-50 pointer-events-none select-none' : ''}>
               {/* Filter Chips + Search */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
@@ -513,6 +545,7 @@ export default function CustomizePageView({
                   );
                 })}
               </div>
+              </div>
             </div>
 
             {/* 2. ACCENT COLOR */}
@@ -527,7 +560,16 @@ export default function CustomizePageView({
                     <p>Override button, link, and highlight colors</p>
                   </div>
                 </div>
-                {draft.color && (
+                {!canCustomizeThemes ? (
+                  <button
+                    type="button"
+                    onClick={goToPlans}
+                    className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 px-3 py-1 rounded-full cursor-pointer transition"
+                  >
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    <span>Upgrade to {reqThemePlan}</span>
+                  </button>
+                ) : draft.color ? (
                   <button
                     type="button"
                     onClick={() => updateDraft({ color: null })}
@@ -535,9 +577,10 @@ export default function CustomizePageView({
                   >
                     Use theme color
                   </button>
-                )}
+                ) : null}
               </div>
 
+              <div className={!canCustomizeThemes ? 'opacity-50 pointer-events-none select-none' : ''}>
               {/* Swatches */}
               <div className="flex items-center gap-2.5 flex-wrap mb-4">
                 {(catalog?.accent_presets || ['#ff2d55', '#ec4899', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#06b6d4', '#6366f1']).map(c => {
@@ -597,6 +640,7 @@ export default function CustomizePageView({
                   <span>{fieldErrors.color}</span>
                 </p>
               )}
+              </div>
             </div>
 
             {/* 3. SHAPE & 4. FONT */}
@@ -614,9 +658,19 @@ export default function CustomizePageView({
                       <p>Card &amp; button radius</p>
                     </div>
                   </div>
+                  {!canCustomizeThemes && (
+                    <button
+                      type="button"
+                      onClick={goToPlans}
+                      className="inline-flex items-center gap-1 text-[10.5px] font-extrabold text-amber-200 bg-amber-500/15 border border-amber-500/35 px-2.5 py-1 rounded-full cursor-pointer"
+                    >
+                      <Lock className="w-3 h-3 text-amber-400" />
+                      <span>Upgrade to {reqThemePlan}</span>
+                    </button>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className={`grid grid-cols-3 gap-2 ${!canCustomizeThemes ? 'opacity-50 pointer-events-none select-none' : ''}`}>
                   {[
                     { id: 'sharp', name: 'Sharp', radiusClass: 'rounded-none' },
                     { id: 'round', name: 'Rounded', radiusClass: 'rounded-lg' },
@@ -660,9 +714,19 @@ export default function CustomizePageView({
                       <p>Heading &amp; text font</p>
                     </div>
                   </div>
+                  {!canCustomizeThemes && (
+                    <button
+                      type="button"
+                      onClick={goToPlans}
+                      className="inline-flex items-center gap-1 text-[10.5px] font-extrabold text-amber-200 bg-amber-500/15 border border-amber-500/35 px-2.5 py-1 rounded-full cursor-pointer"
+                    >
+                      <Lock className="w-3 h-3 text-amber-400" />
+                      <span>Upgrade to {reqThemePlan}</span>
+                    </button>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className={`grid grid-cols-2 gap-2 ${!canCustomizeThemes ? 'opacity-50 pointer-events-none select-none' : ''}`}>
                   {[
                     { id: 'modern', name: 'Modern', stack: "Inter, system-ui, -apple-system, sans-serif" },
                     { id: 'classic', name: 'Classic', stack: "Georgia, Cambria, 'Times New Roman', serif" },
@@ -703,9 +767,19 @@ export default function CustomizePageView({
                     <p>Customize brand identity, logo, and footer text</p>
                   </div>
                 </div>
+                {!canCustomizeBranding && (
+                  <button
+                    type="button"
+                    onClick={goToPlans}
+                    className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 px-3 py-1.5 rounded-full cursor-pointer transition"
+                  >
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    <span>Upgrade to {reqBrandingPlan}</span>
+                  </button>
+                )}
               </div>
 
-              <div className="space-y-4">
+              <div className={`space-y-4 ${!canCustomizeBranding ? 'opacity-50 pointer-events-none select-none' : ''}`}>
                 {/* Brand Name */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">

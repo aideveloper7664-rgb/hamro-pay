@@ -5,7 +5,7 @@ import {
   initialNotifications, 
   defaultProfile 
 } from './data/initialData';
-import { PaymentLink, Transaction, Notification, MerchantProfile, PlanType } from './types';
+import { PaymentLink, Transaction, Notification, MerchantProfile, PlanType, CurrentPlanState, PlanDefinition } from './types';
 import { ApiService, getApiConfig, saveApiConfig, DEFAULT_API_BASE } from './lib/api';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -32,11 +32,19 @@ import CustomizePageView from './components/CustomizePageView';
 import { CashierAccount, getActiveCashier } from './services/cashier.service';
 import { getCreditBalance } from './services/credits.service';
 import { setMode } from './services/developer.service';
+import {
+  DEFAULT_FREE_PLAN,
+  getPlans,
+  getCurrentPlan,
+  getRequiredPlanName,
+  notifyApiOrPlanError,
+  ShowToastFn,
+} from './services/plans.service';
 import Modal from './components/Modal';
 import CreatePaymentLinkModal from './components/CreatePaymentLinkModal';
 import NoCashierWarningModal from './components/NoCashierWarningModal';
 import Toast, { ToastItem } from './components/Toast';
-import { Link as LinkIcon, Wallet, CheckCircle, Info, Cloud, Wifi, HelpCircle, Key } from 'lucide-react';
+import { Link as LinkIcon, Wallet, Info, Cloud, Wifi, HelpCircle, Key, Lock, Zap } from 'lucide-react';
 import { PayPage } from './pages/pay/PayPage';
 import { ApiDocsPage } from './pages/docs/ApiDocsPage';
 import AuthCallback from './pages/AuthCallback';
@@ -112,15 +120,64 @@ export default function App() {
     }
   };
 
+  const [plansCatalog, setPlansCatalog] = useState<PlanDefinition[]>([]);
+  const [currentPlanState, setCurrentPlanState] = useState<CurrentPlanState>({
+    plan: DEFAULT_FREE_PLAN,
+    expires_at: null,
+    usage: {
+      links_used: 0,
+      links_limit: DEFAULT_FREE_PLAN.links_per_month,
+      webhooks_used: 0,
+      webhooks_limit: DEFAULT_FREE_PLAN.webhooks,
+      accounts_used: 0,
+    },
+  });
+
+  const applyPlanState = (nextState: CurrentPlanState) => {
+    setCurrentPlanState(nextState);
+    setCurrentPlan(nextState.plan.name);
+    setFeePercent(nextState.plan.commission);
+    setLinkLimit(nextState.usage.links_limit ?? nextState.plan.links_per_month ?? null);
+  };
+
+  const refreshPlanState = async (catalogOverride?: PlanDefinition[]) => {
+    try {
+      let catalog = catalogOverride || plansCatalog;
+      if (!catalog || catalog.length === 0) {
+        catalog = await getPlans().catch(() => []);
+        if (catalog.length > 0) setPlansCatalog(catalog);
+      }
+      const cur = await getCurrentPlan(catalog);
+      applyPlanState(cur);
+    } catch {
+      // Keep existing plan state on transient failure
+    }
+  };
+
+  const handlePlanUpdated = (nextState: CurrentPlanState) => {
+    applyPlanState(nextState);
+    refreshCredits();
+  };
+
+  useEffect(() => {
+    getPlans()
+      .then((list) => {
+        if (list.length > 0) setPlansCatalog(list);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     refreshCredits();
     if (isLoggedIn) {
       refreshActiveCashier();
+      refreshPlanState();
     }
   }, [isLoggedIn]);
 
   const [currentPlan, setCurrentPlan] = useState<PlanType>(() => {
-    return (localStorage.getItem('hamro_plan') as PlanType) || 'Blaze Free';
+    const saved = localStorage.getItem('hamro_plan') || 'FREE';
+    return (saved.toLowerCase().includes('blaze') ? 'FREE' : saved.toUpperCase()) as PlanType;
   });
 
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => {
@@ -162,12 +219,13 @@ export default function App() {
 
   const [feePercent, setFeePercent] = useState<number>(() => {
     const saved = localStorage.getItem('hamro_fee_percent');
-    return saved ? parseFloat(saved) : 1.5;
+    return saved ? parseFloat(saved) : 5;
   });
 
-  const [linkLimit, setLinkLimit] = useState<number>(() => {
+  const [linkLimit, setLinkLimit] = useState<number | null>(() => {
     const saved = localStorage.getItem('hamro_link_limit');
-    return saved ? parseInt(saved) : 100;
+    if (saved === 'null') return null;
+    return saved ? parseInt(saved, 10) : 20;
   });
 
   const [isSessionChecking, setIsSessionChecking] = useState<boolean>(true);
@@ -190,7 +248,7 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   
   // Modals controller states
-  const [activeModal, setActiveModal] = useState<'create_link' | 'add_funds' | 'confirm_plan' | 'api_settings' | null>(null);
+  const [activeModal, setActiveModal] = useState<'create_link' | 'add_funds' | 'api_settings' | null>(null);
   const [editingLinkId, setEditingLinkId] = useState<string | number | null>(null);
   const [isNoCashierModalOpen, setIsNoCashierModalOpen] = useState<boolean>(false);
   
@@ -203,7 +261,6 @@ export default function App() {
   const [modalLinkUsageLimit, setModalLinkUsageLimit] = useState('');
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [modalFundAmount, setModalFundAmount] = useState('');
-  const [selectedPendingPlan, setSelectedPendingPlan] = useState<{ id: PlanType; price: number } | null>(null);
 
   // Form states for API settings
   const [modalApiUrlInput, setModalApiUrlInput] = useState(apiBaseUrl);
@@ -273,9 +330,11 @@ export default function App() {
               emailReceipts: res.user.emailReceipts ?? true,
               withdrawalAlerts: res.user.withdrawalAlerts ?? true
             });
-            setCurrentPlan(res.user.plan || 'Blaze Free');
-            setFeePercent(res.user.feePercent ?? 1.5);
-            setLinkLimit(res.user.linkLimit ?? 100);
+            const rawUserPlan = String(res.user.plan || 'FREE');
+            const sanitizedPlan = (rawUserPlan.toLowerCase().includes('blaze') ? 'FREE' : rawUserPlan.toUpperCase()) as PlanType;
+            setCurrentPlan(sanitizedPlan);
+            setFeePercent(res.user.feePercent ?? 5);
+            setLinkLimit(res.user.linkLimit ?? 20);
             setApiToken(config.token);
             setIsLoggedIn(true);
             setIsApiSimulated(false);
@@ -407,11 +466,17 @@ export default function App() {
   }, [isLoggedIn, apiBaseUrl]);
 
   // --- Global Toasts handlers ---
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+  const showToast: ShowToastFn = (
+    message: string,
+    type: 'success' | 'error' | 'info' = 'success',
+    action?: { label: string; onClick: () => void }
+  ) => {
     const newToast: ToastItem = {
       id: Date.now() + Math.random(),
       message,
-      type
+      type,
+      actionLabel: action?.label,
+      onAction: action?.onClick,
     };
     setToasts(prev => [...prev, newToast]);
   };
@@ -440,9 +505,11 @@ export default function App() {
       emailReceipts: user.emailReceipts ?? true,
       withdrawalAlerts: user.withdrawalAlerts ?? true
     });
-    setCurrentPlan(user.plan || 'Blaze Free');
-    setFeePercent(user.feePercent ?? 1.5);
-    setLinkLimit(user.linkLimit ?? 100);
+    const rawUserPlan = String(user.plan || 'FREE');
+    const sanitizedPlan = (rawUserPlan.toLowerCase().includes('blaze') ? 'FREE' : rawUserPlan.toUpperCase()) as PlanType;
+    setCurrentPlan(sanitizedPlan);
+    setFeePercent(user.feePercent ?? 5);
+    setLinkLimit(user.linkLimit ?? 20);
 
     setApiStatus(prev => {
       const next = { ...prev };
@@ -665,6 +732,7 @@ export default function App() {
         showToast('Payment link generated successfully.', 'success');
         setActiveModal(null);
         setEditingLinkId(null);
+        refreshPlanState();
       } catch (err: any) {
         console.error('Link create failed:', err);
         const errMsg = err?.message || 'Unknown error';
@@ -684,43 +752,12 @@ export default function App() {
           setActiveModal(null);
           setCurrentView('wallet');
         } else {
-          showToast(`Link create failed: ${errMsg}`, 'error');
+          notifyApiOrPlanError(err, `Link create failed: ${errMsg}`, showToast, () => {
+            setActiveModal(null);
+            setCurrentView('pricing');
+          });
         }
       }
-    }
-  };
-
-  // --- Plan Subscription Switch Action ---
-  const handleOpenPlanConfirm = (planId: PlanType, price: number) => {
-    setSelectedPendingPlan({ id: planId, price });
-    setActiveModal('confirm_plan');
-  };
-
-  const handleConfirmPlanSwitch = async () => {
-    if (selectedPendingPlan) {
-      const planToSet = selectedPendingPlan.id;
-      const res = await ApiService.upgradePlan(planToSet);
-      if (res.success && !res.isSimulated) {
-        setCurrentPlan(res.plan as any);
-        setFeePercent(res.feePercent ?? 1.5);
-        setLinkLimit(res.linkLimit ?? 100);
-        showToast(`Subscription plan upgraded to ${res.plan} on HamroPay.`, 'success');
-      } else {
-        setCurrentPlan(planToSet);
-        if (planToSet === 'Blaze Free') {
-          setFeePercent(1.5);
-          setLinkLimit(100);
-        } else if (planToSet === 'Blaze Pro') {
-          setFeePercent(1.0);
-          setLinkLimit(1000);
-        } else {
-          setFeePercent(0.5);
-          setLinkLimit(1000000);
-        }
-        showToast(`Subscription plan updated to ${planToSet} locally.`, 'success');
-      }
-      setActiveModal(null);
-      setSelectedPendingPlan(null);
     }
   };
 
@@ -772,11 +809,12 @@ export default function App() {
             profileName={profile.name}
             paymentLinks={paymentLinks}
             transactions={transactions}
-            currentPlan={currentPlan}
+            currentPlan={currentPlanState.plan.name}
+            currentPlanState={currentPlanState}
             onViewChange={setCurrentView}
             onCreatePaymentLink={handleOpenCreateLink}
-            feePercent={feePercent}
-            linkLimit={linkLimit}
+            feePercent={currentPlanState.plan.commission}
+            linkLimit={currentPlanState.usage.links_limit}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             unreadNotifications={unreadNotificationsCount}
             showToast={showToast}
@@ -824,8 +862,9 @@ export default function App() {
       case 'pricing':
         return (
           <PricingView
-            currentPlan={currentPlan}
-            onPlanSelect={handleOpenPlanConfirm}
+            currentPlanState={currentPlanState}
+            plansCatalog={plansCatalog}
+            onPlanUpdated={handlePlanUpdated}
             showToast={showToast}
             onViewChange={setCurrentView}
           />
@@ -862,11 +901,54 @@ export default function App() {
             gatewayMode={gatewayMode}
             setGatewayMode={setGatewayMode}
             activeCashier={activeCashier}
+            planState={currentPlanState}
+            plansCatalog={plansCatalog}
           />
         );
 
       case 'api-docs':
-      case 'api-integration':
+      case 'api-integration': {
+        if (!currentPlanState.plan.api_docs) {
+          const reqDocsPlan = getRequiredPlanName(plansCatalog, (p) => Boolean(p.api_docs), 'BUSINESS');
+          return (
+            <div className="min-h-[80vh] flex items-center justify-center p-6">
+              <div className="max-w-md w-full rounded-2xl bg-[#120306] border border-[rgba(255,45,85,0.28)] p-7 text-center space-y-4 shadow-2xl">
+                <div className="w-14 h-14 rounded-2xl bg-[rgba(255,30,75,0.12)] border border-[rgba(255,45,85,0.3)] text-[#ff4d6d] flex items-center justify-center mx-auto">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <div className="space-y-1.5">
+                  <h2 className="text-lg font-black text-white">API Integration Docs Locked</h2>
+                  <p className="text-xs text-[#b89fa5] leading-relaxed">
+                    Your current <strong className="text-white">{currentPlanState.plan.name}</strong> plan does not include API integration documentation.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
+                      setCurrentView('pricing');
+                    }}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30 hover:brightness-110 cursor-pointer"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    <span>Upgrade to {reqDocsPlan}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
+                      setCurrentView('dashboard');
+                    }}
+                    className="py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-[#d4c2c7] cursor-pointer"
+                  >
+                    Dashboard
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
         return (
           <ApiDocsPage 
             onBackToDashboard={() => {
@@ -875,6 +957,7 @@ export default function App() {
             }}
           />
         );
+      }
 
       case 'store':
         return (
@@ -891,6 +974,8 @@ export default function App() {
             onViewChange={setCurrentView}
             showToast={showToast}
             onCashierChanged={refreshActiveCashier}
+            planState={currentPlanState}
+            plansCatalog={plansCatalog}
           />
         );
 
@@ -900,6 +985,8 @@ export default function App() {
             showToast={showToast}
             onViewChange={setCurrentView}
             onCashierChanged={refreshActiveCashier}
+            planState={currentPlanState}
+            plansCatalog={plansCatalog}
           />
         );
 
@@ -911,6 +998,8 @@ export default function App() {
             onViewChange={setCurrentView}
             unreadNotifications={unreadNotificationsCount}
             onCashierChanged={refreshActiveCashier}
+            planState={currentPlanState}
+            plansCatalog={plansCatalog}
           />
         );
 
@@ -921,6 +1010,8 @@ export default function App() {
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}
             merchantName={profile.name}
+            planState={currentPlanState}
+            plansCatalog={plansCatalog}
           />
         );
 
@@ -931,11 +1022,12 @@ export default function App() {
             profileName={profile.name}
             paymentLinks={paymentLinks}
             transactions={transactions}
-            currentPlan={currentPlan}
+            currentPlan={currentPlanState.plan.name}
+            currentPlanState={currentPlanState}
             onViewChange={setCurrentView}
             onCreatePaymentLink={handleOpenCreateLink}
-            feePercent={feePercent}
-            linkLimit={linkLimit}
+            feePercent={currentPlanState.plan.commission}
+            linkLimit={currentPlanState.usage.links_limit}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             unreadNotifications={unreadNotificationsCount}
             showToast={showToast}
@@ -1054,6 +1146,7 @@ export default function App() {
         profileEmail={profile.email}
         unreadNotifications={unreadNotificationsCount}
         currentPlan={currentPlan}
+        planState={currentPlanState}
         onSignOut={handleSignOut}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -1154,8 +1247,12 @@ export default function App() {
               showToast('Payment link updated successfully.', 'success');
               setActiveModal(null);
               setEditingLinkId(null);
+              refreshPlanState();
             } catch (err: any) {
-              showToast(`Link update failed: ${err.message || 'Unknown error'}`, 'error');
+              notifyApiOrPlanError(err, `Link update failed: ${err.message || 'Unknown error'}`, showToast, () => {
+                setActiveModal(null);
+                setCurrentView('pricing');
+              });
               throw err;
             }
           } else {
@@ -1182,6 +1279,7 @@ export default function App() {
               showToast('Payment link generated successfully.', 'success');
               setActiveModal(null);
               setEditingLinkId(null);
+              refreshPlanState();
             } catch (err: any) {
               console.error('Link create failed:', err);
               const errMsg = err?.message || 'Unknown error';
@@ -1201,7 +1299,10 @@ export default function App() {
                 setActiveModal(null);
                 setCurrentView('wallet');
               } else {
-                showToast(`Link create failed: ${errMsg}`, 'error');
+                notifyApiOrPlanError(err, `Link create failed: ${errMsg}`, showToast, () => {
+                  setActiveModal(null);
+                  setCurrentView('pricing');
+                });
               }
               throw err;
             }
@@ -1224,7 +1325,16 @@ export default function App() {
             : null
         }
         isEditing={editingLinkId !== null}
-        linkLimit={linkLimit}
+        linkLimit={currentPlanState.usage.links_limit}
+        linksUsed={currentPlanState.usage.links_used}
+        commission={currentPlanState.plan.commission}
+        maxAmount={currentPlanState.plan.max_amount}
+        linkExpiryDays={currentPlanState.plan.link_expiry_days}
+        planName={currentPlanState.plan.name}
+        onUpgradeClick={() => {
+          setActiveModal(null);
+          setCurrentView('pricing');
+        }}
         showToast={showToast}
       />
 
@@ -1237,55 +1347,6 @@ export default function App() {
           setCurrentView(view);
         }}
       />
-
-      {/* MODAL 2: Plan Switching Confirmation */}
-      <Modal
-        isOpen={activeModal === 'confirm_plan'}
-        onClose={() => setActiveModal(null)}
-        title={
-          <span className="flex items-center gap-2">
-            <span className="w-6.5 h-6.5 bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-3.5 h-3.5 animate-pulse" />
-            </span>
-            Confirm Subscription
-          </span>
-        }
-        footer={
-          <>
-            <button 
-              onClick={() => setActiveModal(null)}
-              className="px-3.5 py-2 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 outline-none"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={handleConfirmPlanSwitch}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/10 active:scale-95 outline-none"
-            >
-              Confirm Subscription Upgrade
-            </button>
-          </>
-        }
-      >
-        {selectedPendingPlan && (
-          <div className="space-y-4">
-            <p className="text-xs text-slate-500 leading-relaxed font-semibold">
-              You are switching your digital merchant workspace subscription plan to 
-              <b className="text-rose-600 px-1 font-black">{selectedPendingPlan.id}</b> 
-              at a recurring local billing rate of 
-              <b className="text-slate-800 px-1">
-                {selectedPendingPlan.price === 0 ? '₹ 0' : `₹ ${selectedPendingPlan.price}/month`}
-              </b>.
-            </p>
-            <div className="flex gap-2.5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs leading-normal text-slate-500 font-semibold">
-              <Info className="w-4.5 h-4.5 text-slate-400 shrink-0 mt-0.5" />
-              <span>
-                Plan updates reconfigure maximum payment link limits and lower automated ledger collection fees on-the-fly.
-              </span>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       {/* MODAL 4: API Sync Settings */}
       <Modal
