@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, Code, ShoppingBag, ShieldCheck, Cpu, CheckCircle2, AlertTriangle, Link as LinkIcon, Lock, Database, ArrowRight, Activity, Terminal } from 'lucide-react';
+import { CreditCard, Code, ShieldCheck, Cpu, CheckCircle2, AlertTriangle, Link as LinkIcon, Lock, Database, ArrowRight, Activity, Terminal } from 'lucide-react';
 import { getStatus } from '../services/fampay.service';
 import FamPayConnectView from './FamPayConnectView';
-import StorePortalView from './StorePortalView';
 import PaytmConnectView from './PaytmConnectView';
 import AmazonConnectView from './AmazonConnectView';
 
 interface ConnectViewProps {
-  viewId: 'fampay' | 'amazon' | 'paytm' | 'developer' | 'store' | string;
+  viewId: 'fampay' | 'amazon' | 'paytm' | 'developer' | string;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   isApiSimulated: boolean;
   apiBaseUrl: string;
@@ -60,18 +59,7 @@ export default function ConnectView({
     );
   }
 
-  if (viewId === 'store') {
-    return (
-      <StorePortalView
-        showToast={showToast}
-        onOpenSidebar={onOpenSidebar}
-        onViewChange={onViewChange}
-      />
-    );
-  }
-
   const isDeveloper = viewId === 'developer';
-  const isStore = viewId === 'store';
   const [fampayConnected, setFampayConnected] = useState(false);
 
   useEffect(() => {
@@ -104,15 +92,6 @@ export default function ConnectView({
       heading: 'API workspace sandbox preview',
       paragraph: 'The standalone demonstration workspace contains no live network API keys or real endpoint bindings. Your original developer navigation links and UI elements are fully represented.',
       buttonText: 'Create Sandbox API Key'
-    },
-    store: {
-      title: 'Store Portal',
-      desc: 'Manage your merchant storefront and product catalogue in one place.',
-      icon: ShoppingBag,
-      color: 'bg-pink-500',
-      heading: 'Your custom store is ready for cataloging',
-      paragraph: 'Branded cataloging tools are simulated locally. Advanced product syncing, active carts, and order checkout flows require an online regional storage database.',
-      buttonText: 'Configure Local Storefront'
     }
   };
 
@@ -128,12 +107,6 @@ export default function ConnectView({
       }
     } else if (isDeveloper) {
       showToast('Developer API token generated and synchronized.', 'success');
-    } else {
-      if (onViewChange) {
-        onViewChange('store');
-      } else {
-        showToast('Navigating to Store Portal...', 'info');
-      }
     }
   };
 
@@ -226,7 +199,7 @@ export default function ConnectView({
             </span>
           </div>
           <div className="space-y-1">
-            <span className="text-slate-400 text-[10px] uppercase tracking-wider block">Session Store Driver</span>
+            <span className="text-slate-400 text-[10px] uppercase tracking-wider block">Session Storage Driver</span>
             <span className="text-slate-200 font-bold flex items-center gap-1.5">
               <Database className="w-3.5 h-3.5 text-indigo-400" />
               {!isApiSimulated ? 'Full-Stack Express JSON Database' : 'LocalStorage Cache'}

@@ -11,7 +11,7 @@ interface CheckoutPreviewProps {
 
 export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
   branding,
-  merchantName = 'Demo Store',
+  merchantName = 'Demo Merchant',
   isTestMode = false,
   className = ''
 }) => {

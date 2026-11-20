@@ -589,7 +589,7 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
 
           {redirectCountdown !== null && redirectCountdown > 0 && (
             <p className="text-xs hp-muted font-medium">
-              Redirecting back to store in {redirectCountdown}s...
+              Redirecting back to merchant website in {redirectCountdown}s...
             </p>
           )}
 
@@ -653,7 +653,7 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
             </h2>
             <p className="text-xs hp-muted mt-1 leading-relaxed">
               {statusMessage || (
-                isExpiredState ? 'The time limit for this payment has expired. Please initiate a new order from the store.' :
+                isExpiredState ? 'The time limit for this payment has expired. Please initiate a new order from the merchant website.' :
                 isCancelledState ? 'This order was cancelled. If funds were debited, keep your UTR and contact the merchant.' :
                 isFailedState ? 'We could not confirm your payment. Please contact the merchant with your reference details.' :
                 'This payment link has been disabled by the merchant.'

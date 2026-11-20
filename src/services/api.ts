@@ -45,6 +45,7 @@ export const PLAN_ERROR_CODES = new Set([
   'PLAN_ACCOUNT_LIMIT',
   'PLAN_FEATURE',
   'LINK_EXPIRED',
+  'PLATFORM_ACCOUNT_MISSING',
 ]);
 
 const performApiCall = async (

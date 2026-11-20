@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Wallet,
   Plus,
   Coins,
   RefreshCw,
@@ -11,25 +10,40 @@ import {
   ArrowUpRight,
   X,
   ShieldCheck,
-  Zap
+  Zap,
+  QrCode,
+  Receipt
 } from 'lucide-react';
-import { getCreditBalance, purchaseCredits, getCreditHistory, CreditTransaction } from '../services/credits.service';
+import { getCreditBalance, getCreditHistory, CreditTransaction } from '../services/credits.service';
 import { getBonusBalance, convertBonusToCredit } from '../services/promo.service';
+import {
+  BillingOrder,
+  createBillingCheckout,
+  getBillingOrders,
+  formatBillingError
+} from '../services/billing.service';
+import { ShowToastFn } from '../services/plans.service';
+import BillingCheckoutModal from './BillingCheckoutModal';
 
 interface WalletViewProps {
   onViewChange: (view: string) => void;
-  showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  showToast?: ShowToastFn;
   onRefreshWallet?: () => void;
+  onRefreshPlan?: () => void;
 }
+
+const CREDIT_PRESETS = [100, 250, 500, 1000, 2000];
 
 export default function WalletView({
   onViewChange,
   showToast,
-  onRefreshWallet
+  onRefreshWallet,
+  onRefreshPlan
 }: WalletViewProps) {
   // 1. Hamro Credit Balance
   const [creditBalance, setCreditBalance] = useState<number>(0);
   const [creditHistory, setCreditHistory] = useState<CreditTransaction[]>([]);
+  const [billingOrders, setBillingOrders] = useState<BillingOrder[]>([]);
 
   // 2. Hamro Bonus Balance
   const [bonusBalance, setBonusBalance] = useState<number>(0);
@@ -39,10 +53,12 @@ export default function WalletView({
   // Modals state
   const [isBuyCreditsOpen, setIsBuyCreditsOpen] = useState<boolean>(false);
   const [isConvertBonusOpen, setIsConvertBonusOpen] = useState<boolean>(false);
+  const [checkoutOrder, setCheckoutOrder] = useState<BillingOrder | null>(null);
+  const [lastRequestedAmount, setLastRequestedAmount] = useState<number>(500);
+  const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
 
   // Modal Inputs
   const [buyAmount, setBuyAmount] = useState<string>('500');
-  const [buyUtr, setBuyUtr] = useState<string>('');
   const [convertBonusAmt, setConvertBonusAmt] = useState<string>('100');
 
   const [isSubmittingBuy, setIsSubmittingBuy] = useState<boolean>(false);
@@ -52,14 +68,15 @@ export default function WalletView({
     if (showToast) showToast(msg, type);
   };
 
-  // Load Credits and Bonus
-  const fetchAllCredits = async () => {
+  // Load Credits, Bonus, History and Billing Orders
+  const fetchAllCredits = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const [creditRes, bonusRes, histRes] = await Promise.allSettled([
+      const [creditRes, bonusRes, histRes, ordersRes] = await Promise.allSettled([
         getCreditBalance(),
         getBonusBalance(),
-        getCreditHistory()
+        getCreditHistory(),
+        getBillingOrders()
       ]);
 
       // 1. Credit Balance
@@ -81,43 +98,79 @@ export default function WalletView({
       if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) {
         setCreditHistory(histRes.value);
       }
+
+      // 4. Billing Orders
+      if (ordersRes.status === 'fulfilled' && Array.isArray(ordersRes.value)) {
+        setBillingOrders(ordersRes.value);
+      }
     } catch {
       // Graceful fallback
     } finally {
       setIsLoadingData(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchAllCredits();
-  }, []);
+  }, [fetchAllCredits]);
 
-  // Handle Buy Credits Submit
-  const handleBuyCreditsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = Number(buyAmount);
-    if (isNaN(amt) || amt <= 0) {
-      notify('Please enter a valid credit purchase amount.', 'error');
-      return;
-    }
-    if (!buyUtr || buyUtr.trim().length < 6) {
-      notify('Please enter a valid 12-digit UTR number.', 'error');
-      return;
-    }
-
+  // Handle Buy Credits via QR Checkout
+  const startCreditsCheckout = async (amt: number) => {
     setIsSubmittingBuy(true);
+    setLastRequestedAmount(amt);
     try {
-      const res = await purchaseCredits(amt, buyUtr.trim());
-      notify(res?.message || `Credit purchase request of ₹${amt} submitted for verification!`, 'success');
+      const order = await createBillingCheckout({ kind: 'credits', amount: amt });
       setIsBuyCreditsOpen(false);
-      setBuyUtr('');
-      fetchAllCredits();
-      if (onRefreshWallet) onRefreshWallet();
+      setCheckoutOrder(order);
+      getBillingOrders().then(setBillingOrders).catch(() => {});
     } catch (err: any) {
-      notify(err?.message || 'Failed to submit credit purchase.', 'error');
+      notify(formatBillingError(err, 'Failed to start credit purchase.'), 'error');
     } finally {
       setIsSubmittingBuy(false);
     }
+  };
+
+  const handleBuyCreditsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = Number(buyAmount);
+    if (!Number.isInteger(amt) || amt < 10 || amt > 10000) {
+      notify('Enter a whole number amount between ₹10 and ₹10,000.', 'error');
+      return;
+    }
+    await startCreditsCheckout(amt);
+  };
+
+  const handleResumeOrder = async (ord: BillingOrder) => {
+    setResumingOrderId(ord.order_id);
+    try {
+      const freshOrder =
+        ord.kind === 'plan' && ord.plan_name
+          ? await createBillingCheckout({ kind: 'plan', plan: ord.plan_name })
+          : await createBillingCheckout({
+              kind: 'credits',
+              amount: Number(ord.credits ?? ord.base_amount),
+            });
+      if (ord.kind === 'credits') {
+        setLastRequestedAmount(Number(ord.credits ?? ord.base_amount));
+      }
+      setCheckoutOrder(freshOrder);
+    } catch (err: any) {
+      notify(formatBillingError(err, 'Unable to open payment order.'), 'error');
+    } finally {
+      setResumingOrderId(null);
+    }
+  };
+
+  const handleCheckoutFulfilled = (fulfilledOrder: BillingOrder) => {
+    fetchAllCredits();
+    onRefreshWallet?.();
+    onRefreshPlan?.();
+    notify(
+      fulfilledOrder.kind === 'credits'
+        ? `${(fulfilledOrder.credits ?? fulfilledOrder.base_amount).toLocaleString('en-IN')} Hamro Credits added!`
+        : `${fulfilledOrder.plan_name || 'Plan'} activated!`,
+      'success'
+    );
   };
 
   // Handle Convert Bonus to Credit
@@ -158,7 +211,7 @@ export default function WalletView({
             </div>
             <div className="hp-w-page-info">
               <h1>Hamro Credits &amp; Balances</h1>
-              <p>Manage your Hamro Credits for platform commissions, plan upgrades, and reward bonuses</p>
+              <p>Buy credits instantly via UPI QR for platform commissions and reward bonuses</p>
             </div>
           </div>
 
@@ -177,7 +230,7 @@ export default function WalletView({
               className="btn-primary"
               style={{ cursor: 'pointer', padding: '9px 16px', fontSize: '12.5px' }}
             >
-              <Sparkles style={{ width: 14, height: 14 }} />
+              <QrCode style={{ width: 14, height: 14 }} />
               <span>Buy Credits</span>
             </button>
           </div>
@@ -196,7 +249,7 @@ export default function WalletView({
         }}>
           <ShieldCheck style={{ width: 20, height: 20, color: '#2bf29a', flexShrink: 0 }} />
           <div style={{ fontSize: '12.5px', color: '#e5f9f0', lineHeight: 1.4 }}>
-            <strong style={{ color: '#fff' }}>Direct UPI Settlements:</strong> Customer payments reach your connected UPI account instantly. Hamro Pay never holds your cash balance. Platform fees and plan upgrades are deducted directly from your <strong>Hamro Credits</strong>.
+            <strong style={{ color: '#fff' }}>Direct UPI Settlements:</strong> Customer payments reach your connected UPI account instantly. Hamro Pay never holds your cash balance. Platform commissions are deducted directly from your <strong>Hamro Credits</strong> (₹1 = 1 credit).
           </div>
         </div>
 
@@ -222,15 +275,15 @@ export default function WalletView({
                 ₹ {creditBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div className="hp-w-credit-desc" style={{ marginBottom: '18px' }}>
-                Used automatically to deduct small commissions on payments and for purchasing plan upgrades.
+                Used automatically to deduct small commissions on live UPI payments. Top up instantly via UPI QR.
               </div>
               <button
                 onClick={() => setIsBuyCreditsOpen(true)}
                 className="btn-primary"
                 style={{ width: '100%', padding: '10px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               >
-                <Sparkles style={{ width: 14, height: 14 }} />
-                <span>Buy Credits Now</span>
+                <QrCode style={{ width: 14, height: 14 }} />
+                <span>Buy Credits via UPI QR</span>
               </button>
             </div>
           </div>
@@ -307,7 +360,111 @@ export default function WalletView({
           </div>
         </div>
 
-        {/* Credit Purchase & History Panel */}
+        {/* Billing Orders Panel */}
+        {billingOrders.length > 0 && (
+          <div className="hp-w-panel" style={{ marginBottom: '20px' }}>
+            <div className="hp-w-panel-head">
+              <div className="hp-w-panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Receipt style={{ width: 16, height: 16, color: '#ff8ca3' }} />
+                <span>QR Billing Orders</span>
+              </div>
+              <button
+                onClick={fetchAllCredits}
+                className="hp-w-panel-action"
+                style={{ cursor: 'pointer' }}
+              >
+                <RefreshCw className={isLoadingData ? 'animate-spin' : ''} style={{ width: 12, height: 12 }} />
+                <span>Refresh</span>
+              </button>
+            </div>
+            <div className="hp-tx-table-wrapper">
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255, 45, 85, 0.12)', color: 'var(--hp-w-muted-dim)', fontSize: '10.5px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    <th style={{ padding: '10px 14px' }}>Item</th>
+                    <th style={{ padding: '10px 14px' }}>Pay Amount</th>
+                    <th style={{ padding: '10px 14px' }}>Status</th>
+                    <th style={{ padding: '10px 14px' }}>UTR</th>
+                    <th style={{ padding: '10px 14px' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {billingOrders.slice(0, 10).map((ord) => {
+                    const statusLower = String(ord.status || '').toLowerCase();
+                    const isPaid = statusLower === 'paid';
+                    const isPending = statusLower === 'pending';
+                    return (
+                      <tr key={ord.order_id} style={{ borderBottom: '1px solid rgba(255, 45, 85, 0.08)' }}>
+                        <td style={{ padding: '12px 14px', fontWeight: 800, color: '#fff' }}>
+                          {ord.kind === 'plan'
+                            ? `${ord.plan_name || 'Plan'} Plan`
+                            : `${(ord.credits ?? ord.base_amount).toLocaleString('en-IN')} Credits`}
+                        </td>
+                        <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontWeight: 900, color: '#2bf29a' }}>
+                          ₹{Number(ord.pay_amount ?? ord.base_amount).toFixed(2)}
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <span style={{
+                            padding: '3px 9px',
+                            borderRadius: '999px',
+                            fontSize: '10px',
+                            fontWeight: 900,
+                            textTransform: 'uppercase',
+                            background: isPaid
+                              ? 'rgba(43, 242, 154, 0.14)'
+                              : isPending
+                                ? 'rgba(255, 184, 52, 0.14)'
+                                : 'rgba(255, 255, 255, 0.06)',
+                            color: isPaid ? '#2bf29a' : isPending ? '#ffb834' : '#b89fa5',
+                            border: `1px solid ${
+                              isPaid
+                                ? 'rgba(43, 242, 154, 0.35)'
+                                : isPending
+                                  ? 'rgba(255, 184, 52, 0.35)'
+                                  : 'rgba(255, 255, 255, 0.12)'
+                            }`
+                          }}>
+                            {ord.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 14px', fontFamily: 'monospace', color: '#b89fa5' }}>
+                          {ord.utr || '—'}
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
+                          {isPending ? (
+                            <button
+                              type="button"
+                              disabled={resumingOrderId === ord.order_id}
+                              onClick={() => handleResumeOrder(ord)}
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: '8px',
+                                background: 'rgba(255, 30, 75, 0.2)',
+                                border: '1px solid rgba(255, 45, 85, 0.4)',
+                                color: '#fff',
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {resumingOrderId === ord.order_id ? 'Opening...' : 'Pay QR'}
+                            </button>
+                          ) : (
+                            <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#83686e' }}>
+                              {ord.order_id.slice(0, 10)}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Credit Transaction History Panel */}
         <div className="hp-w-panel">
           <div className="hp-w-panel-head">
             <div className="hp-w-panel-title">Credit Transaction History</div>
@@ -379,73 +536,74 @@ export default function WalletView({
         </div>
       </div>
 
-      {/* BUY CREDITS MODAL */}
+      {/* BUY CREDITS AMOUNT MODAL */}
       {isBuyCreditsOpen && (
-        <div className="hp-w-modal-scrim" onClick={() => setIsBuyCreditsOpen(false)}>
+        <div className="hp-w-modal-scrim" onClick={() => !isSubmittingBuy && setIsBuyCreditsOpen(false)}>
           <div className="hp-w-credit-modal" onClick={(e) => e.stopPropagation()}>
             <div className="hp-w-modal-head">
               <div className="hp-w-modal-head-icon">
-                <Sparkles />
+                <QrCode />
               </div>
               <div className="hp-w-modal-head-text">
                 <div className="hp-w-modal-title">Buy Hamro Credits</div>
               </div>
-              <button onClick={() => setIsBuyCreditsOpen(false)} className="hp-w-modal-close">
+              <button
+                type="button"
+                disabled={isSubmittingBuy}
+                onClick={() => setIsBuyCreditsOpen(false)}
+                className="hp-w-modal-close"
+              >
                 <X />
               </button>
             </div>
 
             <div className="hp-w-credit-body">
-              <div style={{
-                padding: '14px 16px',
-                borderRadius: '14px',
-                background: 'rgba(255, 30, 75, 0.08)',
-                border: '1px solid rgba(255, 45, 85, 0.25)',
-                marginBottom: '16px'
-              }}>
-                <div style={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', color: '#ff94a7', marginBottom: '4px' }}>
-                  UPI Payment ID
-                </div>
-                <div style={{ fontFamily: 'monospace', fontSize: '15px', fontWeight: 900, color: '#fff' }}>
-                  9769516928@fam
-                </div>
-                <p style={{ fontSize: '11.5px', color: 'var(--hp-w-muted)', marginTop: '4px', lineHeight: 1.4 }}>
-                  Pay the desired amount to the UPI ID above, then enter the 12-digit UTR reference number below for instant credit.
-                </p>
+              <p style={{ fontSize: '12px', color: 'var(--hp-w-muted)', marginBottom: '14px', lineHeight: 1.45 }}>
+                Choose an amount from <strong style={{ color: '#fff' }}>₹10</strong> to <strong style={{ color: '#fff' }}>₹10,000</strong> (₹1 = 1 credit). Pay via UPI QR for automatic activation.
+              </p>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+                {CREDIT_PRESETS.map((preset) => {
+                  const selected = Number(buyAmount) === preset;
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setBuyAmount(String(preset))}
+                      style={{
+                        padding: '7px 12px',
+                        borderRadius: '10px',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        fontFamily: 'monospace',
+                        cursor: 'pointer',
+                        background: selected ? 'rgba(255, 30, 75, 0.24)' : 'rgba(255, 255, 255, 0.05)',
+                        border: `1px solid ${selected ? '#ff2d55' : 'rgba(255, 255, 255, 0.12)'}`,
+                        color: selected ? '#fff' : '#d4c2c7',
+                      }}
+                    >
+                      ₹{preset.toLocaleString('en-IN')}
+                    </button>
+                  );
+                })}
               </div>
 
               <form onSubmit={handleBuyCreditsSubmit}>
                 <div className="hp-w-field">
                   <div className="hp-w-field-label">
-                    <span>Credit Amount (₹)</span>
+                    <span>Credit Amount (₹10 – ₹10,000)</span>
                     <span className="req">*</span>
                   </div>
                   <div className="hp-w-input-wrap-f">
                     <input
                       type="number"
-                      min="50"
+                      min={10}
+                      max={10000}
+                      step={1}
                       value={buyAmount}
-                      onChange={(e) => setBuyAmount(e.target.value)}
-                      className="hp-w-input-field"
-                      placeholder="500"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="hp-w-field">
-                  <div className="hp-w-field-label">
-                    <span>12-Digit UTR / Reference Number</span>
-                    <span className="req">*</span>
-                  </div>
-                  <div className="hp-w-input-wrap-f">
-                    <input
-                      type="text"
-                      maxLength={12}
-                      value={buyUtr}
-                      onChange={(e) => setBuyUtr(e.target.value.replace(/[^0-9]/g, ''))}
+                      onChange={(e) => setBuyAmount(e.target.value.replace(/[^0-9]/g, ''))}
                       className="hp-w-input-field mono"
-                      placeholder="e.g. 423456789012"
+                      placeholder="500"
                       required
                     />
                   </div>
@@ -454,6 +612,7 @@ export default function WalletView({
                 <div className="hp-w-modal-foot" style={{ borderTop: 'none', padding: '12px 0 0' }}>
                   <button
                     type="button"
+                    disabled={isSubmittingBuy}
                     onClick={() => setIsBuyCreditsOpen(false)}
                     className="hp-w-modal-btn hp-w-btn-cancel"
                   >
@@ -464,7 +623,7 @@ export default function WalletView({
                     disabled={isSubmittingBuy}
                     className="hp-w-modal-btn hp-w-btn-proceed"
                   >
-                    {isSubmittingBuy ? <Loader2 className="animate-spin" /> : <span>Submit UTR</span>}
+                    {isSubmittingBuy ? <Loader2 className="animate-spin" /> : <span>Pay via UPI QR</span>}
                   </button>
                 </div>
               </form>
@@ -534,6 +693,24 @@ export default function WalletView({
           </div>
         </div>
       )}
+
+      {/* QR BILLING CHECKOUT MODAL */}
+      <BillingCheckoutModal
+        order={checkoutOrder}
+        onClose={() => {
+          setCheckoutOrder(null);
+          fetchAllCredits();
+        }}
+        onRetry={async () => {
+          const retryAmt = Number(checkoutOrder?.credits ?? checkoutOrder?.base_amount ?? lastRequestedAmount);
+          if (retryAmt >= 10) {
+            await startCreditsCheckout(retryAmt);
+          }
+        }}
+        onFulfilled={handleCheckoutFulfilled}
+        showToast={showToast}
+      />
     </div>
   );
 }
+

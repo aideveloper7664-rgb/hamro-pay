@@ -793,7 +793,7 @@ export default function CustomizePageView({
                     maxLength={brandNameLimit}
                     value={draft.brand_name || ''}
                     onChange={e => updateDraft({ brand_name: e.target.value })}
-                    placeholder="Your shop name (e.g. Apex Store)"
+                    placeholder="Your brand name (e.g. Apex Digital)"
                     className={`hp-input w-full px-3.5 py-2.5 text-xs font-semibold ${
                       fieldErrors.brand_name ? 'border-rose-500' : ''
                     }`}

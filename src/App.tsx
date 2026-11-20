@@ -25,7 +25,6 @@ import SupportView from './components/SupportView';
 import ConnectView from './components/ConnectView';
 import DeveloperPortalView from './components/DeveloperPortalView';
 import ApiIntegrationView from './components/ApiIntegrationView';
-import StorePortalView from './components/StorePortalView';
 import FamPayConnectView from './components/FamPayConnectView';
 import AmazonConnectView from './components/AmazonConnectView';
 import CustomizePageView from './components/CustomizePageView';
@@ -64,7 +63,7 @@ export default function App() {
   const VALID_VIEWS = new Set([
     'dashboard', 'links', 'wallet', 'transactions', 'notifications', 'pricing',
     'profile', 'referral', 'promo', 'support', 'developer', 'api-docs',
-    'api-integration', 'store', 'fampay', 'amazon', 'paytm', 'customize'
+    'api-integration', 'fampay', 'amazon', 'paytm', 'customize'
   ]);
 
   const [currentView, setCurrentView] = useState<string>(() => {
@@ -245,7 +244,7 @@ export default function App() {
     withdrawals: { status: 'SIMULATED', route: 'POST /api/withdrawal' },
     notifications: { status: 'SIMULATED', route: 'GET /api/notification' },
     profile: { status: 'SIMULATED', route: 'POST /api/user' },
-    plans: { status: 'SIMULATED', route: 'POST /api/plans/upgrade' },
+    plans: { status: 'SIMULATED', route: 'POST /api/billing/checkout' },
     referral: { status: 'SIMULATED', route: 'GET /api/referral' },
     support: { status: 'SIMULATED', route: 'POST /api/support' }
   });
@@ -460,7 +459,7 @@ export default function App() {
           ...prev,
           auth: { status: 'REAL', route: 'GET /api/auth/me' },
           withdrawals: { status: 'REAL', route: 'POST /api/withdrawal' },
-          plans: { status: 'REAL', route: 'POST /api/plans/upgrade' },
+          plans: { status: 'REAL', route: 'POST /api/billing/checkout' },
           support: { status: 'REAL', route: 'POST /api/support' }
         }));
 
@@ -851,6 +850,7 @@ export default function App() {
             onViewChange={setCurrentView}
             showToast={showToast}
             onRefreshWallet={refreshCredits}
+            onRefreshPlan={() => refreshPlanState()}
           />
         );
       case 'transactions':
@@ -984,15 +984,6 @@ export default function App() {
           />
         );
       }
-
-      case 'store':
-        return (
-          <StorePortalView
-            showToast={showToast}
-            onOpenSidebar={() => setIsSidebarOpen(true)}
-            onViewChange={setCurrentView}
-          />
-        );
 
       case 'paytm':
         return (
