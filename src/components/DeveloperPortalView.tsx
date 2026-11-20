@@ -2,7 +2,8 @@ import { PanelLeft, RefreshCw, Copy, Check, Eye, EyeOff, AlertTriangle, External
 import { getTokenInfo, regenerateKey, setMode, getApiOrders, getWebhooks, addWebhook, deleteWebhook, createApiOrder } from '../services/developer.service';
 import { CashierAccount, getCashierProviderMeta } from '../services/cashier.service';
 import { CurrentPlanState, PlanDefinition } from '../types';
-import { getRequiredPlanName, notifyApiOrPlanError, ShowToastFn } from '../services/plans.service';
+import { getRequiredPlanName, hasDeveloperPortalAccess, hasApiDocsAccess, isApiDisabledError, notifyApiOrPlanError, ShowToastFn } from '../services/plans.service';
+import UpgradeRequiredView from './UpgradeRequiredView';
 import { useState, useEffect, useRef } from 'react';
 
 interface DeveloperPortalViewProps {
@@ -39,15 +40,17 @@ export default function DeveloperPortalView({
   plansCatalog = [],
 }: DeveloperPortalViewProps) {
   const activePlan = planState?.plan;
-  const apiOrdersEnabled = activePlan ? Boolean(activePlan.api_orders) : true;
-  const apiDocsEnabled = activePlan ? Boolean(activePlan.api_docs) : true;
-  const reqApiPlan = getRequiredPlanName(plansCatalog, (p) => Boolean(p.api_orders), 'BUSINESS');
-  const reqDocsPlan = getRequiredPlanName(plansCatalog, (p) => Boolean(p.api_docs), 'BUSINESS');
+  const portalAllowed = hasDeveloperPortalAccess(activePlan);
+  const apiOrdersEnabled = portalAllowed && Boolean(activePlan?.api_orders ?? true);
+  const apiDocsEnabled = hasApiDocsAccess(activePlan);
+  const reqApiPlan = getRequiredPlanName(plansCatalog, (p) => hasDeveloperPortalAccess(p), 'BASIC');
+  const reqDocsPlan = getRequiredPlanName(plansCatalog, (p) => hasApiDocsAccess(p), 'BASIC');
   const reqWebhookPlan = getRequiredPlanName(
     plansCatalog,
     (p) => p.webhooks === null || Number(p.webhooks) > 0,
     'GROWTH'
   );
+  const [apiDisabledLocked, setApiDisabledLocked] = useState(false);
 
   const activeAccountLabel = activeCashier
     ? `${getCashierProviderMeta(activeCashier.type).label} account`
@@ -100,6 +103,7 @@ export default function DeveloperPortalView({
 
   // 1. Fetch token on mount
   const fetchTokenInfo = async () => {
+    if (!portalAllowed || apiDisabledLocked) return;
     setIsLoadingToken(true);
     setTokenError(null);
     try {
@@ -122,6 +126,10 @@ export default function DeveloperPortalView({
         }
       }
     } catch (err: any) {
+      if (isApiDisabledError(err)) {
+        setApiDisabledLocked(true);
+        return;
+      }
       setTokenError(err?.message || 'Could not load developer token settings.');
     } finally {
       setIsLoadingToken(false);
@@ -130,18 +138,22 @@ export default function DeveloperPortalView({
 
   // 2. Fetch webhooks
   const fetchWebhooks = async () => {
+    if (!portalAllowed || apiDisabledLocked) return;
     try {
       const { webhooks, limit, enabled } = await getWebhooks();
       setWebhooksList(webhooks);
       setWebhookLimit(limit !== undefined ? limit : (activePlan?.webhooks ?? null));
       setWebhooksEnabled(enabled);
-    } catch {
-      // Graceful fallback
+    } catch (err: any) {
+      if (isApiDisabledError(err)) {
+        setApiDisabledLocked(true);
+      }
     }
   };
 
   // 3. Fetch developer orders
   const fetchOrders = async (silent = false) => {
+    if (!portalAllowed || apiDisabledLocked) return;
     if (!silent) setIsLoadingOrders(true);
     try {
       const res = await getApiOrders();
@@ -149,32 +161,38 @@ export default function DeveloperPortalView({
       if (Array.isArray(data)) {
         setOrders(data);
       }
-    } catch {
-      // Graceful fallback
+    } catch (err: any) {
+      if (isApiDisabledError(err)) {
+        setApiDisabledLocked(true);
+      }
     } finally {
       if (!silent) setIsLoadingOrders(false);
     }
   };
 
   useEffect(() => {
+    if (!portalAllowed || apiDisabledLocked) {
+      setIsLoadingToken(false);
+      return;
+    }
     fetchTokenInfo();
     fetchWebhooks();
     fetchOrders();
-  }, []);
+  }, [portalAllowed, apiDisabledLocked]);
 
   // 4. Auto-refresh orders every 10s if pending, else 60s
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
 
   useEffect(() => {
+    if (!portalAllowed || apiDisabledLocked) return;
     const timer = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
-      const hasPending = ordersRef.current.some(o => o.status === 'pending');
       fetchOrders(true);
     }, orders.some(o => o.status === 'pending') ? 10000 : 60000);
 
     return () => clearInterval(timer);
-  }, [orders]);
+  }, [orders, portalAllowed, apiDisabledLocked]);
 
   const handleCopy = () => {
     if (!realKey) return;
@@ -228,6 +246,10 @@ export default function DeveloperPortalView({
         throw new Error(res?.message || 'Failed to regenerate key');
       }
     } catch (err: any) {
+      if (isApiDisabledError(err)) {
+        setApiDisabledLocked(true);
+        return;
+      }
       notifyApiOrPlanError(
         err,
         'Could not regenerate key. Your active key remains valid.',
@@ -261,6 +283,10 @@ export default function DeveloperPortalView({
       setGatewayMode(data?.mode || mode);
       showToast(`Gateway mode switched to ${mode.toUpperCase()}`, 'success');
     } catch (e: any) {
+      if (isApiDisabledError(e)) {
+        setApiDisabledLocked(true);
+        return;
+      }
       notifyApiOrPlanError(e, 'Failed to switch gateway mode.', showToast, goToPlans);
     } finally {
       setIsSwitchingMode(false);
@@ -306,6 +332,10 @@ export default function DeveloperPortalView({
         throw new Error(resp?.message || 'Could not retrieve payment checkout URL.');
       }
     } catch (e: any) {
+      if (isApiDisabledError(e)) {
+        setApiDisabledLocked(true);
+        return;
+      }
       notifyApiOrPlanError(e, 'Failed to create try order.', showToast, goToPlans);
     } finally {
       setIsCreatingTryOrder(false);
@@ -341,6 +371,10 @@ export default function DeveloperPortalView({
       await fetchWebhooks();
       showToast('Webhook URL saved successfully!', 'success');
     } catch (err: any) {
+      if (isApiDisabledError(err)) {
+        setApiDisabledLocked(true);
+        return;
+      }
       notifyApiOrPlanError(err, 'Failed to save webhook.', showToast, goToPlans);
     } finally {
       setIsSavingWebhook(false);
@@ -363,6 +397,10 @@ export default function DeveloperPortalView({
         showToast('All webhooks removed.', 'info');
       }
     } catch (err: any) {
+      if (isApiDisabledError(err)) {
+        setApiDisabledLocked(true);
+        return;
+      }
       notifyApiOrPlanError(err, 'Failed to delete webhook.', showToast, goToPlans);
     } finally {
       setDeletingUrl(null);
@@ -372,6 +410,21 @@ export default function DeveloperPortalView({
 
   const successfulOrders = orders.filter(o => o.status === 'success' || o.status === 'paid');
   const thisMonthVolume = successfulOrders.reduce((sum, o) => sum + (Number(o.pay_amount || o.amount) || 0), 0);
+
+  if (!portalAllowed || apiDisabledLocked) {
+    return (
+      <UpgradeRequiredView
+        title="Upgrade required"
+        message={`Developer Portal & API docs are available from the ${reqApiPlan} plan`}
+        requiredPlanName={reqApiPlan}
+        currentPlanName={activePlan?.name || 'FREE'}
+        pageTitle="Developer Portal"
+        onUpgrade={goToPlans}
+        onBackToDashboard={() => onViewChange?.('dashboard')}
+        onOpenSidebar={onOpenSidebar}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen text-[#fff2f4] flex flex-col">

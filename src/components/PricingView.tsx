@@ -22,6 +22,8 @@ import {
   getCurrentPlan,
   upgradePlan,
   getDaysLeftFromExpiry,
+  hasDeveloperPortalAccess,
+  hasApiDocsAccess,
   ShowToastFn
 } from '../services/plans.service';
 
@@ -114,8 +116,8 @@ const buildPlanFeatures = (plan: PlanDefinition) => {
     { text: commissionText, locked: false, bold: commissionBold },
     { text: accountsText, locked: false, bold: '' },
     { text: webhooksText, locked: webhooksLocked, bold: webhooksBold },
-    { text: 'Developer API orders', locked: !plan.api_orders, bold: '' },
-    { text: 'API integration docs', locked: !plan.api_docs, bold: '' },
+    { text: 'Developer Portal & API', locked: !hasDeveloperPortalAccess(plan), bold: '' },
+    { text: 'API integration docs', locked: !hasApiDocsAccess(plan), bold: '' },
     { text: 'Custom themes & QR styling', locked: !(plan.custom_pages || plan.qr_theme), bold: '' },
     { text: 'Custom branding & logo', locked: !plan.branding, bold: '' },
     ...(plan.advanced_api ? [{ text: 'Advanced API access', locked: false, bold: '' }] : []),

@@ -21,6 +21,7 @@ export const DEFAULT_FREE_PLAN: PlanDefinition = {
   max_amount: 5000,
   commission: 5,
   webhooks: 0,
+  developer_portal: false,
   api_orders: false,
   api_docs: false,
   advanced_api: false,
@@ -129,6 +130,24 @@ export const getDaysLeftFromExpiry = (expiresAt: string | null): number | null =
   if (isNaN(expMs)) return null;
   const diff = expMs - Date.now();
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+};
+
+export const hasDeveloperPortalAccess = (plan?: PlanDefinition | null): boolean => {
+  if (!plan) return false;
+  if (typeof plan.developer_portal === 'boolean') return plan.developer_portal;
+  if (typeof plan.api_orders === 'boolean') return plan.api_orders;
+  return Number(plan.price) > 0;
+};
+
+export const hasApiDocsAccess = (plan?: PlanDefinition | null): boolean => {
+  if (!plan) return false;
+  if (typeof plan.api_docs === 'boolean') return plan.api_docs;
+  return hasDeveloperPortalAccess(plan);
+};
+
+export const isApiDisabledError = (err: any): boolean => {
+  const code = err?.code || err?.data?.code;
+  return String(code || '').toUpperCase() === 'PLAN_API_DISABLED';
 };
 
 export const notifyApiOrPlanError = (

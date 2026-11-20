@@ -79,6 +79,7 @@ export interface PlanDefinition {
   max_amount: number | null;
   commission: number;
   webhooks: number | null;
+  developer_portal?: boolean;
   api_orders: boolean;
   api_docs: boolean;
   advanced_api: boolean;

@@ -37,14 +37,17 @@ import {
   getPlans,
   getCurrentPlan,
   getRequiredPlanName,
+  hasDeveloperPortalAccess,
+  hasApiDocsAccess,
   notifyApiOrPlanError,
   ShowToastFn,
 } from './services/plans.service';
+import UpgradeRequiredView from './components/UpgradeRequiredView';
 import Modal from './components/Modal';
 import CreatePaymentLinkModal from './components/CreatePaymentLinkModal';
 import NoCashierWarningModal from './components/NoCashierWarningModal';
 import Toast, { ToastItem } from './components/Toast';
-import { Link as LinkIcon, Wallet, Info, Cloud, Wifi, HelpCircle, Key, Lock, Zap } from 'lucide-react';
+import { Link as LinkIcon, Wallet, Info, Cloud, Wifi, HelpCircle, Key } from 'lucide-react';
 import { PayPage } from './pages/pay/PayPage';
 import { ApiDocsPage } from './pages/docs/ApiDocsPage';
 import AuthCallback from './pages/AuthCallback';
@@ -121,6 +124,7 @@ export default function App() {
   };
 
   const [plansCatalog, setPlansCatalog] = useState<PlanDefinition[]>([]);
+  const [isPlanLoaded, setIsPlanLoaded] = useState<boolean>(false);
   const [currentPlanState, setCurrentPlanState] = useState<CurrentPlanState>({
     plan: DEFAULT_FREE_PLAN,
     expires_at: null,
@@ -151,11 +155,14 @@ export default function App() {
       applyPlanState(cur);
     } catch {
       // Keep existing plan state on transient failure
+    } finally {
+      setIsPlanLoaded(true);
     }
   };
 
   const handlePlanUpdated = (nextState: CurrentPlanState) => {
     applyPlanState(nextState);
+    setIsPlanLoaded(true);
     refreshCredits();
   };
 
@@ -548,6 +555,7 @@ export default function App() {
       return next;
     });
     setIsLoggedIn(false);
+    setIsPlanLoaded(false);
     setAuthMode(null);
     setActiveCashier(null);
     try { localStorage.removeItem('hamro_current_view'); } catch {}
@@ -892,7 +900,33 @@ export default function App() {
           />
         );
       
-      case 'developer':
+      case 'developer': {
+        if (!isPlanLoaded) {
+          return (
+            <div className="min-h-[60vh] flex items-center justify-center p-6">
+              <div className="text-xs font-bold text-[#b89fa5] animate-pulse">Checking plan access...</div>
+            </div>
+          );
+        }
+        if (!hasDeveloperPortalAccess(currentPlanState.plan)) {
+          const reqPortalPlan = getRequiredPlanName(
+            plansCatalog,
+            (p) => hasDeveloperPortalAccess(p),
+            'BASIC'
+          );
+          return (
+            <UpgradeRequiredView
+              title="Upgrade required"
+              message={`Developer Portal & API docs are available from the ${reqPortalPlan} plan`}
+              requiredPlanName={reqPortalPlan}
+              currentPlanName={currentPlanState.plan.name}
+              pageTitle="Developer Portal"
+              onUpgrade={() => setCurrentView('pricing')}
+              onBackToDashboard={() => setCurrentView('dashboard')}
+              onOpenSidebar={() => setIsSidebarOpen(true)}
+            />
+          );
+        }
         return (
           <DeveloperPortalView 
             showToast={showToast}
@@ -905,48 +939,40 @@ export default function App() {
             plansCatalog={plansCatalog}
           />
         );
+      }
 
       case 'api-docs':
       case 'api-integration': {
-        if (!currentPlanState.plan.api_docs) {
-          const reqDocsPlan = getRequiredPlanName(plansCatalog, (p) => Boolean(p.api_docs), 'BUSINESS');
+        if (!isPlanLoaded) {
           return (
-            <div className="min-h-[80vh] flex items-center justify-center p-6">
-              <div className="max-w-md w-full rounded-2xl bg-[#120306] border border-[rgba(255,45,85,0.28)] p-7 text-center space-y-4 shadow-2xl">
-                <div className="w-14 h-14 rounded-2xl bg-[rgba(255,30,75,0.12)] border border-[rgba(255,45,85,0.3)] text-[#ff4d6d] flex items-center justify-center mx-auto">
-                  <Lock className="w-6 h-6" />
-                </div>
-                <div className="space-y-1.5">
-                  <h2 className="text-lg font-black text-white">API Integration Docs Locked</h2>
-                  <p className="text-xs text-[#b89fa5] leading-relaxed">
-                    Your current <strong className="text-white">{currentPlanState.plan.name}</strong> plan does not include API integration documentation.
-                  </p>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
-                      setCurrentView('pricing');
-                    }}
-                    className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30 hover:brightness-110 cursor-pointer"
-                  >
-                    <Zap className="w-3.5 h-3.5 fill-current" />
-                    <span>Upgrade to {reqDocsPlan}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
-                      setCurrentView('dashboard');
-                    }}
-                    className="py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-[#d4c2c7] cursor-pointer"
-                  >
-                    Dashboard
-                  </button>
-                </div>
-              </div>
+            <div className="min-h-[60vh] flex items-center justify-center p-6">
+              <div className="text-xs font-bold text-[#b89fa5] animate-pulse">Checking plan access...</div>
             </div>
+          );
+        }
+        if (!hasApiDocsAccess(currentPlanState.plan)) {
+          const reqDocsPlan = getRequiredPlanName(
+            plansCatalog,
+            (p) => hasApiDocsAccess(p),
+            'BASIC'
+          );
+          return (
+            <UpgradeRequiredView
+              title="Upgrade required"
+              message={`Developer Portal & API docs are available from the ${reqDocsPlan} plan`}
+              requiredPlanName={reqDocsPlan}
+              currentPlanName={currentPlanState.plan.name}
+              pageTitle="API Documentation"
+              onUpgrade={() => {
+                if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
+                setCurrentView('pricing');
+              }}
+              onBackToDashboard={() => {
+                if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
+                setCurrentView('dashboard');
+              }}
+              onOpenSidebar={() => setIsSidebarOpen(true)}
+            />
           );
         }
         return (
@@ -1075,6 +1101,37 @@ export default function App() {
     window.location.pathname.startsWith('/docs')
   );
   if (isDocsView) {
+    if (isLoggedIn) {
+      if (!isPlanLoaded) {
+        return (
+          <div className="min-h-screen bg-[#070102] text-white flex flex-col justify-center items-center">
+            <div className="text-xs font-bold text-[#b89fa5] animate-pulse">Checking plan access...</div>
+          </div>
+        );
+      }
+      if (!hasApiDocsAccess(currentPlanState.plan)) {
+        const reqDocsPlan = getRequiredPlanName(plansCatalog, (p) => hasApiDocsAccess(p), 'BASIC');
+        return (
+          <div className="min-h-screen bg-[#070102] text-[#fff2f4]">
+            <UpgradeRequiredView
+              title="Upgrade required"
+              message={`Developer Portal & API docs are available from the ${reqDocsPlan} plan`}
+              requiredPlanName={reqDocsPlan}
+              currentPlanName={currentPlanState.plan.name}
+              pageTitle="API Documentation"
+              onUpgrade={() => {
+                window.history.pushState({}, '', '/');
+                setCurrentView('pricing');
+              }}
+              onBackToDashboard={() => {
+                window.history.pushState({}, '', '/');
+                setCurrentView('dashboard');
+              }}
+            />
+          </div>
+        );
+      }
+    }
     return (
       <ApiDocsPage 
         onBackToDashboard={() => {

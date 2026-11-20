@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { CurrentPlanState, PlanType } from '../types';
+import { hasDeveloperPortalAccess, hasApiDocsAccess } from '../services/plans.service';
 import { X, User, LogOut, Wallet, Lock } from 'lucide-react';
 import { FamPayIcon, PaytmIcon, AmazonPayIcon } from './BrandIcons';
 
@@ -33,8 +34,8 @@ export default function Sidebar({
 }: SidebarProps) {
   const { user } = useAuth();
   const displayCredits = credits !== undefined ? credits : balance;
-  const apiOrdersLocked = planState ? !planState.plan.api_orders : false;
-  const apiDocsLocked = planState ? !planState.plan.api_docs : false;
+  const apiOrdersLocked = planState ? !hasDeveloperPortalAccess(planState.plan) : false;
+  const apiDocsLocked = planState ? !hasApiDocsAccess(planState.plan) : false;
 
   // Collapsible groups state - default collapsed so subsections do not open automatically
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
@@ -57,7 +58,7 @@ export default function Sidebar({
   };
 
   const handleNavClick = (viewId: string) => {
-    if (viewId === 'api-docs' || viewId === 'api-integration') {
+    if ((viewId === 'api-docs' || viewId === 'api-integration') && !apiDocsLocked) {
       if (typeof window !== 'undefined') {
         window.history.pushState({}, '', '/api/docs');
       }
