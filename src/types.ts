@@ -106,3 +106,108 @@ export interface CurrentPlanState {
   expires_at: string | null;
   usage: PlanUsage;
 }
+
+export interface StoreConfig {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  logo_url?: string | null;
+  contact_phone?: string | null;
+  is_active: boolean;
+  url: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface StoreUsage {
+  products_used: number;
+  products_limit: number | null;
+}
+
+export interface StoreDashboardData {
+  store: StoreConfig | null;
+  usage: StoreUsage;
+  plan?: PlanDefinition | null;
+}
+
+export interface StoreProduct {
+  id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  image_url?: string | null;
+  stock: number | null;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface StoreOrderItem {
+  product_id?: string;
+  name: string;
+  price: number;
+  qty: number;
+}
+
+export type StoreOrderStatus = 'pending' | 'paid' | 'expired' | 'cancelled';
+export type StoreFulfilmentStatus = 'new' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+
+export interface StoreOrder {
+  order_code: string;
+  status: StoreOrderStatus;
+  fulfilment: StoreFulfilmentStatus;
+  items: StoreOrderItem[];
+  total: number;
+  customer_name: string;
+  customer_phone: string;
+  customer_email?: string | null;
+  address?: string | null;
+  note?: string | null;
+  created_at: string;
+  paid_at?: string | null;
+}
+
+export interface PublicStoreInfo {
+  name: string;
+  slug: string;
+  description?: string | null;
+  logo_url?: string | null;
+  contact_phone?: string | null;
+  merchant_name?: string | null;
+}
+
+export interface PublicStoreProduct {
+  id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  image_url?: string | null;
+  in_stock: boolean;
+  stock: number | null;
+}
+
+export interface PublicStoreData {
+  store: PublicStoreInfo;
+  products: PublicStoreProduct[];
+}
+
+export interface PublicCheckoutResponse {
+  order_code: string;
+  total: number;
+  pay_amount: number;
+  payment_url: string;
+  expires_at?: string | null;
+}
+
+export interface PublicStoreOrderStatus {
+  order_code?: string;
+  status: StoreOrderStatus | string;
+  fulfilment: StoreFulfilmentStatus | string;
+  items: StoreOrderItem[];
+  total: number;
+  payment_url?: string | null;
+  customer_name?: string | null;
+  created_at?: string | null;
+  paid_at?: string | null;
+}
+

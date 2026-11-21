@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { CurrentPlanState, PlanType } from '../types';
 import { hasDeveloperPortalAccess, hasApiDocsAccess } from '../services/plans.service';
-import { X, User, LogOut, Wallet, Lock } from 'lucide-react';
+import { X, User, LogOut, Wallet, Lock, Store } from 'lucide-react';
 import { FamPayIcon, PaytmIcon, AmazonPayIcon } from './BrandIcons';
 
 interface SidebarProps {
@@ -201,6 +201,23 @@ export default function Sidebar({
                 </svg>
               </span>
               <span className="flex-1 min-w-0 truncate">Payment Links</span>
+            </div>
+
+            {/* Online Store */}
+            <div
+              className={`hp-nav-item ${currentView === 'store' ? 'active' : ''}`}
+              onClick={() => handleNavClick('store')}
+            >
+              <span
+                className="hp-nav-icon"
+                style={{
+                  background: 'linear-gradient(135deg, #ff1e4b, #b8002c)',
+                  boxShadow: '0 4px 14px rgba(255,30,75,0.35)',
+                }}
+              >
+                <Store className="w-4 h-4" />
+              </span>
+              <span className="flex-1 min-w-0 truncate">Store</span>
             </div>
 
             {/* Cashier Connect Group */}

@@ -40,6 +40,7 @@ const sanitizeForLog = (obj: any): any => {
 export const PLAN_ERROR_CODES = new Set([
   'PLAN_AMOUNT_LIMIT',
   'PLAN_LINK_LIMIT',
+  'PLAN_STORE_LIMIT',
   'PLAN_API_DISABLED',
   'PLAN_WEBHOOK_LIMIT',
   'PLAN_ACCOUNT_LIMIT',

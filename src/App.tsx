@@ -25,6 +25,7 @@ import DeveloperPortalView from './components/DeveloperPortalView';
 import FamPayConnectView from './components/FamPayConnectView';
 import AmazonConnectView from './components/AmazonConnectView';
 import CustomizePageView from './components/CustomizePageView';
+import StorePortalView from './components/StorePortalView';
 import { CashierAccount, getActiveCashier, getCashierList } from './services/cashier.service';
 import { getCreditBalance } from './services/credits.service';
 import { getWalletBalance } from './services/wallet.service';
@@ -45,6 +46,7 @@ import NoCashierWarningModal from './components/NoCashierWarningModal';
 import Toast, { ToastItem } from './components/Toast';
 import { Link as LinkIcon, Wallet, Info, Cloud, Wifi, HelpCircle, Key } from 'lucide-react';
 import { PayPage } from './pages/pay/PayPage';
+import { PublicStorePage } from './pages/store/PublicStorePage';
 import { ApiDocsPage } from './pages/docs/ApiDocsPage';
 import AuthCallback from './pages/AuthCallback';
 import { supabase } from './config/supabase';
@@ -58,7 +60,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'login' | 'signup' | null>(null);
 
   const VALID_VIEWS = new Set([
-    'dashboard', 'links', 'wallet', 'transactions', 'notifications', 'pricing',
+    'dashboard', 'links', 'store', 'wallet', 'transactions', 'notifications', 'pricing',
     'profile', 'referral', 'promo', 'support', 'developer', 'api-docs',
     'api-integration', 'fampay', 'amazon', 'paytm', 'customize'
   ]);
@@ -1144,6 +1146,17 @@ export default function App() {
           />
         );
 
+      case 'store':
+        return (
+          <StorePortalView
+            showToast={showToast}
+            onViewChange={setCurrentView}
+            activeCashier={activeCashier}
+            planState={currentPlanState}
+            onOpenNoCashierModal={() => setIsNoCashierModalOpen(true)}
+          />
+        );
+
       default:
         console.warn('Unknown view:', currentView);
         return (
@@ -1197,6 +1210,16 @@ export default function App() {
         }} />
       </div>
     );
+  }
+
+  // Check if current route is Public Store View (/store/:slug)
+  const publicStoreMatch =
+    typeof window !== 'undefined'
+      ? window.location.pathname.match(/^\/store\/([^/?#]+)\/?$/)
+      : null;
+  if (publicStoreMatch && publicStoreMatch[1]) {
+    const storeSlug = decodeURIComponent(publicStoreMatch[1]);
+    return <PublicStorePage slug={storeSlug} />;
   }
 
   // Check if current route is API Docs (/api/docs or /api/dosc or /docs)
