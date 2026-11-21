@@ -313,8 +313,8 @@ export const ApiDocsPage: React.FC<ApiDocsPageProps> = ({ onBackToDashboard }) =
             </div>
             <div className="body">
               <p>
-                Every Hamro Pay merchant account has exactly <strong>one API key</strong> (it starts with <code>hmpay_</code>).
-                It authenticates every request you make.
+                Every Hamro Pay merchant account can generate <strong>one Developer API key</strong> (it starts with <code>hmpay_</code>).
+                It authenticates every Developer API request you make.
               </p>
 
               <h3>Where to find it</h3>
@@ -363,7 +363,7 @@ export const ApiDocsPage: React.FC<ApiDocsPageProps> = ({ onBackToDashboard }) =
 
               <h3>Authentication</h3>
               <p>
-                Send your key in the JSON body as <code>hamro_api</code>, <strong>or</strong> as a header <code>X-HamroAPI-Key</code> (the older <code>x-api-key</code> header also works).
+                Send your Developer API key in the JSON body as <code>hamro_api</code>, <strong>or</strong> as the <code>X-HamroAPI-Key</code> header.
               </p>
               <div className="tw">
                 <table>

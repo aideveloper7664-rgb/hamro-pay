@@ -3,7 +3,7 @@ import { PanelLeft } from 'lucide-react';
 import { CurrentPlanState, PaymentLink, Transaction } from '../types';
 import { getPayments } from '../services/wallet.service';
 import { getCreditBalance } from '../services/credits.service';
-import { getDaysLeftFromExpiry } from '../services/plans.service';
+import { getDaysLeftFromExpiry, normalizePlanName } from '../services/plans.service';
 import { useAuth } from '../context/AuthContext';
 import PaymentRoutingCard from './PaymentRoutingCard';
 
@@ -133,10 +133,7 @@ export default function DashboardView({
   }, [propTransactions]);
 
   // Plan formatting
-  const activePlanName = (
-    currentPlanState?.plan?.name ||
-    (currentPlan && !currentPlan.toLowerCase().includes('blaze') ? currentPlan : 'FREE')
-  ).toUpperCase();
+  const activePlanName = normalizePlanName(currentPlanState?.plan?.name || currentPlan);
   const effectiveCommission = currentPlanState?.plan?.commission ?? feePercent ?? 5;
   const linksUsedThisMonth = currentPlanState?.usage?.links_used ?? paymentLinks.length;
   const effectiveLinkLimit =

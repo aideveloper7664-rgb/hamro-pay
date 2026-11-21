@@ -1,5 +1,5 @@
-import { PanelLeft, RefreshCw, Copy, Check, Eye, EyeOff, AlertTriangle, ExternalLink, Loader2, KeyRound, Globe, Radio, Plus, Trash2, ArrowUpRight, Lock, Zap } from 'lucide-react';
-import { getTokenInfo, regenerateKey, setMode, getApiOrders, getWebhooks, addWebhook, deleteWebhook, createApiOrder } from '../services/developer.service';
+import { PanelLeft, RefreshCw, Copy, Check, Eye, EyeOff, AlertTriangle, ExternalLink, Loader2, KeyRound, Globe, Radio, Plus, Trash2, ArrowUpRight, Lock, Zap, Key } from 'lucide-react';
+import { getTokenInfo, generateKey, regenerateKey, setMode, getApiOrders, getWebhooks, addWebhook, deleteWebhook, createApiOrder } from '../services/developer.service';
 import { CashierAccount, getCashierProviderMeta } from '../services/cashier.service';
 import { CurrentPlanState, PlanDefinition } from '../types';
 import { getRequiredPlanName, hasDeveloperPortalAccess, hasApiDocsAccess, isApiDisabledError, notifyApiOrPlanError, ShowToastFn } from '../services/plans.service';
@@ -55,20 +55,14 @@ export default function DeveloperPortalView({
   const activeAccountLabel = activeCashier
     ? `${getCashierProviderMeta(activeCashier.type).label} account`
     : 'connected payment account';
-  const getStoredApiKey = () => {
-    try {
-      const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-      return merchant.api_key || '';
-    } catch {
-      return '';
-    }
-  };
-
-  const [realKey, setRealKey] = useState<string>(getStoredApiKey);
+  const [realKey, setRealKey] = useState<string | null>(null);
+  const [isGenerated, setIsGenerated] = useState<boolean>(false);
   const [keyCreatedAt, setKeyCreatedAt] = useState<string>('Active');
   const [isRevealed, setIsRevealed] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [confirmRegenOpen, setConfirmRegenOpen] = useState(false);
+  const [confirmModeSwitch, setConfirmModeSwitch] = useState<'live' | 'test' | null>(null);
 
   // Loading & error state for token
   const [isLoadingToken, setIsLoadingToken] = useState(true);
@@ -99,31 +93,24 @@ export default function DeveloperPortalView({
   const [orders, setOrders] = useState<DeveloperOrder[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
 
-  const maskedKey = realKey ? '•'.repeat(Math.min(realKey.length, 36)) : '••••••••••••••••••••••••••••••••';
+  const maskedKey = realKey ? `${realKey.slice(0, 6)}${'•'.repeat(Math.max(16, Math.min(realKey.length - 6, 30)))}` : '';
 
-  // 1. Fetch token on mount
+  // 1. Fetch token on mount (never auto-generates)
   const fetchTokenInfo = async () => {
     if (!portalAllowed || apiDisabledLocked) return;
     setIsLoadingToken(true);
     setTokenError(null);
     try {
-      const info = await getTokenInfo();
+      const info: any = await getTokenInfo();
       const data = info?.data !== undefined ? info.data : info;
-      if (data?.api_key) {
-        setRealKey(data.api_key);
-        if (data.mode) {
-          setGatewayMode(data.mode);
-        }
-        if (data.created_at) {
-          setKeyCreatedAt(new Date(data.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }));
-        }
-        try {
-          const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-          merchant.api_key = data.api_key;
-          localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
-        } catch {
-          // Ignore localStorage errors
-        }
+      if (data?.mode === 'live' || data?.mode === 'test') {
+        setGatewayMode(data.mode);
+      }
+      const hasGeneratedKey = Boolean(data?.generated && data?.api_key);
+      setIsGenerated(hasGeneratedKey);
+      setRealKey(hasGeneratedKey ? String(data.api_key) : null);
+      if (data?.created_at) {
+        setKeyCreatedAt(new Date(data.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }));
       }
     } catch (err: any) {
       if (isApiDisabledError(err)) {
@@ -214,7 +201,7 @@ export default function DeveloperPortalView({
 
   const goToPlans = () => onViewChange?.('pricing');
 
-  const handleRegenerate = async () => {
+  const handleGenerate = async () => {
     if (!apiOrdersEnabled) {
       showToast(`API keys & orders require ${reqApiPlan} plan.`, 'error', {
         label: 'Upgrade',
@@ -223,24 +210,50 @@ export default function DeveloperPortalView({
       return;
     }
 
-    const confirmed = window.confirm(
-      'Are you sure you want to regenerate your API key?\n\nThe existing key will stop working immediately. Update all your websites and servers that use it.'
-    );
-    if (!confirmed) return;
-
     setRegenerating(true);
     try {
-      const res = await regenerateKey();
+      const res: any = await generateKey();
       const data = res?.data !== undefined ? res.data : res;
       if (data?.api_key) {
-        setRealKey(data.api_key);
-        try {
-          const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-          merchant.api_key = data.api_key;
-          localStorage.setItem('hamropay_merchant', JSON.stringify(merchant));
-        } catch {
-          // Ignore
-        }
+        setRealKey(String(data.api_key));
+        setIsGenerated(true);
+        setKeyCreatedAt('Just now');
+        showToast('Developer API key generated!', 'success');
+      } else {
+        throw new Error(res?.message || 'Failed to generate API key');
+      }
+    } catch (err: any) {
+      if (isApiDisabledError(err)) {
+        setApiDisabledLocked(true);
+        return;
+      }
+      notifyApiOrPlanError(err, 'Could not generate API key.', showToast, goToPlans);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const handleRegenerateClick = () => {
+    if (!apiOrdersEnabled) {
+      showToast(`API keys & orders require ${reqApiPlan} plan.`, 'error', {
+        label: 'Upgrade',
+        onClick: goToPlans,
+      });
+      return;
+    }
+    setConfirmRegenOpen(true);
+  };
+
+  const handleConfirmRegenerate = async () => {
+    setConfirmRegenOpen(false);
+    setRegenerating(true);
+    try {
+      const res: any = await regenerateKey();
+      const data = res?.data !== undefined ? res.data : res;
+      if (data?.api_key) {
+        setRealKey(String(data.api_key));
+        setIsGenerated(true);
+        setKeyCreatedAt('Just now');
         showToast('API Key regenerated successfully!', 'success');
       } else {
         throw new Error(res?.message || 'Failed to regenerate key');
@@ -261,7 +274,7 @@ export default function DeveloperPortalView({
     }
   };
 
-  const handleModeSelect = async (mode: 'live' | 'test') => {
+  const handleModeSelect = (mode: 'live' | 'test') => {
     if (!apiOrdersEnabled) {
       showToast(`Gateway API mode switching requires ${reqApiPlan} plan.`, 'error', {
         label: 'Upgrade',
@@ -270,15 +283,17 @@ export default function DeveloperPortalView({
       return;
     }
     if (mode === gatewayMode || isSwitchingMode) return;
-    const confirmMsg = mode === 'live'
-      ? `Switch to LIVE mode?\n\nCustomers will make real UPI payments directly into your ${activeAccountLabel}.`
-      : 'Switch to TEST mode?\n\nReal payments will stop for API orders. Customers will see a test simulator instead.';
+    setConfirmModeSwitch(mode);
+  };
 
-    if (!window.confirm(confirmMsg)) return;
+  const handleConfirmModeSwitch = async () => {
+    const mode = confirmModeSwitch;
+    setConfirmModeSwitch(null);
+    if (!mode || mode === gatewayMode || isSwitchingMode) return;
 
     setIsSwitchingMode(true);
     try {
-      const res = await setMode(mode);
+      const res: any = await setMode(mode);
       const data = res?.data !== undefined ? res.data : res;
       setGatewayMode(data?.mode || mode);
       showToast(`Gateway mode switched to ${mode.toUpperCase()}`, 'success');
@@ -314,8 +329,8 @@ export default function DeveloperPortalView({
       );
       return;
     }
-    if (!realKey) {
-      showToast('API Key is missing. Please reload or regenerate.', 'error');
+    if (!isGenerated || !realKey) {
+      showToast('Generate your Developer API key first to test API orders.', 'info');
       return;
     }
 
@@ -325,8 +340,7 @@ export default function DeveloperPortalView({
       const data = resp?.data !== undefined ? resp.data : resp;
       if (data?.payment_url) {
         setLastCreatedOrder({ id: data.order_id, url: data.payment_url });
-        window.open(data.payment_url, '_blank', 'noopener,noreferrer');
-        showToast(`Order ${data.order_id} created successfully!`, 'success');
+        showToast(`Order ${data.order_id} created! Open checkout below.`, 'success');
         fetchOrders(true);
       } else {
         throw new Error(resp?.message || 'Could not retrieve payment checkout URL.');
@@ -614,7 +628,7 @@ export default function DeveloperPortalView({
               </div>
               <div className="panel-title-text">
                 <h2>Your Hamro API Key</h2>
-                <p>Pass via <code>X-HamroAPI-Key</code> or <code>x-api-key</code> headers</p>
+                <p>Pass in request body as <code>hamro_api</code> or via the <code>X-HamroAPI-Key</code> header</p>
               </div>
             </div>
           </div>
@@ -631,6 +645,24 @@ export default function DeveloperPortalView({
               <Loader2 className="w-4 h-4 animate-spin text-[#ff4d6d]" />
               <span>Loading developer credentials...</span>
             </div>
+          ) : !isGenerated || !realKey ? (
+            <div className="p-5 rounded-2xl bg-black/45 border border-[rgba(255,45,85,0.2)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="text-sm font-extrabold text-white">No Developer API key generated yet</div>
+                <p className="text-xs text-[#b89fa5]">
+                  Generate your secret key to authenticate Developer API calls.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={regenerating || !apiOrdersEnabled}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 hover:brightness-110 active:scale-95 transition cursor-pointer shrink-0 disabled:opacity-50"
+              >
+                {regenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+                <span>{regenerating ? 'Generating...' : 'Generate my API key'}</span>
+              </button>
+            </div>
           ) : (
             <>
               <div className="api-key-field">
@@ -644,6 +676,7 @@ export default function DeveloperPortalView({
                   />
                 </div>
                 <button 
+                  type="button"
                   className="icon-action" 
                   onClick={() => setIsRevealed(!isRevealed)} 
                   aria-label="Reveal key" 
@@ -653,6 +686,7 @@ export default function DeveloperPortalView({
                   {isRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
                 <button 
+                  type="button"
                   className={`icon-action ${copiedKey ? 'copied' : ''}`} 
                   onClick={handleCopy} 
                   aria-label="Copy key" 
@@ -664,11 +698,12 @@ export default function DeveloperPortalView({
 
               <div className="key-meta">
                 <div className="key-created text-xs text-slate-400">
-                  Created: <strong style={{ color: '#fff', marginLeft: '4px' }}>{keyCreatedAt}</strong>
+                  Status: <strong style={{ color: '#fff', marginLeft: '4px' }}>{keyCreatedAt}</strong>
                 </div>
                 <button
+                  type="button"
                   className="btn-danger disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={handleRegenerate}
+                  onClick={handleRegenerateClick}
                   disabled={regenerating || !apiOrdersEnabled}
                 >
                   {!apiOrdersEnabled ? (
@@ -679,7 +714,7 @@ export default function DeveloperPortalView({
                   ) : (
                     <>
                       {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                      <span>{regenerating ? 'Regenerating...' : 'Regenerate Key'}</span>
+                      <span>{regenerating ? 'Regenerating...' : 'Regenerate'}</span>
                     </>
                   )}
                 </button>
@@ -687,9 +722,11 @@ export default function DeveloperPortalView({
             </>
           )}
 
-          <div className="key-footer-note">
-            Regenerating instantly disables the old key — update it everywhere you've used it.
-          </div>
+          {isGenerated && realKey && (
+            <div className="key-footer-note">
+              Regenerating instantly disables the old key — update it everywhere you've used it.
+            </div>
+          )}
         </div>
 
         {/* GATEWAY MODE PANEL (ASLI) */}
@@ -1044,6 +1081,88 @@ export default function DeveloperPortalView({
         </div>
 
       </div>
+
+      {/* Confirm Regenerate Key Modal */}
+      {confirmRegenOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#040102]/85 backdrop-blur-md"
+          onClick={() => setConfirmRegenOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-[420px] rounded-[22px] bg-gradient-to-br from-[rgba(26,6,12,0.98)] to-[rgba(12,2,6,0.99)] border border-rose-500/35 p-6 space-y-4 shadow-[0_40px_90px_rgba(0,0,0,0.85)] text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/35 grid place-items-center text-rose-400 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-black text-white">Regenerate API Key?</h3>
+            </div>
+            <p className="text-xs text-[#d8c5ca] leading-relaxed">
+              Your old key stops working immediately. Update all your websites and servers that use it.
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRegenOpen(false)}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRegenerate}
+                className="px-4 py-2 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black shadow-md shadow-rose-600/30 hover:brightness-110 transition cursor-pointer"
+              >
+                Regenerate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Gateway Mode Switch Modal */}
+      {confirmModeSwitch && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#040102]/85 backdrop-blur-md"
+          onClick={() => setConfirmModeSwitch(null)}
+        >
+          <div
+            className="relative w-full max-w-[420px] rounded-[22px] bg-gradient-to-br from-[rgba(26,6,12,0.98)] to-[rgba(12,2,6,0.99)] border border-amber-500/35 p-6 space-y-4 shadow-[0_40px_90px_rgba(0,0,0,0.85)] text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/35 grid place-items-center text-amber-400 shrink-0">
+                <Radio className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-black text-white">
+                Switch to {confirmModeSwitch.toUpperCase()} mode?
+              </h3>
+            </div>
+            <p className="text-xs text-[#d8c5ca] leading-relaxed">
+              {confirmModeSwitch === 'live'
+                ? `Customers will make real UPI payments directly into your ${activeAccountLabel}.`
+                : 'Real payments will stop for API orders. Customers will see a test simulator instead.'}
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModeSwitch(null)}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmModeSwitch}
+                className="px-4 py-2 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black shadow-md shadow-rose-600/30 hover:brightness-110 transition cursor-pointer"
+              >
+                Switch to {confirmModeSwitch.toUpperCase()}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

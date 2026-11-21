@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   Mail, 
@@ -16,19 +16,32 @@ import {
   Code,
   CreditCard,
   Save,
-  CheckCircle2,
-  Sparkles
+  Zap,
+  RefreshCw,
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
-import { MerchantProfile } from '../types';
+import { CurrentPlanState, MerchantProfile, PlanDefinition } from '../types';
 import { CashierAccount, getCashierProviderMeta } from '../services/cashier.service';
+import { getTokenInfo, generateKey, regenerateKey } from '../services/developer.service';
+import {
+  getRequiredPlanName,
+  hasDeveloperPortalAccess,
+  isApiDisabledError,
+  normalizePlanName,
+  notifyApiOrPlanError,
+  ShowToastFn,
+} from '../services/plans.service';
 
 interface ProfileViewProps {
   profile: MerchantProfile;
   onProfileSave: (updated: MerchantProfile) => void;
-  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  showToast: ShowToastFn;
   onOpenSidebar?: () => void;
   onViewChange?: (view: string) => void;
   activeCashier?: CashierAccount | null;
+  planState?: CurrentPlanState | null;
+  plansCatalog?: PlanDefinition[];
 }
 
 export default function ProfileView({
@@ -36,7 +49,9 @@ export default function ProfileView({
   onProfileSave,
   showToast,
   onViewChange,
-  activeCashier
+  activeCashier,
+  planState,
+  plansCatalog = [],
 }: ProfileViewProps) {
   const providerMeta = activeCashier ? getCashierProviderMeta(activeCashier.type) : null;
   const connectTargetView = (() => {
@@ -59,10 +74,55 @@ export default function ProfileView({
   const [phone, setPhone] = useState(profile.phone || '');
   const [emailReceipts, setEmailReceipts] = useState(profile.emailReceipts ?? true);
   const [withdrawalAlerts, setWithdrawalAlerts] = useState(profile.withdrawalAlerts ?? true);
+
+  const portalAllowed = hasDeveloperPortalAccess(planState?.plan);
+  const reqApiPlan = getRequiredPlanName(plansCatalog, (p) => hasDeveloperPortalAccess(p), 'BASIC');
+  const activePlanName = normalizePlanName(planState?.plan?.name || stored.plan_name);
+  const planExpiresAt = planState?.expires_at ?? stored.plan_expires_at ?? null;
+
+  const [devApiKey, setDevApiKey] = useState<string | null>(null);
+  const [isGenerated, setIsGenerated] = useState(false);
+  const [isLoadingKey, setIsLoadingKey] = useState(false);
+  const [isWorkingKey, setIsWorkingKey] = useState(false);
+  const [apiDisabledLocked, setApiDisabledLocked] = useState(false);
+  const [confirmRegenOpen, setConfirmRegenOpen] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
 
-  const apiKey = stored.api_key || 'hp_live_8f3c9a2b7e4d1f8a3c9b2e7d4f1a8c3b9e2d7f4a';
+  useEffect(() => {
+    if (!portalAllowed) {
+      setIsLoadingKey(false);
+      setDevApiKey(null);
+      setIsGenerated(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingKey(true);
+    setApiDisabledLocked(false);
+
+    getTokenInfo()
+      .then((info: any) => {
+        if (cancelled) return;
+        const data = info?.data !== undefined ? info.data : info;
+        const hasKey = Boolean(data?.generated && data?.api_key);
+        setIsGenerated(hasKey);
+        setDevApiKey(hasKey ? String(data.api_key) : null);
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        if (isApiDisabledError(err)) {
+          setApiDisabledLocked(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingKey(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [portalAllowed]);
 
   const getInitials = (n: string) => {
     const parts = n.trim().split(/\s+/);
@@ -72,18 +132,66 @@ export default function ProfileView({
     return (n.slice(0, 2) || 'HP').toUpperCase();
   };
 
+  const maskedKey = devApiKey
+    ? `${devApiKey.slice(0, 6)}${'•'.repeat(Math.max(16, Math.min(devApiKey.length - 6, 26)))}`
+    : '';
+
   const handleCopyApiKey = () => {
-    if (!apiKey) {
-      showToast('No API key found in merchant credentials.', 'error');
-      return;
-    }
-    navigator.clipboard?.writeText(apiKey).then(() => {
+    if (!devApiKey) return;
+    navigator.clipboard?.writeText(devApiKey).then(() => {
       setCopiedKey(true);
       showToast('API key copied to clipboard!', 'success');
       setTimeout(() => setCopiedKey(false), 2000);
     }).catch(() => {
       showToast('Failed to copy API key.', 'error');
     });
+  };
+
+  const handleGenerateKey = async () => {
+    setIsWorkingKey(true);
+    try {
+      const res: any = await generateKey();
+      const data = res?.data !== undefined ? res.data : res;
+      if (data?.api_key) {
+        setDevApiKey(String(data.api_key));
+        setIsGenerated(true);
+        showToast('Developer API key generated!', 'success');
+      } else {
+        throw new Error(res?.message || 'Failed to generate API key.');
+      }
+    } catch (err: any) {
+      if (isApiDisabledError(err)) {
+        setApiDisabledLocked(true);
+        return;
+      }
+      notifyApiOrPlanError(err, 'Could not generate API key.', showToast, () => onViewChange?.('pricing'));
+    } finally {
+      setIsWorkingKey(false);
+    }
+  };
+
+  const handleConfirmRegenerate = async () => {
+    setConfirmRegenOpen(false);
+    setIsWorkingKey(true);
+    try {
+      const res: any = await regenerateKey();
+      const data = res?.data !== undefined ? res.data : res;
+      if (data?.api_key) {
+        setDevApiKey(String(data.api_key));
+        setIsGenerated(true);
+        showToast('API key regenerated successfully!', 'success');
+      } else {
+        throw new Error(res?.message || 'Failed to regenerate API key.');
+      }
+    } catch (err: any) {
+      if (isApiDisabledError(err)) {
+        setApiDisabledLocked(true);
+        return;
+      }
+      notifyApiOrPlanError(err, 'Could not regenerate API key.', showToast, () => onViewChange?.('pricing'));
+    } finally {
+      setIsWorkingKey(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -277,71 +385,124 @@ export default function ProfileView({
             </form>
           </div>
 
-          {/* API Keys Card */}
+          {/* API Key Card */}
           <div className="rounded-2xl bg-gradient-to-b from-[rgba(24,6,10,0.9)] to-[rgba(14,3,7,0.95)] border border-[rgba(255,45,85,0.18)] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[rgba(255,45,85,0.12)]">
               <h2 className="text-sm font-black text-white flex items-center gap-2 tracking-tight">
                 <span className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center">
                   <Key className="w-3.5 h-3.5" />
                 </span>
-                Merchant API Key
+                API key
               </h2>
               <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                Secret Auth Key
+                Developer API
               </span>
             </div>
 
-            <p className="text-xs text-[#b89fa5] leading-relaxed">
-              Use this key in your server backend headers (<code className="text-rose-400 font-mono font-bold">x-api-key</code> or <code className="text-rose-400 font-mono font-bold">X-HamroAPI-Key</code>) for API integrations and order creation.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-stretch gap-2">
-              <div className="relative flex-1">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#83686e]">
-                  <Key className="w-4 h-4 text-amber-400" />
-                </span>
-                <input
-                  type="text"
-                  readOnly
-                  value={showApiKey ? apiKey : `${apiKey ? apiKey.slice(0, 8) : 'hp_live_'}••••••••••••••••••••••••`}
-                  className="w-full text-xs font-mono pl-10 pr-10 py-3 rounded-xl bg-black/70 border border-white/15 text-white font-bold focus:outline-none select-all"
-                />
+            {!portalAllowed || apiDisabledLocked ? (
+              <div className="p-4 rounded-xl bg-black/45 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-[#d4c2c7] leading-relaxed">
+                    API access is available from the <strong className="text-white">{reqApiPlan}</strong> plan.
+                  </p>
+                </div>
+                {onViewChange && (
+                  <button
+                    type="button"
+                    onClick={() => onViewChange('pricing')}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30 hover:brightness-110 cursor-pointer shrink-0"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    <span>Upgrade</span>
+                  </button>
+                )}
+              </div>
+            ) : isLoadingKey ? (
+              <div className="py-5 flex items-center justify-center gap-2 text-xs text-[#b89fa5]">
+                <Loader2 className="w-4 h-4 animate-spin text-[#ff4d6d]" />
+                <span>Checking Developer API key...</span>
+              </div>
+            ) : !isGenerated || !devApiKey ? (
+              <div className="space-y-4">
+                <p className="text-xs text-[#b89fa5] leading-relaxed">
+                  Generate a Developer API key to create payment orders from your server via <code className="text-rose-400 font-mono font-bold">hamro_api</code> (body) or <code className="text-rose-400 font-mono font-bold">X-HamroAPI-Key</code> header.
+                </p>
                 <button
                   type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white transition cursor-pointer"
-                  title={showApiKey ? 'Hide key' : 'Show key'}
+                  onClick={handleGenerateKey}
+                  disabled={isWorkingKey}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 hover:brightness-110 active:scale-95 transition cursor-pointer disabled:opacity-50"
                 >
-                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {isWorkingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+                  <span>{isWorkingKey ? 'Generating...' : 'Generate my API key'}</span>
                 </button>
               </div>
+            ) : (
+              <>
+                <p className="text-xs text-[#b89fa5] leading-relaxed">
+                  Send this key in Developer API requests as <code className="text-rose-400 font-mono font-bold">hamro_api</code> (body) or <code className="text-rose-400 font-mono font-bold">X-HamroAPI-Key</code> header.
+                </p>
 
-              <button
-                type="button"
-                onClick={handleCopyApiKey}
-                className="px-4 py-3 bg-white/10 hover:bg-white/15 border border-white/15 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
-              >
-                {copiedKey ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedKey ? 'Copied' : 'Copy Key'}</span>
-              </button>
-            </div>
+                <div className="flex flex-col sm:flex-row items-stretch gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#83686e]">
+                      <Key className="w-4 h-4 text-amber-400" />
+                    </span>
+                    <input
+                      type="text"
+                      readOnly
+                      value={showApiKey ? devApiKey : maskedKey}
+                      className="w-full text-xs font-mono pl-10 pr-10 py-3 rounded-xl bg-black/70 border border-white/15 text-white font-bold focus:outline-none select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white transition cursor-pointer"
+                      title={showApiKey ? 'Hide key' : 'Show key'}
+                    >
+                      {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
 
-            <div className="flex items-center justify-between pt-1 text-[11px] text-[#83686e]">
-              <span className="flex items-center gap-1">
-                <Lock className="w-3 h-3 text-amber-400" />
-                Keep key private. Never expose in public client scripts.
-              </span>
-              {onViewChange && (
-                <button
-                  type="button"
-                  onClick={() => onViewChange('developer')}
-                  className="text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 cursor-pointer"
-                >
-                  <span>API Settings</span>
-                  <ExternalLink className="w-3 h-3" />
-                </button>
-              )}
-            </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyApiKey}
+                    className="px-4 py-3 bg-white/10 hover:bg-white/15 border border-white/15 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
+                  >
+                    {copiedKey ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedKey ? 'Copied' : 'Copy'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRegenOpen(true)}
+                    disabled={isWorkingKey}
+                    className="px-4 py-3 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/35 text-rose-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    {isWorkingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    <span>Regenerate</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 text-[11px] text-[#83686e]">
+                  <span className="flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    Keep key private. Never expose in public client scripts.
+                  </span>
+                  {onViewChange && (
+                    <button
+                      type="button"
+                      onClick={() => onViewChange('developer')}
+                      className="text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Developer Portal</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -449,6 +610,15 @@ export default function ProfileView({
 
             <div className="text-[11.5px] text-[#b89fa5] space-y-2 leading-relaxed">
               <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[11px]">
+                <span className="text-slate-400">Current Plan</span>
+                <span className="text-white font-bold">
+                  {activePlanName}
+                  {activePlanName !== 'FREE' && planExpiresAt
+                    ? ` · Exp ${new Date(planExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+                    : ''}
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[11px]">
                 <span className="text-slate-400">Account Security</span>
                 <span className="text-emerald-400 font-bold">● Active</span>
               </div>
@@ -462,6 +632,45 @@ export default function ProfileView({
           </div>
         </div>
       </div>
+
+      {/* Confirm Regenerate Key Modal */}
+      {confirmRegenOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#040102]/85 backdrop-blur-md"
+          onClick={() => setConfirmRegenOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-[400px] rounded-[22px] bg-gradient-to-br from-[rgba(26,6,12,0.98)] to-[rgba(12,2,6,0.99)] border border-rose-500/35 p-6 space-y-4 shadow-[0_40px_90px_rgba(0,0,0,0.85)] text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/35 grid place-items-center text-rose-400 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-black text-white">Regenerate API Key?</h3>
+            </div>
+            <p className="text-xs text-[#d8c5ca] leading-relaxed">
+              Your old key stops working immediately. Update all servers and websites using it.
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRegenOpen(false)}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRegenerate}
+                className="px-4 py-2 rounded-xl bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black shadow-md shadow-rose-600/30 hover:brightness-110 transition cursor-pointer"
+              >
+                Regenerate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,8 +6,16 @@ export interface WebhooksResponse {
   enabled: boolean;
 }
 
-export const getTokenInfo = async () => apiCall('/api/developer/token');
-export const regenerateKey = async () => apiCall('/api/developer/token/regenerate', 'POST');
+export interface DeveloperTokenInfo {
+  api_key: string | null;
+  generated: boolean;
+  mode?: 'live' | 'test';
+  created_at?: string | null;
+}
+
+export const getTokenInfo = async (): Promise<DeveloperTokenInfo> => apiCall('/api/developer/token');
+export const generateKey = async (): Promise<DeveloperTokenInfo> => apiCall('/api/developer/token/generate', 'POST');
+export const regenerateKey = async (): Promise<DeveloperTokenInfo> => apiCall('/api/developer/token/regenerate', 'POST');
 
 export const getWebhooks = async (): Promise<WebhooksResponse> => {
   const res = await apiCallFull('/api/developer/webhooks');

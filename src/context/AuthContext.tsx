@@ -7,6 +7,8 @@ export interface Merchant {
   name: string;
   email: string;
   api_key: string;
+  plan_name?: string;
+  plan_expires_at?: string | null;
 }
 
 export interface AuthContextType {

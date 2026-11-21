@@ -30,6 +30,7 @@ import AmazonConnectView from './components/AmazonConnectView';
 import CustomizePageView from './components/CustomizePageView';
 import { CashierAccount, getActiveCashier } from './services/cashier.service';
 import { getCreditBalance } from './services/credits.service';
+import { getWalletBalance } from './services/wallet.service';
 import { setMode } from './services/developer.service';
 import {
   DEFAULT_FREE_PLAN,
@@ -38,6 +39,7 @@ import {
   getRequiredPlanName,
   hasDeveloperPortalAccess,
   hasApiDocsAccess,
+  normalizePlanName,
   notifyApiOrPlanError,
   ShowToastFn,
 } from './services/plans.service';
@@ -150,8 +152,47 @@ export default function App() {
         catalog = await getPlans().catch(() => []);
         if (catalog.length > 0) setPlansCatalog(catalog);
       }
-      const cur = await getCurrentPlan(catalog);
-      applyPlanState(cur);
+      const [planRes, walletRes] = await Promise.allSettled([
+        getCurrentPlan(catalog),
+        getWalletBalance(),
+      ]);
+
+      const walletData = walletRes.status === 'fulfilled' ? walletRes.value : null;
+      if (walletData?.plan_name) {
+        try {
+          const m = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+          m.plan_name = walletData.plan_name;
+          if (walletData.plan_expires_at !== undefined) {
+            m.plan_expires_at = walletData.plan_expires_at;
+          }
+          localStorage.setItem('hamropay_merchant', JSON.stringify(m));
+        } catch {}
+      }
+
+      if (planRes.status === 'fulfilled' && planRes.value) {
+        const cur = planRes.value;
+        if (walletData?.plan_name) {
+          const walletPlanName = normalizePlanName(walletData.plan_name);
+          const matched = catalog.find((p) => p.name.toUpperCase() === walletPlanName);
+          cur.plan = {
+            ...cur.plan,
+            ...(matched || {}),
+            name: walletPlanName,
+          };
+        }
+        if (walletData?.plan_expires_at !== undefined && cur.expires_at == null) {
+          cur.expires_at = walletData.plan_expires_at;
+        }
+        applyPlanState(cur);
+      } else if (walletData?.plan_name) {
+        const walletPlanName = normalizePlanName(walletData.plan_name);
+        const matched = catalog.find((p) => p.name.toUpperCase() === walletPlanName);
+        applyPlanState({
+          ...currentPlanState,
+          plan: matched || { ...DEFAULT_FREE_PLAN, name: walletPlanName },
+          expires_at: walletData.plan_expires_at ?? currentPlanState.expires_at,
+        });
+      }
     } catch {
       // Keep existing plan state on transient failure
     } finally {
@@ -182,8 +223,11 @@ export default function App() {
   }, [isLoggedIn]);
 
   const [currentPlan, setCurrentPlan] = useState<PlanType>(() => {
-    const saved = localStorage.getItem('hamro_plan') || 'FREE';
-    return (saved.toLowerCase().includes('blaze') ? 'FREE' : saved.toUpperCase()) as PlanType;
+    try {
+      const m = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+      if (m.plan_name) return normalizePlanName(m.plan_name);
+    } catch {}
+    return normalizePlanName(localStorage.getItem('hamro_plan'));
   });
 
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => {
@@ -336,9 +380,8 @@ export default function App() {
               emailReceipts: res.user.emailReceipts ?? true,
               withdrawalAlerts: res.user.withdrawalAlerts ?? true
             });
-            const rawUserPlan = String(res.user.plan || 'FREE');
-            const sanitizedPlan = (rawUserPlan.toLowerCase().includes('blaze') ? 'FREE' : rawUserPlan.toUpperCase()) as PlanType;
-            setCurrentPlan(sanitizedPlan);
+            const rawUserPlan = (res.user as any).plan_name || res.user.plan;
+            setCurrentPlan(normalizePlanName(rawUserPlan));
             setFeePercent(res.user.feePercent ?? 5);
             setLinkLimit(res.user.linkLimit ?? 20);
             setApiToken(config.token);
@@ -511,9 +554,8 @@ export default function App() {
       emailReceipts: user.emailReceipts ?? true,
       withdrawalAlerts: user.withdrawalAlerts ?? true
     });
-    const rawUserPlan = String(user.plan || 'FREE');
-    const sanitizedPlan = (rawUserPlan.toLowerCase().includes('blaze') ? 'FREE' : rawUserPlan.toUpperCase()) as PlanType;
-    setCurrentPlan(sanitizedPlan);
+    const rawUserPlan = user.plan_name || user.plan;
+    setCurrentPlan(normalizePlanName(rawUserPlan));
     setFeePercent(user.feePercent ?? 5);
     setLinkLimit(user.linkLimit ?? 20);
 
@@ -885,6 +927,8 @@ export default function App() {
             showToast={showToast}
             onViewChange={setCurrentView}
             activeCashier={activeCashier}
+            planState={currentPlanState}
+            plansCatalog={plansCatalog}
           />
         );
       case 'referral':

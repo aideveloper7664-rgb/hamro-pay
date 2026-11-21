@@ -12,6 +12,18 @@ export interface PaymentsResponse {
   next_before: string | null;
 }
 
+export interface WalletBalanceInfo {
+  balance?: number;
+  credits?: number;
+  plan_name?: string;
+  plan_expires_at?: string | null;
+}
+
+export const getWalletBalance = async (): Promise<WalletBalanceInfo> => {
+  const res: any = await apiCall('/api/wallet/balance');
+  return (res?.data !== undefined ? res.data : res) || {};
+};
+
 export const getTransactions = async () => apiCall('/wallet/transactions');
 
 export const getPayments = async (params: GetPaymentsParams = {}): Promise<PaymentsResponse> => {

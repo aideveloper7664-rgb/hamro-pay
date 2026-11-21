@@ -38,6 +38,21 @@ export const getPlans = async (): Promise<PlanDefinition[]> => {
   return Array.isArray(list) ? list : [];
 };
 
+const KNOWN_PLANS = new Set<string>([
+  'FREE',
+  'BASIC',
+  'STARTER',
+  'GROWTH',
+  'BUSINESS',
+  'ADVANCE',
+  'ELITE',
+]);
+
+export const normalizePlanName = (raw?: string | null): PlanType => {
+  const upper = String(raw || '').trim().toUpperCase();
+  return (KNOWN_PLANS.has(upper) ? upper : 'FREE') as PlanType;
+};
+
 export const normalizeCurrentPlan = (
   raw: any,
   catalog: PlanDefinition[] = []
@@ -46,9 +61,9 @@ export const normalizeCurrentPlan = (
   const planNameRaw =
     typeof rawPlan === 'string'
       ? rawPlan
-      : rawPlan?.name || raw?.plan_id || raw?.name || 'FREE';
+      : rawPlan?.name || raw?.plan_name || raw?.plan_id || raw?.name || 'FREE';
 
-  const normalizedName = String(planNameRaw).trim().toUpperCase() as PlanType;
+  const normalizedName = normalizePlanName(planNameRaw);
   const fromCatalog = catalog.find(
     (p) => p.name.toUpperCase() === normalizedName
   );
@@ -59,7 +74,7 @@ export const normalizeCurrentPlan = (
           ...DEFAULT_FREE_PLAN,
           ...(fromCatalog || {}),
           ...rawPlan,
-          name: (rawPlan.name || normalizedName) as PlanType,
+          name: normalizePlanName(rawPlan.name || normalizedName),
           accounts: {
             ...DEFAULT_FREE_PLAN.accounts,
             ...(fromCatalog?.accounts || {}),
@@ -68,7 +83,7 @@ export const normalizeCurrentPlan = (
         }
       : {
           ...(fromCatalog || DEFAULT_FREE_PLAN),
-          name: normalizedName || 'FREE',
+          name: normalizedName,
         };
 
   const rawUsage = raw?.usage || {};
