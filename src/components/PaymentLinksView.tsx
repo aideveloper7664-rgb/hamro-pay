@@ -32,6 +32,7 @@ interface PaymentLinksViewProps {
   onOpenSidebar?: () => void;
   onViewChange?: (view: string) => void;
   unreadNotifications?: number;
+  isLoading?: boolean;
 }
 
 const isValidDateStr = (val?: string | null): boolean => {
@@ -67,6 +68,7 @@ export default function PaymentLinksView({
   showToast,
   onOpenSidebar,
   onViewChange,
+  isLoading = false,
 }: PaymentLinksViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Expired' | 'Disabled'>('All');
@@ -162,7 +164,9 @@ export default function PaymentLinksView({
       try {
         await deleteLink(linkIdToDelete);
       } catch (err: any) {
-        console.warn('Backend deleteLink call error:', err);
+        if (err?.status !== 404) {
+          throw err;
+        }
       }
       if (onDeleteLink) {
         onDeleteLink(link.id);
@@ -322,7 +326,38 @@ export default function PaymentLinksView({
         </div>
 
         {/* Links Card Grid or Empty State */}
-        {filteredLinks.length > 0 ? (
+        {isLoading && paymentLinks.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {[0, 1, 2].map((idx) => (
+              <div
+                key={idx}
+                className="p-5 rounded-[18px] bg-gradient-to-br from-[rgba(24,6,10,0.88)] to-[rgba(12,2,6,0.96)] border border-[rgba(255,45,85,0.18)] flex flex-col gap-4 animate-pulse"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="h-4 w-32 rounded bg-white/10" />
+                  <div className="h-6 w-16 rounded-lg bg-white/10" />
+                </div>
+                <div className="flex items-end justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <div className="h-3 w-12 rounded bg-white/5" />
+                    <div className="h-7 w-24 rounded bg-white/10" />
+                  </div>
+                  <div className="space-y-1.5 items-end flex flex-col">
+                    <div className="h-3 w-12 rounded bg-white/5" />
+                    <div className="h-4 w-16 rounded bg-white/10" />
+                  </div>
+                </div>
+                <div className="h-9 w-full rounded-xl bg-white/5" />
+                <div className="flex items-center gap-1.5">
+                  <div className="h-9 flex-1 rounded-xl bg-white/10" />
+                  <div className="h-9 w-9 rounded-xl bg-white/5" />
+                  <div className="h-9 w-9 rounded-xl bg-white/5" />
+                  <div className="h-9 w-9 rounded-xl bg-white/5" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredLinks.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredLinks.map((link) => {
               const calculatedTotal = link.is_test ? 0 : link.amount * link.orders;

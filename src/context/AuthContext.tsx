@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../config/supabase';
 
+import { clearHamroStorage } from '../services/api';
+
 export interface Merchant {
   id: string;
   name: string;
@@ -46,9 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.error('Supabase signout error:', err);
     }
-    localStorage.removeItem('hamropay_token');
-    localStorage.removeItem('hamropay_merchant');
-    localStorage.removeItem('hamro_is_logged_in');
+    clearHamroStorage();
     setUser(null);
     toast.success('Signed out.');
   };

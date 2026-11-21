@@ -37,6 +37,7 @@ const makeRequest = async (path: string, method: string = 'GET', body?: any) => 
 
   const res = await fetch(url, {
     method,
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`

@@ -138,7 +138,7 @@ export const getCustomizeThemes = async (): Promise<CustomizeThemesCatalog> => {
 
   catalogPromise = (async () => {
     try {
-      const res = await fetch(`${API_URL}/api/customize/themes`);
+      const res = await fetch(`${API_URL}/api/customize/themes`, { cache: 'no-store' });
       if (!res.ok) {
         throw new Error(`Failed to load themes (HTTP ${res.status})`);
       }
@@ -186,6 +186,7 @@ export const previewCustomizeConfig = async (
   try {
     const res = await fetch(`${API_URL}/api/customize/preview`, {
       method: 'POST',
+      cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(draft),
       signal: controller.signal

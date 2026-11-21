@@ -34,8 +34,8 @@ export default function Sidebar({
 }: SidebarProps) {
   const { user } = useAuth();
   const displayCredits = credits !== undefined ? credits : balance;
-  const apiOrdersLocked = planState ? !hasDeveloperPortalAccess(planState.plan) : false;
-  const apiDocsLocked = planState ? !hasApiDocsAccess(planState.plan) : false;
+  const apiOrdersLocked = !planState || !hasDeveloperPortalAccess(planState.plan);
+  const apiDocsLocked = !planState || !hasApiDocsAccess(planState.plan);
 
   // Collapsible groups state - default collapsed so subsections do not open automatically
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
@@ -71,9 +71,9 @@ export default function Sidebar({
   };
 
   // Determine dynamic user info according to logged-in user
-  const displayName = user?.name?.trim() || profileName?.trim() || 'sunny';
-  const displayEmail = user?.email?.trim() || profileEmail?.trim() || 'aideveloper7664@gmail.com';
-  const avatarLetter = (displayName[0] || 'S').toUpperCase();
+  const displayName = user?.name?.trim() || profileName?.trim() || 'Merchant';
+  const displayEmail = user?.email?.trim() || profileEmail?.trim() || '';
+  const avatarLetter = (displayName[0] || 'M').toUpperCase();
 
   return (
     <>

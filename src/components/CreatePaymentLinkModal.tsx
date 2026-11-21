@@ -26,7 +26,7 @@ interface CreatePaymentLinkModalProps {
   isEditing: boolean;
   linkLimit: number | null;
   linksUsed?: number;
-  commission?: number;
+  commission?: number | null;
   maxAmount?: number | null;
   linkExpiryDays?: number | null;
   planName?: string;
@@ -42,10 +42,10 @@ export default function CreatePaymentLinkModal({
   isEditing,
   linkLimit,
   linksUsed = 0,
-  commission = 5,
+  commission,
   maxAmount = null,
   linkExpiryDays = null,
-  planName = 'FREE',
+  planName = '',
   onUpgradeClick,
   showToast
 }: CreatePaymentLinkModalProps) {
@@ -98,7 +98,7 @@ export default function CreatePaymentLinkModal({
 
     if (maxAmount !== null && maxAmount !== undefined && num > maxAmount) {
       showToast(
-        `${planName} plan max amount is ₹${maxAmount.toLocaleString('en-IN')} per link.`,
+        `${planName ? `${planName} plan` : 'Your current plan'} max amount is ₹${maxAmount.toLocaleString('en-IN')} per link.`,
         'error',
         onUpgradeClick ? { label: 'Upgrade', onClick: onUpgradeClick } : undefined
       );
@@ -177,7 +177,7 @@ export default function CreatePaymentLinkModal({
               <span className="text-[11px] font-bold text-[#b89fa5]">
                 {maxAmount === null || maxAmount === undefined
                   ? 'Unlimited amount'
-                  : `Max ₹${maxAmount.toLocaleString('en-IN')} (${planName})`}
+                  : `Max ₹${maxAmount.toLocaleString('en-IN')}${planName ? ` (${planName})` : ''}`}
               </span>
             </div>
             <div className="relative flex items-center">
@@ -374,7 +374,9 @@ export default function CreatePaymentLinkModal({
           <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[rgba(20,5,10,0.7)] border border-[rgba(255,45,85,0.14)] text-xs">
             <div>
               <span className="block text-[10px] font-bold text-[#83686e] uppercase">Commission</span>
-              <span className="font-extrabold text-[#ff5274]">{commission}%</span>
+              <span className="font-extrabold text-[#ff5274]">
+                {typeof commission === 'number' ? `${commission}%` : '—'}
+              </span>
             </div>
             <div className="text-center">
               <span className="block text-[10px] font-bold text-[#83686e] uppercase">Validity</span>
@@ -385,7 +387,9 @@ export default function CreatePaymentLinkModal({
             <div className="text-right">
               <span className="block text-[10px] font-bold text-[#83686e] uppercase">Links Remaining</span>
               <span className="font-extrabold text-[#2bf29a]">
-                {linkLimit === null ? 'Unlimited' : `${Math.max(0, linkLimit - linksUsed)} of ${linkLimit}`}
+                {linkLimit === null || linkLimit === Infinity
+                  ? 'Unlimited'
+                  : `${Math.max(0, linkLimit - linksUsed)} of ${linkLimit}`}
               </span>
             </div>
           </div>

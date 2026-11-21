@@ -1,12 +1,9 @@
-import { apiCall, publicApiCall } from './api';
+import { apiCall, publicApiCall, clearHamroStorage } from './api';
 
 export const getMe = async () => apiCall('/auth/me', 'GET');
 
 export const logout = async () => {
-  localStorage.removeItem('hamropay_token');
-  localStorage.removeItem('hamropay_merchant');
-  localStorage.removeItem('hamro_is_logged_in');
-  localStorage.removeItem('hamropay_api_key');
+  clearHamroStorage();
 };
 
 export const sendOTP = async (email: string) =>

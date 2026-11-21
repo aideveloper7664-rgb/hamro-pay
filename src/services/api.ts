@@ -72,6 +72,7 @@ const performApiCall = async (
   try {
     res = await fetch(`${API_URL}${path}`, {
       method,
+      cache: 'no-store',
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -141,6 +142,7 @@ export const publicApiCall = async (
   try {
     res = await fetch(`${API_URL}${path}`, {
       method,
+      cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -167,6 +169,43 @@ export const publicApiCall = async (
     throw errObj;
   }
   return data.data !== undefined ? data.data : data;
+};
+
+const STALE_CACHE_KEYS = [
+  'hamro_plan',
+  'hamro_fee_percent',
+  'hamro_link_limit',
+  'hamro_fampay_accounts',
+  'hamropay_cashier_accounts',
+];
+
+export const removeStaleCacheKeys = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    for (const key of STALE_CACHE_KEYS) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore storage errors
+  }
+};
+
+export const clearHamroStorage = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('hamro_') || key.startsWith('hamropay_'))) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore storage errors
+  }
 };
 
 export { API_URL, getApiKey, getToken };

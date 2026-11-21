@@ -1,12 +1,11 @@
-import { useState, useEffect } from 'react';
-import { 
-  initialLinks, 
-  initialTransactions, 
-  initialNotifications, 
-  defaultProfile 
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  initialNotifications,
+  defaultProfile
 } from './data/initialData';
-import { PaymentLink, Transaction, Notification, MerchantProfile, PlanType, CurrentPlanState, PlanDefinition } from './types';
+import { PaymentLink, Transaction, Notification, MerchantProfile, CurrentPlanState, PlanDefinition } from './types';
 import { ApiService, getApiConfig, saveApiConfig, DEFAULT_API_BASE } from './lib/api';
+import { clearHamroStorage, removeStaleCacheKeys } from './services/api';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import AuthScreen from './components/AuthScreen';
@@ -22,24 +21,20 @@ import ProfileView from './components/ProfileView';
 import ReferralView from './components/ReferralView';
 import PromoView from './components/PromoView';
 import SupportView from './components/SupportView';
-import ConnectView from './components/ConnectView';
 import DeveloperPortalView from './components/DeveloperPortalView';
-import ApiIntegrationView from './components/ApiIntegrationView';
 import FamPayConnectView from './components/FamPayConnectView';
 import AmazonConnectView from './components/AmazonConnectView';
 import CustomizePageView from './components/CustomizePageView';
-import { CashierAccount, getActiveCashier } from './services/cashier.service';
+import { CashierAccount, getActiveCashier, getCashierList } from './services/cashier.service';
 import { getCreditBalance } from './services/credits.service';
 import { getWalletBalance } from './services/wallet.service';
 import { setMode } from './services/developer.service';
 import {
-  DEFAULT_FREE_PLAN,
   getPlans,
   getCurrentPlan,
   getRequiredPlanName,
   hasDeveloperPortalAccess,
   hasApiDocsAccess,
-  normalizePlanName,
   notifyApiOrPlanError,
   ShowToastFn,
 } from './services/plans.service';
@@ -99,159 +94,59 @@ export default function App() {
 
   const [credits, setCredits] = useState<number>(0);
   const [balance, setBalance] = useState<number>(0);
-
-  const refreshCredits = async () => {
-    try {
-      const res: any = await getCreditBalance();
-      const val = res?.data !== undefined ? res.data : res;
-      const c = typeof val?.balance === 'number' ? val.balance : (typeof val === 'number' ? val : 0);
-      setCredits(c);
-    } catch {
-      // Ignore
-    }
-  };
-
   const [activeCashier, setActiveCashier] = useState<CashierAccount | null>(null);
-
-  const refreshActiveCashier = async () => {
-    try {
-      const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-      const apiKey = merchant.api_key || localStorage.getItem('hamropay_api_key') || '';
-      const active = await getActiveCashier(apiKey || undefined);
-      setActiveCashier(active);
-    } catch {
-      // Ignore transient errors
-    }
-  };
-
   const [plansCatalog, setPlansCatalog] = useState<PlanDefinition[]>([]);
   const [isPlanLoaded, setIsPlanLoaded] = useState<boolean>(false);
-  const [currentPlanState, setCurrentPlanState] = useState<CurrentPlanState>({
-    plan: DEFAULT_FREE_PLAN,
-    expires_at: null,
-    usage: {
-      links_used: 0,
-      links_limit: DEFAULT_FREE_PLAN.links_per_month,
-      webhooks_used: 0,
-      webhooks_limit: DEFAULT_FREE_PLAN.webhooks,
-      accounts_used: 0,
-    },
-  });
+  const [currentPlanState, setCurrentPlanState] = useState<CurrentPlanState | null>(null);
+  const [isLinksLoaded, setIsLinksLoaded] = useState<boolean>(false);
+  const [isTransactionsLoaded, setIsTransactionsLoaded] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [refreshTick, setRefreshTick] = useState<number>(0);
 
-  const applyPlanState = (nextState: CurrentPlanState) => {
-    setCurrentPlanState(nextState);
-    setCurrentPlan(nextState.plan.name);
-    setFeePercent(nextState.plan.commission);
-    setLinkLimit(nextState.usage.links_limit ?? nextState.plan.links_per_month ?? null);
-  };
-
-  const refreshPlanState = async (catalogOverride?: PlanDefinition[]) => {
-    try {
-      let catalog = catalogOverride || plansCatalog;
-      if (!catalog || catalog.length === 0) {
-        catalog = await getPlans().catch(() => []);
-        if (catalog.length > 0) setPlansCatalog(catalog);
-      }
-      const [planRes, walletRes] = await Promise.allSettled([
-        getCurrentPlan(catalog),
-        getWalletBalance(),
-      ]);
-
-      const walletData = walletRes.status === 'fulfilled' ? walletRes.value : null;
-      if (walletData?.plan_name) {
-        try {
-          const m = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-          m.plan_name = walletData.plan_name;
-          if (walletData.plan_expires_at !== undefined) {
-            m.plan_expires_at = walletData.plan_expires_at;
-          }
-          localStorage.setItem('hamropay_merchant', JSON.stringify(m));
-        } catch {}
-      }
-
-      if (planRes.status === 'fulfilled' && planRes.value) {
-        const cur = planRes.value;
-        if (walletData?.plan_name) {
-          const walletPlanName = normalizePlanName(walletData.plan_name);
-          const matched = catalog.find((p) => p.name.toUpperCase() === walletPlanName);
-          cur.plan = {
-            ...cur.plan,
-            ...(matched || {}),
-            name: walletPlanName,
-          };
-        }
-        if (walletData?.plan_expires_at !== undefined && cur.expires_at == null) {
-          cur.expires_at = walletData.plan_expires_at;
-        }
-        applyPlanState(cur);
-      } else if (walletData?.plan_name) {
-        const walletPlanName = normalizePlanName(walletData.plan_name);
-        const matched = catalog.find((p) => p.name.toUpperCase() === walletPlanName);
-        applyPlanState({
-          ...currentPlanState,
-          plan: matched || { ...DEFAULT_FREE_PLAN, name: walletPlanName },
-          expires_at: walletData.plan_expires_at ?? currentPlanState.expires_at,
-        });
-      }
-    } catch {
-      // Keep existing plan state on transient failure
-    } finally {
-      setIsPlanLoaded(true);
-    }
-  };
-
-  const handlePlanUpdated = (nextState: CurrentPlanState) => {
-    applyPlanState(nextState);
-    setIsPlanLoaded(true);
-    refreshCredits();
-  };
-
-  useEffect(() => {
-    getPlans()
-      .then((list) => {
-        if (list.length > 0) setPlansCatalog(list);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    refreshCredits();
-    if (isLoggedIn) {
-      refreshActiveCashier();
-      refreshPlanState();
-    }
-  }, [isLoggedIn]);
-
-  const [currentPlan, setCurrentPlan] = useState<PlanType>(() => {
-    try {
-      const m = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
-      if (m.plan_name) return normalizePlanName(m.plan_name);
-    } catch {}
-    return normalizePlanName(localStorage.getItem('hamro_plan'));
-  });
+  const isRefreshingRef = useRef<boolean>(false);
+  const lastSyncAtRef = useRef<number>(0);
+  const plansCatalogRef = useRef<PlanDefinition[]>([]);
+  plansCatalogRef.current = plansCatalog;
 
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => {
-    const saved = localStorage.getItem('hamro_links');
-    return saved ? JSON.parse(saved) : initialLinks;
+    try {
+      const saved = localStorage.getItem('hamro_links');
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('hamro_transactions');
-    return saved ? JSON.parse(saved) : initialTransactions;
+    try {
+      const saved = localStorage.getItem('hamro_transactions');
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   });
 
   const [notifications, setNotifications] = useState<Notification[]>(() => {
-    const saved = localStorage.getItem('hamro_notifications');
-    return saved ? JSON.parse(saved) : initialNotifications;
+    try {
+      const saved = localStorage.getItem('hamro_notifications');
+      return saved ? JSON.parse(saved) : initialNotifications;
+    } catch {
+      return initialNotifications;
+    }
   });
 
   const [profile, setProfile] = useState<MerchantProfile>(() => {
-    const saved = localStorage.getItem('hamro_profile');
-    return saved ? JSON.parse(saved) : defaultProfile;
+    try {
+      const saved = localStorage.getItem('hamro_profile');
+      return saved ? JSON.parse(saved) : defaultProfile;
+    } catch {
+      return defaultProfile;
+    }
   });
 
   const [gatewayMode, setGatewayMode] = useState<'live' | 'test'>('live');
-
 
   // --- API Connection Management States ---
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(() => {
@@ -267,16 +162,61 @@ export default function App() {
     return getApiConfig().token;
   });
 
-  const [feePercent, setFeePercent] = useState<number>(() => {
-    const saved = localStorage.getItem('hamro_fee_percent');
-    return saved ? parseFloat(saved) : 5;
-  });
+  const refreshCredits = useCallback(async () => {
+    try {
+      const res: any = await getCreditBalance();
+      const val = res?.data !== undefined ? res.data : res;
+      const c = typeof val?.balance === 'number' ? val.balance : (typeof val === 'number' ? val : 0);
+      setCredits(c);
+    } catch {
+      // Keep current credits on transient failure
+    }
+  }, []);
 
-  const [linkLimit, setLinkLimit] = useState<number | null>(() => {
-    const saved = localStorage.getItem('hamro_link_limit');
-    if (saved === 'null') return null;
-    return saved ? parseInt(saved, 10) : 20;
-  });
+  const refreshActiveCashier = useCallback(async () => {
+    try {
+      const merchant = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+      const apiKey = merchant.api_key || localStorage.getItem('hamropay_api_key') || '';
+      const active = await getActiveCashier(apiKey || undefined);
+      setActiveCashier(active);
+    } catch {
+      // Keep current cashier on transient failure
+    }
+  }, []);
+
+  const applyPlanState = useCallback((nextState: CurrentPlanState) => {
+    setCurrentPlanState(nextState);
+    setIsPlanLoaded(true);
+    removeStaleCacheKeys();
+    try {
+      const m = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+      if (m && typeof m === 'object') {
+        m.plan_name = nextState.plan.name;
+        m.plan_expires_at = nextState.expires_at;
+        localStorage.setItem('hamropay_merchant', JSON.stringify(m));
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  const refreshPlanState = useCallback(async (catalogOverride?: PlanDefinition[]) => {
+    try {
+      let catalog = catalogOverride || plansCatalogRef.current;
+      if (!catalog || catalog.length === 0) {
+        catalog = await getPlans().catch(() => []);
+        if (catalog.length > 0) setPlansCatalog(catalog);
+      }
+      const cur = await getCurrentPlan(catalog);
+      applyPlanState(cur);
+      return cur;
+    } catch {
+      // Do not fabricate a plan on transient failure
+      return null;
+    } finally {
+      setIsPlanLoaded(true);
+    }
+  }, [applyPlanState]);
 
   const [isSessionChecking, setIsSessionChecking] = useState<boolean>(true);
 
@@ -317,7 +257,7 @@ export default function App() {
   const [modalApiEnabledInput, setModalApiEnabledInput] = useState(apiEnabled);
   const [modalApiTokenInput, setModalApiTokenInput] = useState(apiToken);
 
-  // --- Effect syncs to local storage ---
+  // --- Effect syncs first-paint caches to local storage (only while logged in) ---
   useEffect(() => {
     localStorage.setItem('hamro_is_logged_in', String(isLoggedIn));
   }, [isLoggedIn]);
@@ -327,32 +267,32 @@ export default function App() {
   }, [currentView]);
 
   useEffect(() => {
-    localStorage.setItem('hamro_plan', currentPlan);
-  }, [currentPlan]);
+    if (!isLoggedIn) return;
+    try {
+      localStorage.setItem('hamro_links', JSON.stringify(paymentLinks));
+    } catch {}
+  }, [paymentLinks, isLoggedIn]);
 
   useEffect(() => {
-    localStorage.setItem('hamro_fee_percent', String(feePercent));
-  }, [feePercent]);
+    if (!isLoggedIn) return;
+    try {
+      localStorage.setItem('hamro_transactions', JSON.stringify(transactions));
+    } catch {}
+  }, [transactions, isLoggedIn]);
 
   useEffect(() => {
-    localStorage.setItem('hamro_link_limit', String(linkLimit));
-  }, [linkLimit]);
+    if (!isLoggedIn) return;
+    try {
+      localStorage.setItem('hamro_notifications', JSON.stringify(notifications));
+    } catch {}
+  }, [notifications, isLoggedIn]);
 
   useEffect(() => {
-    localStorage.setItem('hamro_links', JSON.stringify(paymentLinks));
-  }, [paymentLinks]);
-
-  useEffect(() => {
-    localStorage.setItem('hamro_transactions', JSON.stringify(transactions));
-  }, [transactions]);
-
-  useEffect(() => {
-    localStorage.setItem('hamro_notifications', JSON.stringify(notifications));
-  }, [notifications]);
-
-  useEffect(() => {
-    localStorage.setItem('hamro_profile', JSON.stringify(profile));
-  }, [profile]);
+    if (!isLoggedIn) return;
+    try {
+      localStorage.setItem('hamro_profile', JSON.stringify(profile));
+    } catch {}
+  }, [profile, isLoggedIn]);
 
   // Synchronize with API client helper on settings changes
   useEffect(() => {
@@ -364,6 +304,157 @@ export default function App() {
     });
   }, [apiBaseUrl, apiEnabled, isApiSimulated, apiToken]);
 
+  // Unified workspace refresh from backend (single source of truth)
+  const refreshWorkspaceData = useCallback(async (opts?: { silent?: boolean; force?: boolean }) => {
+    if (!isLoggedIn) return;
+    const now = Date.now();
+    if (!opts?.force) {
+      if (isRefreshingRef.current) return;
+      if (now - lastSyncAtRef.current < 5000) return;
+    }
+
+    isRefreshingRef.current = true;
+    lastSyncAtRef.current = now;
+    if (!opts?.silent) setIsRefreshing(true);
+
+    try {
+      removeStaleCacheKeys();
+
+      let catalog = plansCatalogRef.current;
+      const fetchedPlans = await getPlans().catch(() => catalog);
+      if (Array.isArray(fetchedPlans) && fetchedPlans.length > 0) {
+        catalog = fetchedPlans;
+        setPlansCatalog(fetchedPlans);
+      }
+
+      const [
+        planRes,
+        walletRes,
+        creditRes,
+        linksRes,
+        txRes,
+        cashierListRes,
+        activeCashierRes,
+        profRes,
+      ] = await Promise.allSettled([
+        getCurrentPlan(catalog),
+        getWalletBalance(),
+        getCreditBalance(),
+        ApiService.getLinks(),
+        ApiService.getTransactions(),
+        getCashierList(),
+        getActiveCashier(),
+        ApiService.getUserProfile(),
+      ]);
+
+      if (planRes.status === 'fulfilled' && planRes.value) {
+        applyPlanState(planRes.value);
+      } else {
+        setIsPlanLoaded(true);
+      }
+
+      if (walletRes.status === 'fulfilled' && walletRes.value) {
+        const w = walletRes.value;
+        const nextBalance = Number(w.balance ?? (w as { available_balance?: number }).available_balance ?? 0);
+        setBalance(nextBalance);
+        if (typeof w.credits === 'number') {
+          setCredits(w.credits);
+        }
+        try {
+          const m = JSON.parse(localStorage.getItem('hamropay_merchant') || '{}');
+          if (w.plan_name) m.plan_name = w.plan_name;
+          if (w.plan_expires_at !== undefined) m.plan_expires_at = w.plan_expires_at;
+          localStorage.setItem('hamropay_merchant', JSON.stringify(m));
+        } catch {}
+      }
+
+      if (creditRes.status === 'fulfilled' && creditRes.value !== undefined) {
+        const raw: any = creditRes.value;
+        const val = raw?.data !== undefined ? raw.data : raw;
+        const c = typeof val?.balance === 'number' ? val.balance : (typeof val === 'number' ? val : 0);
+        setCredits(c);
+      }
+
+      if (linksRes.status === 'fulfilled' && linksRes.value) {
+        setPaymentLinks(linksRes.value.links);
+        setIsLinksLoaded(true);
+        setApiStatus(prev => ({ ...prev, paymentLinks: { status: 'REAL', route: 'GET /api/payment-link/list' } }));
+      } else if (linksRes.status === 'rejected') {
+        setIsLinksLoaded(true);
+        setApiStatus(prev => ({
+          ...prev,
+          paymentLinks: { status: 'SIMULATED', route: 'GET /api/payment-link/list', error: linksRes.reason?.message }
+        }));
+      }
+
+      if (txRes.status === 'fulfilled' && txRes.value) {
+        setTransactions(txRes.value.transactions);
+        setIsTransactionsLoaded(true);
+        setApiStatus(prev => ({ ...prev, transactions: { status: 'REAL', route: 'GET /wallet/transactions' } }));
+      } else if (txRes.status === 'rejected') {
+        setIsTransactionsLoaded(true);
+        setApiStatus(prev => ({
+          ...prev,
+          transactions: { status: 'SIMULATED', route: 'GET /wallet/transactions', error: txRes.reason?.message }
+        }));
+      }
+
+      if (activeCashierRes.status === 'fulfilled') {
+        setActiveCashier(activeCashierRes.value);
+      } else if (cashierListRes.status === 'fulfilled' && Array.isArray(cashierListRes.value)) {
+        const activeFromList = cashierListRes.value.find(c => Boolean(c.is_active ?? c.isActive)) || null;
+        setActiveCashier(activeFromList);
+      }
+
+      if (profRes.status === 'fulfilled' && profRes.value?.success) {
+        setProfile(prev => ({
+          ...prev,
+          name: profRes.value.profile.name || prev.name,
+          email: profRes.value.profile.email || prev.email,
+        }));
+      }
+
+      setApiStatus(prev => ({
+        ...prev,
+        auth: { status: 'REAL', route: 'GET /api/auth/me' },
+        withdrawals: { status: 'REAL', route: 'POST /api/withdrawal' },
+        plans: { status: 'REAL', route: 'GET /api/plans/current' },
+        support: { status: 'REAL', route: 'POST /api/support' }
+      }));
+      setIsApiSimulated(false);
+      setRefreshTick(t => t + 1);
+
+      if (!opts?.silent) {
+        showToast('Dashboard synced with server.', 'success');
+      }
+    } catch (err: any) {
+      if (!opts?.silent) {
+        showToast(err?.message || 'Failed to sync with server.', 'error');
+      }
+    } finally {
+      isRefreshingRef.current = false;
+      setIsRefreshing(false);
+    }
+  }, [isLoggedIn, applyPlanState]);
+
+  const handlePlanUpdated = useCallback((nextState: CurrentPlanState) => {
+    applyPlanState(nextState);
+    refreshWorkspaceData({ silent: true, force: true });
+  }, [applyPlanState, refreshWorkspaceData]);
+
+  const handleCashierChanged = useCallback(() => {
+    refreshActiveCashier();
+    refreshWorkspaceData({ silent: true, force: true });
+  }, [refreshActiveCashier, refreshWorkspaceData]);
+
+  useEffect(() => {
+    getPlans()
+      .then((list) => {
+        if (list.length > 0) setPlansCatalog(list);
+      })
+      .catch(() => {});
+  }, []);
+
   // --- Session restoration on mount ---
   useEffect(() => {
     const restoreSession = async () => {
@@ -371,6 +462,7 @@ export default function App() {
       if (config.token) {
         setIsSessionChecking(true);
         try {
+          removeStaleCacheKeys();
           const res = await ApiService.getMe();
           if (res.success && res.user) {
             setProfile({
@@ -380,10 +472,6 @@ export default function App() {
               emailReceipts: res.user.emailReceipts ?? true,
               withdrawalAlerts: res.user.withdrawalAlerts ?? true
             });
-            const rawUserPlan = (res.user as any).plan_name || res.user.plan;
-            setCurrentPlan(normalizePlanName(rawUserPlan));
-            setFeePercent(res.user.feePercent ?? 5);
-            setLinkLimit(res.user.linkLimit ?? 20);
             setApiToken(config.token);
             setIsLoggedIn(true);
             setIsApiSimulated(false);
@@ -394,7 +482,6 @@ export default function App() {
               });
               return next;
             });
-            showToast(`Session restored for ${res.user.name}`, 'success');
           } else {
             console.warn('Session check fail:', res.error);
             setApiStatus(prev => ({
@@ -426,12 +513,16 @@ export default function App() {
     const onUnauthorized = () => {
       if (handling401 || !isLoggedIn) return;
       handling401 = true;
-      localStorage.removeItem('hamropay_token');
-      localStorage.removeItem('hamropay_merchant');
-      localStorage.removeItem('hamropay_api_key');
-      localStorage.removeItem('hamro_is_logged_in');
+      clearHamroStorage();
       setApiToken('');
       setIsLoggedIn(false);
+      setIsPlanLoaded(false);
+      setCurrentPlanState(null);
+      setPaymentLinks([]);
+      setTransactions([]);
+      setCredits(0);
+      setBalance(0);
+      setActiveCashier(null);
       setAuthMode('login');
       showToast('Session expired or invalid API key. Please sign in again.', 'error');
     };
@@ -439,80 +530,37 @@ export default function App() {
     return () => window.removeEventListener('hamropay:unauthorized', onUnauthorized);
   }, [isLoggedIn]);
 
-  // Try to sync with remote API on login/mount
+  // Initial sync on login + refetch on focus, visibilitychange, and 60s interval
   useEffect(() => {
-    if (isLoggedIn) {
-      const syncInitialData = async () => {
-        showToast('Syncing workspace with Hamro Pay API...', 'info');
-        
-        // 1. Payment Links
-        try {
-          const linksRes = await ApiService.getLinks();
-          setPaymentLinks(linksRes.links);
-          setApiStatus(prev => ({ ...prev, paymentLinks: { status: 'REAL', route: 'GET /api/payment-link/list' } }));
-        } catch (err: any) {
-          console.error('[Sync Payment Links Error]:', err);
-          setApiStatus(prev => ({ ...prev, paymentLinks: { status: 'SIMULATED', route: 'GET /api/payment-link/list', error: err.message } }));
-        }
+    if (!isLoggedIn) return;
 
-        // 2. Transactions
-        try {
-          const txRes = await ApiService.getTransactions();
-          setTransactions(txRes.transactions);
-          setApiStatus(prev => ({ ...prev, transactions: { status: 'REAL', route: 'GET /wallet/transactions' } }));
-        } catch (err: any) {
-          console.error('[Sync Transactions Error]:', err);
-          setApiStatus(prev => ({ ...prev, transactions: { status: 'SIMULATED', route: 'GET /wallet/transactions', error: err.message } }));
-        }
+    refreshWorkspaceData({ silent: true, force: true });
 
-        // 3. Notifications
-        const notifRes = await ApiService.getNotifications(notifications);
-        if (!notifRes.isSimulated) {
-          setNotifications(notifRes.notifications);
-          setApiStatus(prev => ({ ...prev, notifications: { status: 'REAL', route: 'GET /api/notification' } }));
-        } else {
-          setApiStatus(prev => ({ ...prev, notifications: { status: 'SIMULATED', route: 'GET /api/notification', error: 'Service unavailable' } }));
-        }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshWorkspaceData({ silent: true });
+      }
+    };
 
-        // 4. Profile details
-        const profRes = await ApiService.getUserProfile();
-        if (profRes.success && !profRes.isSimulated) {
-          setProfile({
-            name: profRes.profile.name || 'Merchant User',
-            email: profRes.profile.email || 'merchant@hamropay.demo',
-            phone: profRes.profile.phone || '',
-            emailReceipts: profRes.profile.emailReceipts ?? true,
-            withdrawalAlerts: profRes.profile.withdrawalAlerts ?? true
-          });
-          setApiStatus(prev => ({ ...prev, profile: { status: 'REAL', route: 'GET /api/user' } }));
-        } else {
-          setApiStatus(prev => ({ ...prev, profile: { status: 'SIMULATED', route: 'GET /api/user', error: profRes.error } }));
-        }
+    const onWindowFocus = () => {
+      refreshWorkspaceData({ silent: true });
+    };
 
-        // 5. Referral System
-        const refRes = await ApiService.getReferral();
-        if (!refRes.isSimulated) {
-          setApiStatus(prev => ({ ...prev, referral: { status: 'REAL', route: 'GET /api/referral' } }));
-        } else {
-          setApiStatus(prev => ({ ...prev, referral: { status: 'SIMULATED', route: 'GET /api/referral' } }));
-        }
+    const pollInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshWorkspaceData({ silent: true });
+      }
+    }, 60000);
 
-        // Set remaining routes with status mapping
-        setApiStatus(prev => ({
-          ...prev,
-          auth: { status: 'REAL', route: 'GET /api/auth/me' },
-          withdrawals: { status: 'REAL', route: 'POST /api/withdrawal' },
-          plans: { status: 'REAL', route: 'POST /api/billing/checkout' },
-          support: { status: 'REAL', route: 'POST /api/support' }
-        }));
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', onWindowFocus);
 
-        setIsApiSimulated(false);
-        showToast('All core merchant modules successfully synchronized.', 'success');
-      };
-      
-      syncInitialData();
-    }
-  }, [isLoggedIn, apiBaseUrl]);
+    return () => {
+      window.clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', onWindowFocus);
+    };
+  }, [isLoggedIn, apiBaseUrl, refreshWorkspaceData]);
 
   // --- Global Toasts handlers ---
   const showToast: ShowToastFn = (
@@ -536,9 +584,14 @@ export default function App() {
 
   // --- Login handler ---
   const handleLoginSuccess = (token: string, user: any) => {
+    removeStaleCacheKeys();
     setApiToken(token);
     setIsApiSimulated(false);
-    
+    setIsPlanLoaded(false);
+    setCurrentPlanState(null);
+    setIsLinksLoaded(false);
+    setIsTransactionsLoaded(false);
+
     // Save configurations
     saveApiConfig({
       baseUrl: apiBaseUrl,
@@ -549,15 +602,11 @@ export default function App() {
 
     setProfile({
       name: user.name || 'Merchant User',
-      email: user.email || 'merchant@hamropay.demo',
+      email: user.email || '',
       phone: user.phone || '',
       emailReceipts: user.emailReceipts ?? true,
       withdrawalAlerts: user.withdrawalAlerts ?? true
     });
-    const rawUserPlan = user.plan_name || user.plan;
-    setCurrentPlan(normalizePlanName(rawUserPlan));
-    setFeePercent(user.feePercent ?? 5);
-    setLinkLimit(user.linkLimit ?? 20);
 
     setApiStatus(prev => {
       const next = { ...prev };
@@ -577,10 +626,7 @@ export default function App() {
     } catch (err) {
       console.error('Supabase signout error:', err);
     }
-    localStorage.removeItem('hamropay_token');
-    localStorage.removeItem('hamropay_merchant');
-    localStorage.removeItem('hamropay_api_key');
-    localStorage.removeItem('hamro_is_logged_in');
+    clearHamroStorage();
     setApiToken('');
     saveApiConfig({
       baseUrl: apiBaseUrl,
@@ -597,9 +643,15 @@ export default function App() {
     });
     setIsLoggedIn(false);
     setIsPlanLoaded(false);
+    setCurrentPlanState(null);
+    setIsLinksLoaded(false);
+    setIsTransactionsLoaded(false);
+    setPaymentLinks([]);
+    setTransactions([]);
+    setCredits(0);
+    setBalance(0);
     setAuthMode(null);
     setActiveCashier(null);
-    try { localStorage.removeItem('hamro_current_view'); } catch {}
     showToast('You have been signed out of your merchant workspace.', 'info');
   };
 
@@ -633,6 +685,7 @@ export default function App() {
         return l;
       }));
       showToast(nextState ? 'Payment link enabled' : 'Payment link disabled', 'success');
+      refreshWorkspaceData({ silent: true, force: true });
     } catch (err: any) {
       console.error('Toggle link active error:', err);
       const errMsg = err?.message || 'Failed to update link status';
@@ -658,6 +711,7 @@ export default function App() {
         return l;
       }));
       showToast(nextIsTest ? 'Test mode enabled' : 'Live mode enabled', 'success');
+      refreshWorkspaceData({ silent: true, force: true });
     } catch (err: any) {
       console.error('Toggle link test mode error:', err);
       const errMsg = err?.message || 'Failed to update test mode';
@@ -713,6 +767,7 @@ export default function App() {
 
   const handleDeleteLink = (id: string | number) => {
     setPaymentLinks(prev => prev.filter(l => l.id !== id && (l as any).link_id !== id));
+    refreshWorkspaceData({ silent: true, force: true });
   };
 
   const handleSavePaymentLinkSubmit = async () => {
@@ -856,24 +911,28 @@ export default function App() {
         return (
           <DashboardView
             profileName={profile.name}
+            balance={balance}
+            credits={credits}
             paymentLinks={paymentLinks}
             transactions={transactions}
-            currentPlan={currentPlanState.plan.name}
             currentPlanState={currentPlanState}
+            isPlanLoaded={isPlanLoaded}
             onViewChange={setCurrentView}
             onCreatePaymentLink={handleOpenCreateLink}
-            feePercent={currentPlanState.plan.commission}
-            linkLimit={currentPlanState.usage.links_limit}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             unreadNotifications={unreadNotificationsCount}
             showToast={showToast}
-            onCashierChanged={refreshActiveCashier}
+            onCashierChanged={handleCashierChanged}
+            isRefreshing={isRefreshing}
+            onRefresh={() => refreshWorkspaceData({ silent: false, force: true })}
+            refreshTrigger={refreshTick}
           />
         );
       case 'links':
         return (
           <PaymentLinksView
             paymentLinks={paymentLinks}
+            isLoading={!isLinksLoaded}
             onToggleActive={handleToggleLinkActive}
             onToggleTestMode={handleToggleLinkTestMode}
             togglingLinkId={togglingLinkId}
@@ -891,8 +950,8 @@ export default function App() {
           <WalletView
             onViewChange={setCurrentView}
             showToast={showToast}
-            onRefreshWallet={refreshCredits}
-            onRefreshPlan={() => refreshPlanState()}
+            onRefreshWallet={() => refreshWorkspaceData({ silent: true, force: true })}
+            onRefreshPlan={() => refreshWorkspaceData({ silent: true, force: true })}
           />
         );
       case 'transactions':
@@ -929,12 +988,18 @@ export default function App() {
             activeCashier={activeCashier}
             planState={currentPlanState}
             plansCatalog={plansCatalog}
+            onApiKeyChanged={() => refreshWorkspaceData({ silent: true, force: true })}
           />
         );
       case 'referral':
         return <ReferralView showToast={showToast} />;
       case 'promo':
-        return <PromoView showToast={showToast} />;
+        return (
+          <PromoView
+            showToast={showToast}
+            onRefreshWallet={() => refreshWorkspaceData({ silent: true, force: true })}
+          />
+        );
       case 'support':
         return (
           <SupportView 
@@ -945,10 +1010,11 @@ export default function App() {
         );
       
       case 'developer': {
-        if (!isPlanLoaded) {
+        if (!isPlanLoaded || !currentPlanState) {
           return (
-            <div className="min-h-[60vh] flex items-center justify-center p-6">
-              <div className="text-xs font-bold text-[#b89fa5] animate-pulse">Checking plan access...</div>
+            <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 gap-3">
+              <div className="w-48 h-4 rounded-lg bg-white/10 animate-pulse" />
+              <div className="w-64 h-3 rounded-lg bg-white/5 animate-pulse" />
             </div>
           );
         }
@@ -981,16 +1047,18 @@ export default function App() {
             activeCashier={activeCashier}
             planState={currentPlanState}
             plansCatalog={plansCatalog}
+            onDeveloperUpdated={() => refreshWorkspaceData({ silent: true, force: true })}
           />
         );
       }
 
       case 'api-docs':
       case 'api-integration': {
-        if (!isPlanLoaded) {
+        if (!isPlanLoaded || !currentPlanState) {
           return (
-            <div className="min-h-[60vh] flex items-center justify-center p-6">
-              <div className="text-xs font-bold text-[#b89fa5] animate-pulse">Checking plan access...</div>
+            <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 gap-3">
+              <div className="w-48 h-4 rounded-lg bg-white/10 animate-pulse" />
+              <div className="w-64 h-3 rounded-lg bg-white/5 animate-pulse" />
             </div>
           );
         }
@@ -1034,7 +1102,7 @@ export default function App() {
           <PaytmConnectView
             onViewChange={setCurrentView}
             showToast={showToast}
-            onCashierChanged={refreshActiveCashier}
+            onCashierChanged={handleCashierChanged}
             planState={currentPlanState}
             plansCatalog={plansCatalog}
           />
@@ -1045,7 +1113,7 @@ export default function App() {
           <AmazonConnectView
             showToast={showToast}
             onViewChange={setCurrentView}
-            onCashierChanged={refreshActiveCashier}
+            onCashierChanged={handleCashierChanged}
             planState={currentPlanState}
             plansCatalog={plansCatalog}
           />
@@ -1058,7 +1126,7 @@ export default function App() {
             onOpenSidebar={() => setIsSidebarOpen(true)}
             onViewChange={setCurrentView}
             unreadNotifications={unreadNotificationsCount}
-            onCashierChanged={refreshActiveCashier}
+            onCashierChanged={handleCashierChanged}
             planState={currentPlanState}
             plansCatalog={plansCatalog}
           />
@@ -1081,18 +1149,21 @@ export default function App() {
         return (
           <DashboardView
             profileName={profile.name}
+            balance={balance}
+            credits={credits}
             paymentLinks={paymentLinks}
             transactions={transactions}
-            currentPlan={currentPlanState.plan.name}
             currentPlanState={currentPlanState}
+            isPlanLoaded={isPlanLoaded}
             onViewChange={setCurrentView}
             onCreatePaymentLink={handleOpenCreateLink}
-            feePercent={currentPlanState.plan.commission}
-            linkLimit={currentPlanState.usage.links_limit}
             onOpenSidebar={() => setIsSidebarOpen(true)}
             unreadNotifications={unreadNotificationsCount}
             showToast={showToast}
-            onCashierChanged={refreshActiveCashier}
+            onCashierChanged={handleCashierChanged}
+            isRefreshing={isRefreshing}
+            onRefresh={() => refreshWorkspaceData({ silent: false, force: true })}
+            refreshTrigger={refreshTick}
           />
         );
     }
@@ -1101,7 +1172,7 @@ export default function App() {
   // Profile update handler to synchronize with real API
   const handleProfileSave = async (updated: MerchantProfile) => {
     setProfile(updated);
-    const { success, isSimulated } = await ApiService.updateProfile(updated);
+    const { success } = await ApiService.updateProfile(updated);
     if (success) {
       showToast('Merchant profile details updated successfully.', 'success');
     } else {
@@ -1137,10 +1208,11 @@ export default function App() {
   );
   if (isDocsView) {
     if (isLoggedIn) {
-      if (!isPlanLoaded) {
+      if (!isPlanLoaded || !currentPlanState) {
         return (
-          <div className="min-h-screen bg-[#070102] text-white flex flex-col justify-center items-center">
-            <div className="text-xs font-bold text-[#b89fa5] animate-pulse">Checking plan access...</div>
+          <div className="min-h-screen bg-[#070102] text-white flex flex-col justify-center items-center gap-3">
+            <div className="w-48 h-4 rounded-lg bg-white/10 animate-pulse" />
+            <div className="w-64 h-3 rounded-lg bg-white/5 animate-pulse" />
           </div>
         );
       }
@@ -1234,10 +1306,10 @@ export default function App() {
         currentView={currentView}
         onViewChange={setCurrentView}
         credits={credits}
+        balance={balance}
         profileName={profile.name}
         profileEmail={profile.email}
         unreadNotifications={unreadNotificationsCount}
-        currentPlan={currentPlan}
         planState={currentPlanState}
         onSignOut={handleSignOut}
         isOpen={isSidebarOpen}
@@ -1339,7 +1411,7 @@ export default function App() {
               showToast('Payment link updated successfully.', 'success');
               setActiveModal(null);
               setEditingLinkId(null);
-              refreshPlanState();
+              refreshWorkspaceData({ silent: true, force: true });
             } catch (err: any) {
               notifyApiOrPlanError(err, `Link update failed: ${err.message || 'Unknown error'}`, showToast, () => {
                 setActiveModal(null);
@@ -1371,7 +1443,7 @@ export default function App() {
               showToast('Payment link generated successfully.', 'success');
               setActiveModal(null);
               setEditingLinkId(null);
-              refreshPlanState();
+              refreshWorkspaceData({ silent: true, force: true });
             } catch (err: any) {
               console.error('Link create failed:', err);
               const errMsg = err?.message || 'Unknown error';
@@ -1417,12 +1489,12 @@ export default function App() {
             : null
         }
         isEditing={editingLinkId !== null}
-        linkLimit={currentPlanState.usage.links_limit}
-        linksUsed={currentPlanState.usage.links_used}
-        commission={currentPlanState.plan.commission}
-        maxAmount={currentPlanState.plan.max_amount}
-        linkExpiryDays={currentPlanState.plan.link_expiry_days}
-        planName={currentPlanState.plan.name}
+        linkLimit={currentPlanState ? currentPlanState.usage.links_limit : 0}
+        linksUsed={currentPlanState?.usage.links_used ?? 0}
+        commission={currentPlanState?.plan.commission ?? 0}
+        maxAmount={currentPlanState?.plan.max_amount ?? null}
+        linkExpiryDays={currentPlanState?.plan.link_expiry_days ?? null}
+        planName={currentPlanState?.plan.name || ''}
         onUpgradeClick={() => {
           setActiveModal(null);
           setCurrentView('pricing');

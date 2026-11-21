@@ -204,8 +204,8 @@ export default function PricingView({
     }
   }, [propPlanState]);
 
-  const activePlan = currentState?.plan;
-  const activePlanName = (activePlan?.name || 'FREE').toUpperCase();
+  const activePlan = currentState?.plan ?? null;
+  const activePlanName = activePlan?.name ? activePlan.name.toUpperCase() : null;
   const daysLeft = getDaysLeftFromExpiry(currentState?.expires_at || null);
   const usage = currentState?.usage;
 
@@ -323,9 +323,13 @@ export default function PricingView({
         </p>
         <div className="current-badge">
           <span style={{ color: 'var(--muted, #b89fa5)' }}>Current:</span>
-          <span className="plan-name-badge">
-            <span className="bolt">⚡</span> {activePlanName}
-          </span>
+          {!activePlanName ? (
+            <span className="inline-block w-20 h-4 rounded-md bg-white/10 animate-pulse align-middle" />
+          ) : (
+            <span className="plan-name-badge">
+              <span className="bolt">⚡</span> {activePlanName}
+            </span>
+          )}
           {activePlan && activePlan.price > 0 && daysLeft !== null && (
             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#2bf29a] pl-2 border-l border-white/15">
               <Clock className="w-3 h-3" />
@@ -336,7 +340,22 @@ export default function PricingView({
       </div>
 
       {/* Current Plan & Usage Summary */}
-      {currentState && (
+      {!currentState || !activePlan || !activePlanName ? (
+        <div className="mb-7 p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-[rgba(24,6,10,0.86)] to-[rgba(12,2,6,0.96)] border border-[rgba(255,45,85,0.2)] shadow-xl space-y-4 animate-pulse">
+          <div className="flex items-center justify-between gap-3 pb-3 border-b border-[rgba(255,45,85,0.12)]">
+            <div className="space-y-2">
+              <div className="h-4 w-48 rounded bg-white/10" />
+              <div className="h-3 w-64 rounded bg-white/5" />
+            </div>
+            <div className="h-8 w-32 rounded-xl bg-white/10" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-20 rounded-xl bg-black/40 border border-white/5" />
+            ))}
+          </div>
+        </div>
+      ) : (
         <div className="mb-7 p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-[rgba(24,6,10,0.86)] to-[rgba(12,2,6,0.96)] border border-[rgba(255,45,85,0.2)] shadow-xl space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[rgba(255,45,85,0.12)]">
             <div>
@@ -345,11 +364,11 @@ export default function PricingView({
                   Active Plan Usage — {activePlanName}
                 </h2>
                 <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                  {activePlan?.commission ?? 5}% Commission
+                  {activePlan.commission}% Commission
                 </span>
               </div>
               <p className="text-[11.5px] text-[#b89fa5] mt-0.5">
-                {activePlan && activePlan.price > 0 && currentState.expires_at
+                {activePlan.price > 0 && currentState.expires_at
                   ? `Valid until ${new Date(currentState.expires_at).toLocaleDateString('en-IN', {
                       day: 'numeric',
                       month: 'short',
@@ -423,7 +442,7 @@ export default function PricingView({
           {plans.map((plan) => {
             const meta = getPlanStyleMeta(plan.name);
             const PlanIcon = meta.Icon;
-            const isCurrent = plan.name.toUpperCase() === activePlanName;
+            const isCurrent = Boolean(activePlanName && plan.name.toUpperCase() === activePlanName);
             const isFree = Number(plan.price) === 0;
             const features = buildPlanFeatures(plan);
             const isUpgrading = checkingOutPlan === plan.name;

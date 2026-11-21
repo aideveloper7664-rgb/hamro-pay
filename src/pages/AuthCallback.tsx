@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../config/supabase';
 import { Wallet, Loader2, AlertCircle } from 'lucide-react';
-import { API_URL } from '../services/api';
+import { API_URL, removeStaleCacheKeys } from '../services/api';
 
 export const AuthCallback: React.FC = () => {
   const [status, setStatus] = useState<string>('Authenticating with Google...');
@@ -32,11 +32,13 @@ export const AuthCallback: React.FC = () => {
           // Send to our backend
           const res = await fetch(`${API_URL}/auth/google`, {
             method: 'POST',
+            cache: 'no-store',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ access_token: session.access_token })
           });
           const data = await res.json();
           if (data.success) {
+            removeStaleCacheKeys();
             localStorage.setItem('hamropay_token', data.data.token);
             localStorage.setItem('hamropay_merchant', JSON.stringify(data.data.merchant));
             localStorage.setItem('hamro_is_logged_in', 'true');
@@ -60,11 +62,13 @@ export const AuthCallback: React.FC = () => {
               
               const res = await fetch(`${API_URL}/auth/google`, {
                 method: 'POST',
+                cache: 'no-store',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ access_token: currentSession.access_token })
               });
               const data = await res.json();
               if (data.success) {
+                removeStaleCacheKeys();
                 localStorage.setItem('hamropay_token', data.data.token);
                 localStorage.setItem('hamropay_merchant', JSON.stringify(data.data.merchant));
                 localStorage.setItem('hamro_is_logged_in', 'true');

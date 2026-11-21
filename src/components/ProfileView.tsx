@@ -42,6 +42,7 @@ interface ProfileViewProps {
   activeCashier?: CashierAccount | null;
   planState?: CurrentPlanState | null;
   plansCatalog?: PlanDefinition[];
+  onApiKeyChanged?: () => void;
 }
 
 export default function ProfileView({
@@ -52,6 +53,7 @@ export default function ProfileView({
   activeCashier,
   planState,
   plansCatalog = [],
+  onApiKeyChanged,
 }: ProfileViewProps) {
   const providerMeta = activeCashier ? getCashierProviderMeta(activeCashier.type) : null;
   const connectTargetView = (() => {
@@ -69,15 +71,24 @@ export default function ProfileView({
   };
 
   const stored = getStoredMerchant();
-  const [name, setName] = useState(stored.name || profile.name || 'Merchant');
-  const [email, setEmail] = useState(stored.email || profile.email || '');
+  const [name, setName] = useState(profile.name || stored.name || 'Merchant');
+  const [email, setEmail] = useState(profile.email || stored.email || '');
   const [phone, setPhone] = useState(profile.phone || '');
   const [emailReceipts, setEmailReceipts] = useState(profile.emailReceipts ?? true);
   const [withdrawalAlerts, setWithdrawalAlerts] = useState(profile.withdrawalAlerts ?? true);
 
-  const portalAllowed = hasDeveloperPortalAccess(planState?.plan);
+  useEffect(() => {
+    if (profile.name) setName(profile.name);
+    if (profile.email) setEmail(profile.email);
+    setPhone(profile.phone || '');
+    setEmailReceipts(profile.emailReceipts ?? true);
+    setWithdrawalAlerts(profile.withdrawalAlerts ?? true);
+  }, [profile]);
+
+  const portalAllowed = Boolean(planState && hasDeveloperPortalAccess(planState.plan));
   const reqApiPlan = getRequiredPlanName(plansCatalog, (p) => hasDeveloperPortalAccess(p), 'BASIC');
-  const activePlanName = normalizePlanName(planState?.plan?.name || stored.plan_name);
+  const rawPlanName = planState?.plan?.name || stored.plan_name;
+  const activePlanName = rawPlanName ? normalizePlanName(rawPlanName) : null;
   const planExpiresAt = planState?.expires_at ?? stored.plan_expires_at ?? null;
 
   const [devApiKey, setDevApiKey] = useState<string | null>(null);
@@ -156,6 +167,7 @@ export default function ProfileView({
         setDevApiKey(String(data.api_key));
         setIsGenerated(true);
         showToast('Developer API key generated!', 'success');
+        onApiKeyChanged?.();
       } else {
         throw new Error(res?.message || 'Failed to generate API key.');
       }
@@ -180,6 +192,7 @@ export default function ProfileView({
         setDevApiKey(String(data.api_key));
         setIsGenerated(true);
         showToast('API key regenerated successfully!', 'success');
+        onApiKeyChanged?.();
       } else {
         throw new Error(res?.message || 'Failed to regenerate API key.');
       }
@@ -399,7 +412,12 @@ export default function ProfileView({
               </span>
             </div>
 
-            {!portalAllowed || apiDisabledLocked ? (
+            {!planState && !apiDisabledLocked ? (
+              <div className="py-5 flex items-center justify-center gap-2 text-xs text-[#b89fa5]">
+                <Loader2 className="w-4 h-4 animate-spin text-[#ff4d6d]" />
+                <span>Loading plan access...</span>
+              </div>
+            ) : !portalAllowed || apiDisabledLocked ? (
               <div className="p-4 rounded-xl bg-black/45 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-start gap-2.5">
                   <Lock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -611,12 +629,16 @@ export default function ProfileView({
             <div className="text-[11.5px] text-[#b89fa5] space-y-2 leading-relaxed">
               <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[11px]">
                 <span className="text-slate-400">Current Plan</span>
-                <span className="text-white font-bold">
-                  {activePlanName}
-                  {activePlanName !== 'FREE' && planExpiresAt
-                    ? ` · Exp ${new Date(planExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
-                    : ''}
-                </span>
+                {activePlanName ? (
+                  <span className="text-white font-bold">
+                    {activePlanName}
+                    {activePlanName !== 'FREE' && planExpiresAt
+                      ? ` · Exp ${new Date(planExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+                      : ''}
+                  </span>
+                ) : (
+                  <span className="h-4 w-20 rounded bg-white/10 animate-pulse inline-block" />
+                )}
               </div>
               <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[11px]">
                 <span className="text-slate-400">Account Security</span>

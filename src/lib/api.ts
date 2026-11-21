@@ -41,11 +41,9 @@ export const ApiService = {
           withdrawalAlerts: true,
           availableBalance: 0,
           pendingPayout: 0,
-          plan: merchant.plan_name || 'FREE',
-          plan_name: merchant.plan_name || 'FREE',
+          plan: merchant.plan_name || undefined,
+          plan_name: merchant.plan_name || undefined,
           plan_expires_at: merchant.plan_expires_at || null,
-          feePercent: 5,
-          linkLimit: 20,
         },
         error: undefined as string | undefined
       };
@@ -195,7 +193,8 @@ export const ApiService = {
   },
 
   async upgradePlan(plan: string) {
-    return { success: true, isSimulated: false, plan, feePercent: 1.5, linkLimit: 100 };
+    const data = await apiCall('/api/plans/upgrade', 'POST', { plan_id: plan });
+    return { success: true, isSimulated: false, data };
   },
 
   async submitSupport(topic: string, message: string, name?: string, email?: string) {

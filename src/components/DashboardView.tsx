@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { PanelLeft } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { PanelLeft, RefreshCw } from 'lucide-react';
 import { CurrentPlanState, PaymentLink, Transaction } from '../types';
 import { getPayments } from '../services/wallet.service';
 import { getCreditBalance } from '../services/credits.service';
@@ -10,6 +10,7 @@ import PaymentRoutingCard from './PaymentRoutingCard';
 interface DashboardViewProps {
   profileName: string;
   balance?: number;
+  credits?: number;
   paymentLinks: PaymentLink[];
   transactions: Transaction[];
   onViewChange: (view: string) => void;
@@ -18,34 +19,52 @@ interface DashboardViewProps {
   linkLimit?: number | null;
   currentPlan?: string;
   currentPlanState?: CurrentPlanState | null;
+  isPlanLoaded?: boolean;
   onOpenSidebar?: () => void;
   unreadNotifications?: number;
   showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onCashierChanged?: () => void;
+  isRefreshing?: boolean;
+  onRefresh?: () => void;
+  refreshTrigger?: number;
 }
 
 export default function DashboardView({
   profileName,
+  credits: propCredits,
   paymentLinks,
   transactions: propTransactions,
   onViewChange,
   onCreatePaymentLink,
-  feePercent = 5,
-  linkLimit = 20,
-  currentPlan = 'FREE',
+  feePercent,
+  linkLimit,
+  currentPlan,
   currentPlanState,
+  isPlanLoaded = false,
   onOpenSidebar,
   unreadNotifications = 0,
   showToast,
   onCashierChanged,
+  isRefreshing = false,
+  onRefresh,
+  refreshTrigger = 0,
 }: DashboardViewProps) {
   const { user } = useAuth();
-  const [creditBalance, setCreditBalance] = useState<number>(0);
+  const [creditBalance, setCreditBalance] = useState<number>(propCredits ?? 0);
   const [totalReceivedAmount, setTotalReceivedAmount] = useState<number>(0);
   const [successRateStr, setSuccessRateStr] = useState<string>('100%');
   const [avgOrderVal, setAvgOrderVal] = useState<number>(0);
   const [thisMonthVol, setThisMonthVol] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>(propTransactions);
+  const [isLoadingStats, setIsLoadingStats] = useState<boolean>(true);
+  const [pullOffset, setPullOffset] = useState<number>(0);
+  const touchStartYRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof propCredits === 'number') {
+      setCreditBalance(propCredits);
+    }
+  }, [propCredits]);
 
   // Live time-based greeting calculation
   const getTimeGreeting = (): string => {
@@ -78,7 +97,8 @@ export default function DashboardView({
   const displayName = rawName.trim() ? rawName.trim() : 'User';
 
   // Fetch live Hamro Credits and payments from backend
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setIsLoadingStats(true);
     try {
       const [creditRes, paymentsRes] = await Promise.allSettled([
         getCreditBalance(),
@@ -104,6 +124,8 @@ export default function DashboardView({
         }
         if (successful.length > 0) {
           setAvgOrderVal(sumReceived / successful.length);
+        } else {
+          setAvgOrderVal(0);
         }
 
         const mapped: Transaction[] = paymentsList.slice(0, 10).map((item, idx) => ({
@@ -118,13 +140,15 @@ export default function DashboardView({
         setTransactions(mapped);
       }
     } catch {
-      // Graceful fallback
+      // Keep existing state on transient failure
+    } finally {
+      setIsLoadingStats(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    fetchDashboardData(refreshTrigger === 0);
+  }, [fetchDashboardData, refreshTrigger]);
 
   useEffect(() => {
     if (propTransactions && propTransactions.length > 0) {
@@ -132,15 +156,53 @@ export default function DashboardView({
     }
   }, [propTransactions]);
 
-  // Plan formatting
-  const activePlanName = normalizePlanName(currentPlanState?.plan?.name || currentPlan);
-  const effectiveCommission = currentPlanState?.plan?.commission ?? feePercent ?? 5;
-  const linksUsedThisMonth = currentPlanState?.usage?.links_used ?? paymentLinks.length;
+  const handleManualRefresh = () => {
+    fetchDashboardData(true);
+    onRefresh?.();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (typeof window !== 'undefined' && window.scrollY <= 0) {
+      touchStartYRef.current = e.touches[0].clientY;
+    } else {
+      touchStartYRef.current = null;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartYRef.current === null) return;
+    const delta = e.touches[0].clientY - touchStartYRef.current;
+    if (delta > 0 && delta < 120) {
+      setPullOffset(Math.min(72, Math.round(delta * 0.55)));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (pullOffset >= 56 && !isRefreshing) {
+      handleManualRefresh();
+    }
+    touchStartYRef.current = null;
+    setPullOffset(0);
+  };
+
+  // Plan formatting derived strictly from backend state (no fabricated FREE/5%/20 defaults)
+  const hasPlanData = Boolean(currentPlanState?.plan?.name) || Boolean(currentPlan);
+  const planUnknown = !hasPlanData && !isPlanLoaded;
+  const activePlanName = currentPlanState?.plan?.name
+    ? normalizePlanName(currentPlanState.plan.name)
+    : currentPlan
+      ? normalizePlanName(currentPlan)
+      : null;
+  const effectiveCommission =
+    currentPlanState?.plan?.commission ?? feePercent ?? null;
+  const linksUsedThisMonth =
+    currentPlanState?.usage?.links_used ?? paymentLinks.length;
   const effectiveLinkLimit =
-    currentPlanState?.usage?.links_limit !== undefined
-      ? currentPlanState.usage.links_limit
-      : linkLimit;
-  const isPaidPlan = activePlanName !== 'FREE';
+    currentPlanState
+      ? (currentPlanState.usage?.links_limit ?? currentPlanState.plan.links_per_month ?? null)
+      : (linkLimit !== undefined ? linkLimit : null);
+  const isUnlimitedLinks = effectiveLinkLimit === null || effectiveLinkLimit === Infinity;
+  const isPaidPlan = Boolean(activePlanName && activePlanName !== 'FREE');
   const daysLeft = isPaidPlan
     ? getDaysLeftFromExpiry(currentPlanState?.expires_at || null)
     : null;
@@ -161,7 +223,12 @@ export default function DashboardView({
   };
 
   return (
-    <div className="hamropay-dashboard-wrap">
+    <div
+      className="hamropay-dashboard-wrap"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       <style>{`
         :root {
           --bg: #0b0204;
@@ -971,6 +1038,15 @@ export default function DashboardView({
 
       {/* ============ MAIN CONTENT ============ */}
       <main className="dash-container">
+        {pullOffset > 12 && (
+          <div
+            className="flex items-center justify-center gap-2 text-xs font-bold text-[#ff8ca3] pb-3 transition-all"
+            style={{ opacity: Math.min(1, pullOffset / 56) }}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${pullOffset >= 56 ? 'animate-spin text-[#2bf29a]' : ''}`} />
+            <span>{pullOffset >= 56 ? 'Release to refresh' : 'Pull down to refresh'}</span>
+          </div>
+        )}
 
         {/* Greeting with dynamic time-based greeting and logged-in user name */}
         <div className="greet-row">
@@ -983,6 +1059,16 @@ export default function DashboardView({
             <p>Here's your account overview.</p>
           </div>
           <div className="greet-actions">
+            <button
+              type="button"
+              className="dash-btn btn-ghost"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              title="Refresh data from server"
+            >
+              <RefreshCw className={isRefreshing ? 'animate-spin' : ''} />
+              <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
+            </button>
             <button 
               className="dash-btn btn-ghost"
               onClick={() => onViewChange('pricing')}
@@ -1013,24 +1099,35 @@ export default function DashboardView({
                 <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
               </svg>
             </div>
-            <div className="plan-info">
-              <strong>
-                <span className="zap">⚡</span>
-                {planBaseName}
-                <span className="plan-tag">{planTag}</span>
-              </strong>
-              <p>
-                {linksUsedThisMonth}/{effectiveLinkLimit === null ? 'Unlimited' : effectiveLinkLimit} links used this month
-                <span className="dot-sep"></span>
-                {effectiveCommission}% commission
-                {daysLeft !== null && (
-                  <>
-                    <span className="dot-sep"></span>
-                    {daysLeft} day{daysLeft === 1 ? '' : 's'} left
-                  </>
-                )}
-              </p>
-            </div>
+            {planUnknown || !planBaseName ? (
+              <div className="plan-info space-y-2">
+                <div className="h-4 w-36 rounded-md bg-white/10 animate-pulse" />
+                <div className="h-3 w-56 rounded-md bg-white/5 animate-pulse" />
+              </div>
+            ) : (
+              <div className="plan-info">
+                <strong>
+                  <span className="zap">⚡</span>
+                  {planBaseName}
+                  <span className="plan-tag">{planTag}</span>
+                </strong>
+                <p>
+                  {linksUsedThisMonth}/{isUnlimitedLinks ? 'Unlimited' : effectiveLinkLimit} links used this month
+                  {effectiveCommission !== null && (
+                    <>
+                      <span className="dot-sep"></span>
+                      {effectiveCommission}% commission
+                    </>
+                  )}
+                  {daysLeft !== null && (
+                    <>
+                      <span className="dot-sep"></span>
+                      {daysLeft} day{daysLeft === 1 ? '' : 's'} left
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
           <button 
             className="dash-btn btn-primary"
@@ -1048,6 +1145,7 @@ export default function DashboardView({
           onViewChange={onViewChange}
           showToast={showToast}
           onCashierChanged={() => onCashierChanged?.()}
+          refreshTrigger={refreshTrigger}
         />
 
         {/* Row 1: 4 cards */}
@@ -1068,7 +1166,11 @@ export default function DashboardView({
             </div>
             <div className="stat-label">Total Received</div>
             <div className="stat-value">
-              ₹{totalReceivedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {isLoadingStats ? (
+                <div className="h-7 w-28 rounded-lg bg-white/10 animate-pulse" />
+              ) : (
+                `₹${totalReceivedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              )}
             </div>
             <div className="stat-foot">Direct into your UPI account</div>
           </div>
@@ -1119,9 +1221,21 @@ export default function DashboardView({
               </div>
             </div>
             <div className="stat-label">Links Used</div>
-            <div className="stat-value">{linksUsedThisMonth}</div>
+            <div className="stat-value">
+              {planUnknown ? (
+                <div className="h-7 w-16 rounded-lg bg-white/10 animate-pulse" />
+              ) : (
+                linksUsedThisMonth
+              )}
+            </div>
             <div className="stat-foot">
-              {effectiveLinkLimit === null ? 'Unlimited / month' : `of ${effectiveLinkLimit}/month`}
+              {planUnknown ? (
+                <div className="h-3 w-20 rounded bg-white/5 animate-pulse" />
+              ) : isUnlimitedLinks ? (
+                'Unlimited / month'
+              ) : (
+                `of ${effectiveLinkLimit}/month`
+              )}
             </div>
           </div>
 
@@ -1139,7 +1253,13 @@ export default function DashboardView({
               </div>
             </div>
             <div className="stat-label">Success Rate</div>
-            <div className="stat-value">{successRateStr}</div>
+            <div className="stat-value">
+              {isLoadingStats ? (
+                <div className="h-7 w-16 rounded-lg bg-white/10 animate-pulse" />
+              ) : (
+                successRateStr
+              )}
+            </div>
             <div className="stat-foot">Checkout conversion</div>
           </div>
         </div>
@@ -1162,7 +1282,11 @@ export default function DashboardView({
             </div>
             <div className="stat-label">Avg. Order Value</div>
             <div className="stat-value">
-              ₹{avgOrderVal.toFixed(2)}
+              {isLoadingStats ? (
+                <div className="h-7 w-16 rounded-lg bg-white/10 animate-pulse" />
+              ) : (
+                `₹${avgOrderVal.toFixed(2)}`
+              )}
             </div>
           </div>
 
@@ -1183,7 +1307,11 @@ export default function DashboardView({
             </div>
             <div className="stat-label">This Month</div>
             <div className="stat-value">
-              ₹{thisMonthVol.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {isLoadingStats ? (
+                <div className="h-7 w-20 rounded-lg bg-white/10 animate-pulse" />
+              ) : (
+                `₹${thisMonthVol.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              )}
             </div>
           </div>
 
@@ -1201,13 +1329,29 @@ export default function DashboardView({
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                 </svg>
               </div>
-              <span className="stat-badge badge-green">
-                {daysLeft !== null ? `${daysLeft}d left` : 'Active'}
-              </span>
+              {planUnknown ? (
+                <span className="h-5 w-14 rounded-full bg-white/10 animate-pulse inline-block" />
+              ) : (
+                <span className="stat-badge badge-green">
+                  {daysLeft !== null ? `${daysLeft}d left` : 'Active'}
+                </span>
+              )}
             </div>
             <div className="stat-label">Current Plan</div>
-            <div className="stat-value">{planBaseName}</div>
-            <div className="stat-foot">{effectiveCommission}% platform fee</div>
+            <div className="stat-value">
+              {planUnknown || !planBaseName ? (
+                <div className="h-7 w-24 rounded-lg bg-white/10 animate-pulse" />
+              ) : (
+                planBaseName
+              )}
+            </div>
+            <div className="stat-foot">
+              {planUnknown || effectiveCommission === null ? (
+                <div className="h-3 w-24 rounded bg-white/5 animate-pulse" />
+              ) : (
+                `${effectiveCommission}% platform fee`
+              )}
+            </div>
           </div>
 
           <div 

@@ -12,26 +12,6 @@ export type ShowToastFn = (
   action?: ToastAction
 ) => void;
 
-export const DEFAULT_FREE_PLAN: PlanDefinition = {
-  name: 'FREE',
-  price: 0,
-  duration_days: 30,
-  links_per_month: 20,
-  link_expiry_days: 7,
-  max_amount: 5000,
-  commission: 5,
-  webhooks: 0,
-  developer_portal: false,
-  api_orders: false,
-  api_docs: false,
-  advanced_api: false,
-  accounts: { fampay: 1, paytm_mid: 1, amazon: 1 },
-  custom_pages: false,
-  qr_theme: false,
-  branding: false,
-  multiple_pages: false,
-};
-
 export const getPlans = async (): Promise<PlanDefinition[]> => {
   const res = await publicApiCall('/api/plans');
   const list = Array.isArray(res) ? res : (res?.plans || res?.data || []);
@@ -61,7 +41,11 @@ export const normalizeCurrentPlan = (
   const planNameRaw =
     typeof rawPlan === 'string'
       ? rawPlan
-      : rawPlan?.name || raw?.plan_name || raw?.plan_id || raw?.name || 'FREE';
+      : rawPlan?.name || raw?.plan_name || raw?.plan_id || raw?.name;
+
+  if (!planNameRaw) {
+    throw new Error('Plan data missing from server response');
+  }
 
   const normalizedName = normalizePlanName(planNameRaw);
   const fromCatalog = catalog.find(
@@ -71,18 +55,16 @@ export const normalizeCurrentPlan = (
   const planObj: PlanDefinition =
     typeof rawPlan === 'object' && rawPlan !== null
       ? {
-          ...DEFAULT_FREE_PLAN,
-          ...(fromCatalog || {}),
+          ...(fromCatalog || ({} as PlanDefinition)),
           ...rawPlan,
-          name: normalizePlanName(rawPlan.name || normalizedName),
+          name: String(rawPlan.name || normalizedName).toUpperCase(),
           accounts: {
-            ...DEFAULT_FREE_PLAN.accounts,
-            ...(fromCatalog?.accounts || {}),
+            ...(fromCatalog?.accounts || { fampay: null, paytm_mid: null, amazon: null }),
             ...(rawPlan.accounts || {}),
           },
         }
       : {
-          ...(fromCatalog || DEFAULT_FREE_PLAN),
+          ...(fromCatalog || ({} as PlanDefinition)),
           name: normalizedName,
         };
 
@@ -90,11 +72,11 @@ export const normalizeCurrentPlan = (
   const linksLimit =
     rawUsage.links_limit !== undefined
       ? rawUsage.links_limit
-      : planObj.links_per_month;
+      : planObj.links_per_month ?? null;
   const webhooksLimit =
     rawUsage.webhooks_limit !== undefined
       ? rawUsage.webhooks_limit
-      : planObj.webhooks;
+      : planObj.webhooks ?? null;
 
   return {
     plan: planObj,

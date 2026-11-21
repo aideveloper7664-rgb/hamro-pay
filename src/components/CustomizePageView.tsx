@@ -38,8 +38,8 @@ export default function CustomizePageView({
   plansCatalog = [],
 }: CustomizePageViewProps) {
   const activePlan = planState?.plan;
-  const canCustomizeThemes = activePlan ? Boolean(activePlan.custom_pages || activePlan.qr_theme) : true;
-  const canCustomizeBranding = activePlan ? Boolean(activePlan.branding) : true;
+  const canCustomizeThemes = Boolean(activePlan && (activePlan.custom_pages || activePlan.qr_theme));
+  const canCustomizeBranding = Boolean(activePlan && activePlan.branding);
   const reqThemePlan = getRequiredPlanName(
     plansCatalog,
     (p) => Boolean(p.custom_pages || p.qr_theme),

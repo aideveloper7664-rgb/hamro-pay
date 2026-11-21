@@ -15,6 +15,7 @@ interface DeveloperPortalViewProps {
   activeCashier?: CashierAccount | null;
   planState?: CurrentPlanState | null;
   plansCatalog?: PlanDefinition[];
+  onDeveloperUpdated?: () => void;
 }
 
 export interface DeveloperOrder {
@@ -38,10 +39,11 @@ export default function DeveloperPortalView({
   activeCashier,
   planState,
   plansCatalog = [],
+  onDeveloperUpdated,
 }: DeveloperPortalViewProps) {
   const activePlan = planState?.plan;
   const portalAllowed = hasDeveloperPortalAccess(activePlan);
-  const apiOrdersEnabled = portalAllowed && Boolean(activePlan?.api_orders ?? true);
+  const apiOrdersEnabled = portalAllowed && Boolean(activePlan?.api_orders);
   const apiDocsEnabled = hasApiDocsAccess(activePlan);
   const reqApiPlan = getRequiredPlanName(plansCatalog, (p) => hasDeveloperPortalAccess(p), 'BASIC');
   const reqDocsPlan = getRequiredPlanName(plansCatalog, (p) => hasApiDocsAccess(p), 'BASIC');
@@ -82,7 +84,7 @@ export default function DeveloperPortalView({
     activePlan?.webhooks !== undefined ? activePlan.webhooks : null
   );
   const [webhooksEnabled, setWebhooksEnabled] = useState<boolean>(
-    activePlan ? activePlan.webhooks !== 0 : true
+    Boolean(activePlan && activePlan.webhooks !== 0)
   );
   const [whInput, setWhInput] = useState('');
   const [isSavingWebhook, setIsSavingWebhook] = useState(false);
@@ -219,6 +221,7 @@ export default function DeveloperPortalView({
         setIsGenerated(true);
         setKeyCreatedAt('Just now');
         showToast('Developer API key generated!', 'success');
+        onDeveloperUpdated?.();
       } else {
         throw new Error(res?.message || 'Failed to generate API key');
       }
@@ -255,6 +258,7 @@ export default function DeveloperPortalView({
         setIsGenerated(true);
         setKeyCreatedAt('Just now');
         showToast('API Key regenerated successfully!', 'success');
+        onDeveloperUpdated?.();
       } else {
         throw new Error(res?.message || 'Failed to regenerate key');
       }
@@ -297,6 +301,7 @@ export default function DeveloperPortalView({
       const data = res?.data !== undefined ? res.data : res;
       setGatewayMode(data?.mode || mode);
       showToast(`Gateway mode switched to ${mode.toUpperCase()}`, 'success');
+      onDeveloperUpdated?.();
     } catch (e: any) {
       if (isApiDisabledError(e)) {
         setApiDisabledLocked(true);
@@ -384,6 +389,7 @@ export default function DeveloperPortalView({
       setWhInput('');
       await fetchWebhooks();
       showToast('Webhook URL saved successfully!', 'success');
+      onDeveloperUpdated?.();
     } catch (err: any) {
       if (isApiDisabledError(err)) {
         setApiDisabledLocked(true);
@@ -410,6 +416,7 @@ export default function DeveloperPortalView({
         setWebhooksList([]);
         showToast('All webhooks removed.', 'info');
       }
+      onDeveloperUpdated?.();
     } catch (err: any) {
       if (isApiDisabledError(err)) {
         setApiDisabledLocked(true);
