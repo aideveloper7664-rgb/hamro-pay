@@ -11,6 +11,8 @@ export interface PaymentLink {
   payment_url?: string;
   redirectUrl?: string;
   expiry?: string;
+  expires_at?: string | null;
+  created_at?: string;
   usageLimit?: number;
 }
 

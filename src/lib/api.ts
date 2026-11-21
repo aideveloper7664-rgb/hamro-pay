@@ -85,7 +85,12 @@ export const ApiService = {
         is_test: !!item.is_test,
         note: item.note || '',
         orders: item.total_orders || item.orders || 0,
-        date: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent',
+        date: item.created_at
+          ? new Date(item.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+          : 'Recent',
+        created_at: item.created_at || undefined,
+        expires_at: item.expires_at || null,
+        expiry: item.expires_at || item.expiry || undefined,
         payment_url: item.payment_url || '',
       }));
       return { links: mapped, isSimulated: false };
@@ -116,7 +121,12 @@ export const ApiService = {
         is_test: !!data.is_test,
         note: data.note || (link as any).note || '',
         orders: 0,
-        date: 'Created just now',
+        date: data.created_at
+          ? new Date(data.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+          : 'Created just now',
+        created_at: data.created_at || undefined,
+        expires_at: data.expires_at || null,
+        expiry: data.expires_at || data.expiry || undefined,
         payment_url: data.payment_url || '',
       };
       return { link: newLink, isSimulated: false };
