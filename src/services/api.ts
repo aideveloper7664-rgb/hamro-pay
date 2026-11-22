@@ -134,7 +134,7 @@ export const apiCallFull = async (
 ) => performApiCall(path, method, body, extraHeaders);
 
 // For public API calls (no auth)
-export const publicApiCall = async (
+const performPublicApiCall = async (
   path: string,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
   body?: object
@@ -169,8 +169,23 @@ export const publicApiCall = async (
     errObj.data = data;
     throw errObj;
   }
+  return data;
+};
+
+export const publicApiCall = async (
+  path: string,
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
+  body?: object
+) => {
+  const data = await performPublicApiCall(path, method, body);
   return data.data !== undefined ? data.data : data;
 };
+
+export const publicApiCallFull = async (
+  path: string,
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
+  body?: object
+) => performPublicApiCall(path, method, body);
 
 const STALE_CACHE_KEYS = [
   'hamro_plan',
