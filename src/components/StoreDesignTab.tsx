@@ -48,6 +48,7 @@ interface StoreDesignTabProps {
   products: StoreProduct[];
   showToast: ShowToastFn;
   onViewChange: (view: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 type AccordionId =
@@ -115,6 +116,7 @@ export default function StoreDesignTab({
   products,
   showToast,
   onViewChange,
+  onDirtyChange,
 }: StoreDesignTabProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -176,6 +178,26 @@ export default function StoreDesignTab({
 
   const dirtyCount = Object.keys(changedPatch).length;
   const isDirty = dirtyCount > 0;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [onDirtyChange]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   const updateField = <K extends keyof StoreCustomization>(
     key: K,

@@ -28,7 +28,6 @@ import {
   XCircle,
   Palette,
 } from 'lucide-react';
-import StoreDesignTab from './StoreDesignTab';
 import {
   CashierAccount,
 } from '../services/cashier.service';
@@ -126,7 +125,7 @@ export default function StorePortalView({
   planState,
   onOpenNoCashierModal,
 }: StorePortalViewProps) {
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'design' | 'settings'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'settings'>('products');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -607,6 +606,14 @@ export default function StorePortalView({
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
+              onClick={() => onViewChange('store-customize')}
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-[11px] bg-white/5 hover:bg-white/10 border border-white/12 text-white text-xs font-bold transition cursor-pointer whitespace-nowrap"
+            >
+              <Palette className="w-3.5 h-3.5 text-[#a78bfa]" />
+              <span>Customize design</span>
+            </button>
+            <button
+              type="button"
               onClick={openAddProductModal}
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-[11px] bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white text-xs font-extrabold shadow-[0_8px_24px_rgba(255,30,75,0.35)] hover:brightness-110 active:scale-95 transition cursor-pointer whitespace-nowrap"
             >
@@ -917,18 +924,6 @@ export default function StorePortalView({
             >
               <ShoppingBag className="w-3.5 h-3.5" />
               <span>Orders ({orders.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('design')}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer whitespace-nowrap shrink-0 ${
-                activeTab === 'design'
-                  ? 'bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white shadow-md shadow-rose-600/30'
-                  : 'text-[#b89fa5] hover:text-white'
-              }`}
-            >
-              <Palette className="w-3.5 h-3.5" />
-              <span>Design</span>
             </button>
             <button
               type="button"
@@ -1262,17 +1257,7 @@ export default function StorePortalView({
             </div>
           )}
 
-          {/* TAB 3: DESIGN */}
-          {activeTab === 'design' && (
-            <StoreDesignTab
-              store={store}
-              products={products}
-              showToast={showToast}
-              onViewChange={onViewChange}
-            />
-          )}
-
-          {/* TAB 4: SETTINGS */}
+          {/* TAB 3: SETTINGS */}
           {activeTab === 'settings' && (
             <form
               onSubmit={handleSaveStore}

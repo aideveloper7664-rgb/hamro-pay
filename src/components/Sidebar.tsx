@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { CurrentPlanState, PlanType } from '../types';
 import { hasDeveloperPortalAccess, hasApiDocsAccess } from '../services/plans.service';
-import { X, User, LogOut, Wallet, Lock, Store } from 'lucide-react';
+import { X, User, LogOut, Wallet, Lock, Store, Palette } from 'lucide-react';
 import { FamPayIcon, PaytmIcon, AmazonPayIcon } from './BrandIcons';
 
 interface SidebarProps {
@@ -39,13 +39,22 @@ export default function Sidebar({
 
   // Collapsible groups state - default collapsed so subsections do not open automatically
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    store: currentView === 'store' || currentView === 'store-customize',
     cashier: currentView === 'fampay' || currentView === 'paytm' || currentView === 'amazon',
     dev: currentView === 'developer' || currentView === 'api-docs' || currentView === 'api-integration',
   });
 
+  const isStoreActive = currentView === 'store' || currentView === 'store-customize';
+
   useEffect(() => {
+    if (currentView === 'store' || currentView === 'store-customize') {
+      setExpandedGroups(prev => (prev.store ? prev : { ...prev, store: true }));
+    }
     if (currentView === 'fampay' || currentView === 'paytm' || currentView === 'amazon') {
       setExpandedGroups(prev => (prev.cashier ? prev : { ...prev, cashier: true }));
+    }
+    if (currentView === 'developer' || currentView === 'api-docs' || currentView === 'api-integration') {
+      setExpandedGroups(prev => (prev.dev ? prev : { ...prev, dev: true }));
     }
   }, [currentView]);
 
@@ -203,21 +212,72 @@ export default function Sidebar({
               <span className="flex-1 min-w-0 truncate">Payment Links</span>
             </div>
 
-            {/* Online Store */}
-            <div
-              className={`hp-nav-item ${currentView === 'store' ? 'active' : ''}`}
-              onClick={() => handleNavClick('store')}
-            >
-              <span
-                className="hp-nav-icon"
-                style={{
-                  background: 'linear-gradient(135deg, #ff1e4b, #b8002c)',
-                  boxShadow: '0 4px 14px rgba(255,30,75,0.35)',
-                }}
+            {/* Store Portal Group */}
+            <div className={`hp-nav-group flex flex-col ${expandedGroups.store ? 'expanded' : ''}`}>
+              <div
+                className={`hp-nav-item ${expandedGroups.store ? 'expanded' : ''} ${isStoreActive ? 'active' : ''}`}
+                onClick={() => toggleGroup('store')}
               >
-                <Store className="w-4 h-4" />
-              </span>
-              <span className="flex-1 min-w-0 truncate">Store</span>
+                <span
+                  className="hp-nav-icon"
+                  style={{
+                    background: 'linear-gradient(135deg, #ff1e4b, #b8002c)',
+                    boxShadow: '0 4px 14px rgba(255,30,75,0.35)',
+                  }}
+                >
+                  <Store className="w-4 h-4" />
+                </span>
+                <span className="flex-1 min-w-0 truncate">Store Portal</span>
+                <span className="hp-new-badge">New</span>
+                <svg
+                  className={`w-3.5 h-3.5 hp-chevron transition-transform duration-200 ${expandedGroups.store ? 'rotate-180' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
+              <div className="hp-sub-wrap">
+                <div className="hp-sub-inner">
+                  <div className="hp-sub-list">
+                    {/* My Store */}
+                    <div
+                      className={`hp-sub-item ${currentView === 'store' ? 'active' : ''}`}
+                      onClick={() => handleNavClick('store')}
+                    >
+                      <span
+                        className="hp-sub-icon"
+                        style={{
+                          background: 'linear-gradient(135deg, #ff1e4b, #b8002c)',
+                        }}
+                      >
+                        <Store className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="flex-1 min-w-0 truncate">My Store</span>
+                    </div>
+
+                    {/* Store Customization */}
+                    <div
+                      className={`hp-sub-item ${currentView === 'store-customize' ? 'active' : ''}`}
+                      onClick={() => handleNavClick('store-customize')}
+                    >
+                      <span
+                        className="hp-sub-icon"
+                        style={{
+                          background: 'linear-gradient(135deg, #a78bfa, #7c5cf0)',
+                        }}
+                      >
+                        <Palette className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="flex-1 min-w-0 truncate">Store Customization</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Cashier Connect Group */}

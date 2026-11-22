@@ -6,7 +6,7 @@ import PaytmConnectView from './PaytmConnectView';
 import AmazonConnectView from './AmazonConnectView';
 
 interface ConnectViewProps {
-  viewId: 'fampay' | 'amazon' | 'paytm' | 'developer' | string;
+  viewId: 'fampay' | 'amazon' | 'paytm' | 'developer' | 'store' | 'store-customize' | string;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   isApiSimulated: boolean;
   apiBaseUrl: string;

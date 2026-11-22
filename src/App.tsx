@@ -26,6 +26,7 @@ import FamPayConnectView from './components/FamPayConnectView';
 import AmazonConnectView from './components/AmazonConnectView';
 import CustomizePageView from './components/CustomizePageView';
 import StorePortalView from './components/StorePortalView';
+import StoreCustomizeView from './components/StoreCustomizeView';
 import { CashierAccount, getActiveCashier, getCashierList } from './services/cashier.service';
 import { getCreditBalance } from './services/credits.service';
 import { getWalletBalance } from './services/wallet.service';
@@ -60,7 +61,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'login' | 'signup' | null>(null);
 
   const VALID_VIEWS = new Set([
-    'dashboard', 'links', 'store', 'wallet', 'transactions', 'notifications', 'pricing',
+    'dashboard', 'links', 'store', 'store-customize', 'wallet', 'transactions', 'notifications', 'pricing',
     'profile', 'referral', 'promo', 'support', 'developer', 'api-docs',
     'api-integration', 'fampay', 'amazon', 'paytm', 'customize'
   ]);
@@ -82,6 +83,24 @@ export default function App() {
     }
     return 'dashboard';
   });
+
+  const [hasUnsavedStoreDesign, setHasUnsavedStoreDesign] = useState<boolean>(false);
+  const [pendingUnsavedNavView, setPendingUnsavedNavView] = useState<string | null>(null);
+
+  const handleSafeViewChange = useCallback((nextView: string) => {
+    if (
+      currentView === 'store-customize' &&
+      hasUnsavedStoreDesign &&
+      nextView !== 'store-customize'
+    ) {
+      setPendingUnsavedNavView(nextView);
+      return;
+    }
+    if (nextView !== 'store-customize') {
+      setHasUnsavedStoreDesign(false);
+    }
+    setCurrentView(nextView);
+  }, [currentView, hasUnsavedStoreDesign]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -1150,10 +1169,19 @@ export default function App() {
         return (
           <StorePortalView
             showToast={showToast}
-            onViewChange={setCurrentView}
+            onViewChange={handleSafeViewChange}
             activeCashier={activeCashier}
             planState={currentPlanState}
             onOpenNoCashierModal={() => setIsNoCashierModalOpen(true)}
+          />
+        );
+
+      case 'store-customize':
+        return (
+          <StoreCustomizeView
+            showToast={showToast}
+            onViewChange={handleSafeViewChange}
+            onDirtyChange={setHasUnsavedStoreDesign}
           />
         );
 
@@ -1327,7 +1355,7 @@ export default function App() {
       {/* Sidebar Rail */}
       <Sidebar
         currentView={currentView}
-        onViewChange={setCurrentView}
+        onViewChange={handleSafeViewChange}
         credits={credits}
         balance={balance}
         profileName={profile.name}
@@ -1364,7 +1392,7 @@ export default function App() {
           <Header
             currentView={currentView}
             onOpenSidebar={() => setIsSidebarOpen(true)}
-            onViewChange={setCurrentView}
+            onViewChange={handleSafeViewChange}
             unreadNotifications={unreadNotificationsCount}
             credits={credits}
             apiBaseUrl={apiBaseUrl}
@@ -1531,9 +1559,48 @@ export default function App() {
         onClose={() => setIsNoCashierModalOpen(false)}
         onSelectProvider={(view) => {
           setIsNoCashierModalOpen(false);
-          setCurrentView(view);
+          handleSafeViewChange(view);
         }}
       />
+
+      {/* MODAL 1C: Unsaved Store Design Guard */}
+      {pendingUnsavedNavView && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#040102]/85 backdrop-blur-md"
+          onClick={() => setPendingUnsavedNavView(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-[#160409] border border-rose-500/35 p-6 space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-black text-white">Unsaved design changes</h3>
+            <p className="text-xs text-[#d4c2c7] leading-relaxed">
+              You have unsaved changes in Store Customization. Leave this page and discard them?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingUnsavedNavView(null)}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white cursor-pointer"
+              >
+                Stay
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = pendingUnsavedNavView;
+                  setPendingUnsavedNavView(null);
+                  setHasUnsavedStoreDesign(false);
+                  setCurrentView(target);
+                }}
+                className="px-4 py-2 rounded-xl bg-[#ff1e4b] hover:brightness-110 text-xs font-black text-white cursor-pointer"
+              >
+                Discard &amp; Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL 4: API Sync Settings */}
       <Modal
