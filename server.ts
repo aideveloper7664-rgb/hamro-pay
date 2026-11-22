@@ -728,6 +728,17 @@ app.get('/api/cashier/active', (req: any, res) => {
 });
 
 // -------------------------------------------------------------
+// IFRAME ALLOWANCE FOR /pay/* ROUTES
+// -------------------------------------------------------------
+app.use((req, res, next) => {
+  if (req.path === '/pay' || req.path.startsWith('/pay/')) {
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Content-Security-Policy', 'frame-ancestors *');
+  }
+  next();
+});
+
+// -------------------------------------------------------------
 // VITE OR STATIC FILE HOOKS
 // -------------------------------------------------------------
 async function bootstrapServer() {

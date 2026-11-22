@@ -4,6 +4,7 @@ import {
   Download, Smartphone, X, RefreshCw, ShieldCheck
 } from 'lucide-react';
 import { BrandingObject, DEFAULT_BRANDING } from '../../services/customize.service';
+import { copyTextWithFallback } from '../../utils/clipboard';
 
 const API_URL = 'https://hamropay-backends-54xp.onrender.com';
 
@@ -186,11 +187,14 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
     };
   }, [branding]);
 
-  // Embedded detection
-  const isEmbeddedQuery = typeof window !== 'undefined' && 
-    (new URLSearchParams(window.location.search).get('embedded') === '1' || 
-     new URLSearchParams(window.location.search).get('embedded') === 'true');
-  const isEmbedded = isEmbeddedQuery || Boolean(data?.embedded);
+  // Embedded detection (?embedded=1 / ?embedded=true = iframe overlay mode)
+  const isEmbeddedQuery =
+    typeof window !== 'undefined' &&
+    (() => {
+      const val = new URLSearchParams(window.location.search).get('embedded');
+      return val === '1' || val === 'true';
+    })();
+  const isPopupEmbedded = !isEmbeddedQuery && Boolean(data?.embedded);
 
   const isTerminal = ['paid', 'expired', 'cancelled', 'failed', 'disabled'].includes(status);
   const isTerminalRef = useRef(isTerminal);
@@ -320,9 +324,15 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
     };
   }, [orderId]);
 
-  // Handle auto-redirect / close when paid
+  // Handle auto-redirect / close when paid (disabled in ?embedded=1 iframe mode)
   useEffect(() => {
     if (status !== 'paid') return;
+
+    if (isEmbeddedQuery) {
+      setRedirectCountdown(null);
+      setShowCloseNotice(false);
+      return;
+    }
 
     const redirectUrl = data?.redirect_url;
     if (redirectUrl) {
@@ -332,7 +342,7 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
           if (prev === null || prev <= 1) {
             clearInterval(interval);
             try {
-              if (window.opener && isEmbedded) {
+              if (window.opener && isPopupEmbedded) {
                 window.close();
               } else {
                 window.location.href = redirectUrl;
@@ -347,10 +357,10 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
       }, 1000);
 
       return () => clearInterval(interval);
-    } else if (isEmbedded) {
+    } else if (isPopupEmbedded) {
       setShowCloseNotice(true);
     }
-  }, [status, data?.redirect_url, isEmbedded]);
+  }, [status, data?.redirect_url, isEmbeddedQuery, isPopupEmbedded]);
 
   // Test action simulator
   const handleTestAction = async (action: 'success' | 'failed' | 'cancelled') => {
@@ -411,16 +421,17 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
     }
   };
 
-  // Copy UPI ID
-  const handleCopyUpi = (upiId?: string) => {
+  // Copy UPI ID (with textarea fallback for cross-origin iframes)
+  const handleCopyUpi = async (upiId?: string) => {
     if (!upiId) return;
-    navigator.clipboard?.writeText(upiId).then(() => {
+    const copied = await copyTextWithFallback(upiId);
+    if (copied) {
       setIsCopied(true);
       showToast('UPI ID copied!', 'success');
       setTimeout(() => setIsCopied(false), 2000);
-    }).catch(() => {
+    } else {
       showToast('Could not copy UPI ID', 'error');
-    });
+    }
   };
 
   // Download QR code
@@ -476,15 +487,35 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
     return '';
   })();
 
+  const pageContainerClass = isEmbeddedQuery
+    ? 'hp-page min-h-[100dvh] w-full overflow-x-hidden flex flex-col items-center px-3.5 py-4 sm:px-5 sm:py-5'
+    : 'hp-page min-h-screen w-full flex flex-col items-center justify-center p-3.5 sm:p-6';
+
+  const cardWrapperClass = isEmbeddedQuery
+    ? 'w-full max-w-[400px] my-auto flex flex-col items-center'
+    : 'w-full max-w-[380px] flex flex-col items-center';
+
+  const pageStyle: React.CSSProperties = {
+    ...(branding.vars as React.CSSProperties),
+    ...(isEmbeddedQuery
+      ? {
+          paddingTop: 'max(14px, env(safe-area-inset-top))',
+          paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+          paddingLeft: 'max(14px, env(safe-area-inset-left))',
+          paddingRight: 'max(14px, env(safe-area-inset-right))',
+        }
+      : {}),
+  };
+
   // Render Skeleton while loading
   if (isLoading) {
     return (
       <div
-        className="hp-page min-h-screen w-full flex flex-col items-center justify-center p-3.5 sm:p-6"
+        className={pageContainerClass}
         data-mode={branding.mode || 'dark'}
-        style={branding.vars as React.CSSProperties}
+        style={pageStyle}
       >
-        <div className="hp-card w-full max-w-[380px] p-6 text-center space-y-3 animate-pulse">
+        <div className={`hp-card ${isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'} p-6 text-center space-y-3 animate-pulse`}>
           <div className="w-12 h-12 rounded-full mx-auto bg-white/10" />
           <div className="w-32 h-4 rounded-md mx-auto bg-white/10" />
           <div className="w-48 h-3 rounded-md mx-auto bg-white/10" />
@@ -500,11 +531,11 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
   if (errorKind !== null) {
     return (
       <div
-        className="hp-page min-h-screen w-full flex flex-col items-center justify-center p-3.5 sm:p-6"
+        className={pageContainerClass}
         data-mode={branding.mode || 'dark'}
-        style={branding.vars as React.CSSProperties}
+        style={pageStyle}
       >
-        <div className="hp-card w-full max-w-[380px] p-6 text-center space-y-4">
+        <div className={`hp-card ${isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'} p-6 text-center space-y-4`}>
           <div className="w-14 h-14 rounded-full mx-auto flex items-center justify-center hp-badge-bad">
             <AlertCircle className="w-7 h-7 stroke-[2.5]" />
           </div>
@@ -522,16 +553,16 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
             {errorKind === 'network' && (
               <button
                 type="button"
-                className="hp-btn px-4 py-2 text-xs font-bold"
+                className="hp-btn px-4 py-2 text-xs font-bold cursor-pointer"
                 onClick={fetchOrder}
               >
                 Retry
               </button>
             )}
-            {onBackToDashboard && (
+            {!isEmbeddedQuery && onBackToDashboard && (
               <button
                 type="button"
-                className="hp-btn-ghost px-4 py-2 text-xs font-bold"
+                className="hp-btn-ghost px-4 py-2 text-xs font-bold cursor-pointer"
                 onClick={onBackToDashboard}
               >
                 Return Home
@@ -547,11 +578,11 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
   if (status === 'paid') {
     return (
       <div
-        className="hp-page min-h-screen w-full flex flex-col items-center justify-center p-3.5 sm:p-6"
+        className={pageContainerClass}
         data-mode={branding.mode || 'dark'}
-        style={branding.vars as React.CSSProperties}
+        style={pageStyle}
       >
-        <div className="hp-card w-full max-w-[380px] p-6 text-center space-y-4">
+        <div className={`hp-card ${isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'} p-6 text-center space-y-4`}>
           <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center hp-badge-ok">
             <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
           </div>
@@ -567,34 +598,38 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
           )}
 
           <div className="hp-panel w-full p-3.5 space-y-2 text-left rounded-xl">
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center justify-between text-xs gap-2">
               <span className="hp-muted font-medium">Order ID</span>
-              <span className="font-mono font-bold">{orderId}</span>
+              <span className="font-mono font-bold truncate">{orderId}</span>
             </div>
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center justify-between text-xs gap-2">
               <span className="hp-muted font-medium">Amount</span>
               <span className="font-black font-mono" style={{ color: 'var(--hp-ok)' }}>₹{payAmountNum.toFixed(2)}</span>
             </div>
             {utr && (
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-xs gap-2">
                 <span className="hp-muted font-medium">UTR Reference</span>
-                <span className="font-mono font-bold">{utr}</span>
+                <span className="font-mono font-bold truncate">{utr}</span>
               </div>
             )}
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center justify-between text-xs gap-2">
               <span className="hp-muted font-medium">Merchant</span>
               <span className="font-bold truncate max-w-[180px]">{brandName}</span>
             </div>
           </div>
 
-          {redirectCountdown !== null && redirectCountdown > 0 && (
+          {!isEmbeddedQuery && redirectCountdown !== null && redirectCountdown > 0 && (
             <p className="text-xs hp-muted font-medium">
               Redirecting back to merchant website in {redirectCountdown}s...
             </p>
           )}
 
           <div className="space-y-2 pt-2">
-            {data?.redirect_url ? (
+            {isEmbeddedQuery ? (
+              <div className="hp-panel p-2.5 rounded-xl text-xs font-semibold hp-muted">
+                Payment confirmed. Returning to merchant page...
+              </div>
+            ) : data?.redirect_url ? (
               <button
                 type="button"
                 onClick={handleManualRedirect}
@@ -633,11 +668,11 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
 
     return (
       <div
-        className="hp-page min-h-screen w-full flex flex-col items-center justify-center p-3.5 sm:p-6"
+        className={pageContainerClass}
         data-mode={branding.mode || 'dark'}
-        style={branding.vars as React.CSSProperties}
+        style={pageStyle}
       >
-        <div className="hp-card w-full max-w-[380px] p-6 text-center space-y-4">
+        <div className={`hp-card ${isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'} p-6 text-center space-y-4`}>
           <div className={`w-14 h-14 rounded-full mx-auto flex items-center justify-center ${
             isExpiredState || isCancelledState ? 'hp-badge-warn' : 'hp-badge-bad'
           }`}>
@@ -667,17 +702,17 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
             </div>
           )}
 
-          <div className="flex gap-2 justify-center pt-2">
-            {onBackToDashboard && (
+          {!isEmbeddedQuery && onBackToDashboard && (
+            <div className="flex gap-2 justify-center pt-2">
               <button
                 type="button"
-                className="hp-btn-ghost px-4 py-2 text-xs font-bold"
+                className="hp-btn-ghost px-4 py-2 text-xs font-bold cursor-pointer"
                 onClick={onBackToDashboard}
               >
                 Return Home
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -686,11 +721,11 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
   // ACTIVE PENDING PAYMENT SCREEN
   return (
     <div
-      className="hp-page min-h-screen w-full flex flex-col items-center justify-center p-3.5 sm:p-6"
+      className={pageContainerClass}
       data-mode={branding.mode || 'dark'}
-      style={branding.vars as React.CSSProperties}
+      style={pageStyle}
     >
-      <div className="w-full max-w-[380px] flex flex-col items-center">
+      <div className={cardWrapperClass}>
         
         {/* TIMER */}
         <OrderCountdownTimer
@@ -856,13 +891,20 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
 
               {/* Pay via UPI App Intent Button */}
               {upiIntentUrl && (
-                <a
-                  href={upiIntentUrl}
-                  className="hp-btn w-full py-3 px-4 text-xs font-black tracking-wide flex items-center justify-center gap-2 cursor-pointer no-underline"
-                >
-                  <Smartphone className="w-4 h-4" />
-                  <span>Pay via UPI App</span>
-                </a>
+                <div className="w-full space-y-1.5">
+                  <a
+                    href={upiIntentUrl}
+                    className="hp-btn w-full py-3 px-4 text-xs font-black tracking-wide flex items-center justify-center gap-2 cursor-pointer no-underline"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>Pay via UPI App</span>
+                  </a>
+                  {(data?.qr_code || data?.upi_id) && (
+                    <p className="text-[10.5px] hp-muted leading-snug">
+                      If your UPI app doesn&apos;t open, scan the QR or copy the UPI ID above.
+                    </p>
+                  )}
+                </div>
               )}
 
               {/* Live auto-detection status pulse */}

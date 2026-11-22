@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DeveloperOrderPay } from './DeveloperOrderPay';
 import { BrandingObject, DEFAULT_BRANDING } from '../../services/customize.service';
+import { copyTextWithFallback } from '../../utils/clipboard';
 import { 
   Clock, Copy, Check, Smartphone, Download, AlertCircle, 
   CheckCircle2, X, RefreshCw, ShieldCheck, Lock, ExternalLink
@@ -136,6 +137,13 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [branding, setBranding] = useState<BrandingObject>(DEFAULT_BRANDING);
   const [logoError, setLogoError] = useState<boolean>(false);
 
+  const isEmbeddedQuery =
+    typeof window !== 'undefined' &&
+    (() => {
+      const val = new URLSearchParams(window.location.search).get('embedded');
+      return val === '1' || val === 'true';
+    })();
+
   const [data, setData] = useState<{
     link_id?: string;
     title?: string;
@@ -221,8 +229,10 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   showToastRef.current = showToast;
 
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [isCopied, setIsCopied] = useState<boolean>(false);
 
   const handleGoHome = () => {
+    if (isEmbeddedQuery) return;
     if (onBackToDashboard) {
       onBackToDashboard();
     } else if (typeof window !== 'undefined') {
@@ -741,13 +751,16 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     loadPaymentData();
   };
 
-  const copyToClipboard = (text: string, label: string) => {
+  const copyToClipboard = async (text: string, label: string) => {
     if (!text) return;
-    navigator.clipboard?.writeText(text).then(() => {
+    const copied = await copyTextWithFallback(text);
+    if (copied) {
+      setIsCopied(true);
       showToast(`${label} copied to clipboard!`, 'success');
-    }).catch(() => {
+      setTimeout(() => setIsCopied(false), 2000);
+    } else {
       showToast(`Could not copy ${label}`, 'error');
-    });
+    }
   };
 
   const handleDownloadQr = async () => {
@@ -905,13 +918,33 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const qrImageSrc = sessionQrCode || `${API_URL}/api/payment-link/${encodeURIComponent(id)}/qr`;
   const firstLetter = merchantName.charAt(0).toUpperCase() || 'M';
 
+  const pageContainerClass = isEmbeddedQuery
+    ? 'hp-page min-h-[100dvh] w-full overflow-x-hidden flex flex-col items-center px-3.5 py-4 sm:px-5 sm:py-5'
+    : 'hp-page min-h-screen w-full flex flex-col items-center justify-center p-3.5 sm:p-6';
+
+  const cardWrapperClass = isEmbeddedQuery
+    ? 'w-full max-w-[400px] my-auto flex flex-col items-center'
+    : 'w-full max-w-[380px] flex flex-col items-center';
+
+  const pageStyle: React.CSSProperties = {
+    ...(branding.vars as React.CSSProperties),
+    ...(isEmbeddedQuery
+      ? {
+          paddingTop: 'max(14px, env(safe-area-inset-top))',
+          paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+          paddingLeft: 'max(14px, env(safe-area-inset-left))',
+          paddingRight: 'max(14px, env(safe-area-inset-right))',
+        }
+      : {}),
+  };
+
   return (
     <div
-      className="hp-page min-h-screen w-full flex flex-col items-center justify-center p-3.5 sm:p-6"
+      className={pageContainerClass}
       data-mode={branding.mode || 'dark'}
-      style={branding.vars as React.CSSProperties}
+      style={pageStyle}
     >
-      <div className="w-full max-w-[380px] flex flex-col items-center">
+      <div className={cardWrapperClass}>
 
         {/* 1. CANCELLED SCREEN */}
         {isCancelled ? (
@@ -928,18 +961,20 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             <div className="flex gap-2 justify-center pt-2">
               <button
                 type="button"
-                className="hp-btn px-4 py-2 text-xs font-bold"
+                className="hp-btn px-4 py-2 text-xs font-bold cursor-pointer"
                 onClick={startNewCheckout}
               >
                 Pay again
               </button>
-              <button
-                type="button"
-                className="hp-btn-ghost px-4 py-2 text-xs font-bold"
-                onClick={handleGoHome}
-              >
-                Return Home
-              </button>
+              {!isEmbeddedQuery && (
+                <button
+                  type="button"
+                  className="hp-btn-ghost px-4 py-2 text-xs font-bold cursor-pointer"
+                  onClick={handleGoHome}
+                >
+                  Return Home
+                </button>
+              )}
             </div>
           </div>
         ) : failedState !== null ? (
@@ -962,18 +997,20 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             <div className="flex gap-2 justify-center pt-2">
               <button
                 type="button"
-                className="hp-btn px-4 py-2 text-xs font-bold"
+                className="hp-btn px-4 py-2 text-xs font-bold cursor-pointer"
                 onClick={startNewCheckout}
               >
                 Try again
               </button>
-              <button
-                type="button"
-                className="hp-btn-ghost px-4 py-2 text-xs font-bold"
-                onClick={handleGoHome}
-              >
-                Return Home
-              </button>
+              {!isEmbeddedQuery && (
+                <button
+                  type="button"
+                  className="hp-btn-ghost px-4 py-2 text-xs font-bold cursor-pointer"
+                  onClick={handleGoHome}
+                >
+                  Return Home
+                </button>
+              )}
             </div>
           </div>
         ) : isSuccess ? (
@@ -994,37 +1031,43 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             )}
 
             <div className="hp-panel w-full p-3.5 space-y-2 text-left rounded-xl">
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-xs gap-2">
                 <span className="hp-muted font-medium">Amount Paid</span>
                 <span className="font-black font-mono" style={{ color: 'var(--hp-ok)' }}>₹{displayAmount}</span>
               </div>
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-xs gap-2">
                 <span className="hp-muted font-medium">UTR Reference</span>
-                <span className="font-mono font-bold">{utr || orderResult?.utr || '—'}</span>
+                <span className="font-mono font-bold truncate">{utr || orderResult?.utr || '—'}</span>
               </div>
               {orderResult?.order_id && (
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between text-xs gap-2">
                   <span className="hp-muted font-medium">Order ID</span>
-                  <span className="font-mono font-bold">{orderResult.order_id}</span>
+                  <span className="font-mono font-bold truncate">{orderResult.order_id}</span>
                 </div>
               )}
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-xs gap-2">
                 <span className="hp-muted font-medium">Merchant</span>
                 <span className="font-bold truncate max-w-[180px]">{merchantName}</span>
               </div>
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-xs gap-2">
                 <span className="hp-muted font-medium">Title</span>
                 <span className="font-semibold truncate max-w-[180px]">{title}</span>
               </div>
             </div>
 
-            <button
-              type="button"
-              className="hp-btn w-full py-2.5 text-xs font-black"
-              onClick={handleGoHome}
-            >
-              Done
-            </button>
+            {isEmbeddedQuery ? (
+              <div className="hp-panel p-2.5 rounded-xl text-xs font-semibold hp-muted">
+                Payment confirmed. Returning to merchant page...
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="hp-btn w-full py-2.5 text-xs font-black cursor-pointer"
+                onClick={handleGoHome}
+              >
+                Done
+              </button>
+            )}
           </div>
         ) : isLoading ? (
           /* 4. LOADING SKELETON */
@@ -1064,19 +1107,21 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
               {(errorKind === 'network' || errorKind === '429') && (
                 <button
                   type="button"
-                  className="hp-btn px-4 py-2 text-xs font-bold"
+                  className="hp-btn px-4 py-2 text-xs font-bold cursor-pointer"
                   onClick={loadPaymentData}
                 >
                   Retry Payment
                 </button>
               )}
-              <button
-                type="button"
-                className="hp-btn-ghost px-4 py-2 text-xs font-bold"
-                onClick={handleGoHome}
-              >
-                Return Home
-              </button>
+              {!isEmbeddedQuery && (
+                <button
+                  type="button"
+                  className="hp-btn-ghost px-4 py-2 text-xs font-bold cursor-pointer"
+                  onClick={handleGoHome}
+                >
+                  Return Home
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -1187,21 +1232,26 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                         onClick={() => copyToClipboard(activeUpi, 'UPI ID')}
                         className="px-2.5 py-1 text-xs font-bold rounded-lg hp-btn-ghost flex items-center gap-1 cursor-pointer"
                       >
-                        <Copy className="w-3 h-3 hp-accent" />
-                        <span>Copy</span>
+                        {isCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 hp-accent" />}
+                        <span>{isCopied ? 'Copied' : 'Copy'}</span>
                       </button>
                     </div>
                   )}
 
                   {/* Primary UPI Intent Button */}
                   {upiPayUrl && (
-                    <a
-                      href={upiPayUrl}
-                      className="hp-btn w-full py-3 px-4 text-xs font-black tracking-wide flex items-center justify-center gap-2 cursor-pointer no-underline"
-                    >
-                      <Smartphone className="w-4 h-4" />
-                      <span>Pay via UPI App</span>
-                    </a>
+                    <div className="w-full space-y-1.5">
+                      <a
+                        href={upiPayUrl}
+                        className="hp-btn w-full py-3 px-4 text-xs font-black tracking-wide flex items-center justify-center gap-2 cursor-pointer no-underline"
+                      >
+                        <Smartphone className="w-4 h-4" />
+                        <span>Pay via UPI App</span>
+                      </a>
+                      <p className="text-[10.5px] hp-muted leading-snug">
+                        If your UPI app doesn&apos;t open, scan the QR or copy the UPI ID above.
+                      </p>
+                    </div>
                   )}
 
                   {/* Status Indicator Pulse */}
