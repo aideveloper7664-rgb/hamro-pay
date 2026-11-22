@@ -186,9 +186,71 @@ export interface PublicStoreProduct {
   stock: number | null;
 }
 
+export interface StoreCustomization {
+  preset: string;
+  mode: string;
+  primary_color: string;
+  accent_color: string;
+  background_color: string;
+  text_color: string;
+  card_color: string;
+  announcement_color: string;
+  font: string;
+  radius: string;
+  card_style: string;
+  button_style: string;
+  button_text: string;
+  layout: string;
+  columns_mobile: number | string;
+  header_style: string;
+  banner_url: string | null;
+  hero_title: string | null;
+  hero_subtitle: string | null;
+  announcement: string | null;
+  sort_default: string;
+  show_search: boolean;
+  show_sort: boolean;
+  show_stock: boolean;
+  show_description: boolean;
+  hide_branding: boolean;
+  whatsapp: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  telegram: string | null;
+  website: string | null;
+  footer_text: string | null;
+  shipping_policy: string | null;
+  return_policy: string | null;
+  meta_title: string | null;
+  meta_description: string | null;
+}
+
+export interface StoreCustomizeOptions {
+  preset?: string[];
+  mode?: string[];
+  font?: string[];
+  radius?: string[];
+  layout?: string[];
+  columns_mobile?: Array<number | string>;
+  card_style?: string[];
+  button_style?: string[];
+  header_style?: string[];
+  sort_default?: string[];
+  [key: string]: Array<string | number> | undefined;
+}
+
+export interface StoreCustomizeResponse {
+  customization: StoreCustomization;
+  defaults: StoreCustomization;
+  options: StoreCustomizeOptions;
+  text_limits: Record<string, number>;
+  can_hide_branding: boolean;
+}
+
 export interface PublicStoreData {
   store: PublicStoreInfo;
   products: PublicStoreProduct[];
+  customization?: Partial<StoreCustomization> | null;
 }
 
 export interface PublicCheckoutResponse {

@@ -26,7 +26,9 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
+  Palette,
 } from 'lucide-react';
+import StoreDesignTab from './StoreDesignTab';
 import {
   CashierAccount,
 } from '../services/cashier.service';
@@ -124,7 +126,7 @@ export default function StorePortalView({
   planState,
   onOpenNoCashierModal,
 }: StorePortalViewProps) {
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'settings'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'design' | 'settings'>('products');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -918,6 +920,18 @@ export default function StorePortalView({
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab('design')}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === 'design'
+                  ? 'bg-gradient-to-br from-[#ff1e4b] to-[#d8002f] text-white shadow-md shadow-rose-600/30'
+                  : 'text-[#b89fa5] hover:text-white'
+              }`}
+            >
+              <Palette className="w-3.5 h-3.5" />
+              <span>Design</span>
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 syncStoreForm(store);
                 setSlugError(null);
@@ -1248,7 +1262,17 @@ export default function StorePortalView({
             </div>
           )}
 
-          {/* TAB 3: SETTINGS */}
+          {/* TAB 3: DESIGN */}
+          {activeTab === 'design' && (
+            <StoreDesignTab
+              store={store}
+              products={products}
+              showToast={showToast}
+              onViewChange={onViewChange}
+            />
+          )}
+
+          {/* TAB 4: SETTINGS */}
           {activeTab === 'settings' && (
             <form
               onSubmit={handleSaveStore}

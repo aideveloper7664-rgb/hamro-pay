@@ -4,6 +4,8 @@ import {
   PublicStoreData,
   PublicStoreOrderStatus,
   StoreConfig,
+  StoreCustomization,
+  StoreCustomizeResponse,
   StoreDashboardData,
   StoreFulfilmentStatus,
   StoreOrder,
@@ -124,13 +126,37 @@ export const updateStoreOrder = async (
   return res?.order || res;
 };
 
+export const getStoreCustomization = async (): Promise<StoreCustomizeResponse> => {
+  const res: any = await apiCall('/api/store/customize');
+  return {
+    customization: res?.customization || res,
+    defaults: res?.defaults || res?.customization || {},
+    options: res?.options || {},
+    text_limits: res?.text_limits || {},
+    can_hide_branding: Boolean(res?.can_hide_branding),
+  };
+};
+
+export const updateStoreCustomization = async (
+  patch: Partial<StoreCustomization>
+): Promise<StoreCustomization> => {
+  const res: any = await apiCall('/api/store/customize', 'PUT', patch);
+  return res?.customization || res;
+};
+
+export const resetStoreCustomization = async (): Promise<StoreCustomization> => {
+  const res: any = await apiCall('/api/store/customize', 'DELETE');
+  return res?.customization || res;
+};
+
 export const getPublicStore = async (slug: string): Promise<PublicStoreData> => {
   const res: any = await publicApiCall(
     `/api/store/public/${encodeURIComponent(slug)}`
   );
   const store = res?.store || {};
   const products = Array.isArray(res?.products) ? res.products : [];
-  return { store, products };
+  const customization = res?.customization || null;
+  return { store, products, customization };
 };
 
 export const checkoutPublicStore = async (
