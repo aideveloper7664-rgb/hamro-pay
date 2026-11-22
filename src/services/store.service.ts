@@ -27,6 +27,8 @@ export interface StoreProductPayload {
   price: number;
   image_url?: string;
   stock?: number | null;
+  delivery_link?: string | null;
+  delivery_note?: string | null;
   is_active?: boolean;
 }
 

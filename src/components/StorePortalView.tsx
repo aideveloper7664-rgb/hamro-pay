@@ -27,6 +27,8 @@ import {
   CheckCircle2,
   XCircle,
   Palette,
+  Zap,
+  Link2,
 } from 'lucide-react';
 import {
   CashierAccount,
@@ -162,6 +164,9 @@ export default function StorePortalView({
   const [prodDescription, setProdDescription] = useState('');
   const [prodImageUrl, setProdImageUrl] = useState('');
   const [prodStock, setProdStock] = useState('');
+  const [prodDeliveryLink, setProdDeliveryLink] = useState('');
+  const [prodDeliveryNote, setProdDeliveryNote] = useState('');
+  const [prodFormError, setProdFormError] = useState<string | null>(null);
   const [prodActive, setProdActive] = useState(true);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [togglingProductId, setTogglingProductId] = useState<string | null>(null);
@@ -176,6 +181,7 @@ export default function StorePortalView({
   const [drawerNote, setDrawerNote] = useState('');
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [updatingOrderCode, setUpdatingOrderCode] = useState<string | null>(null);
+  const [copiedDeliveryKey, setCopiedDeliveryKey] = useState<string | null>(null);
 
   const syncStoreForm = (s: StoreConfig | null) => {
     if (!s) {
@@ -358,6 +364,9 @@ export default function StorePortalView({
     setProdDescription('');
     setProdImageUrl('');
     setProdStock('');
+    setProdDeliveryLink('');
+    setProdDeliveryNote('');
+    setProdFormError(null);
     setProdActive(true);
     setIsProductModalOpen(true);
   };
@@ -369,17 +378,35 @@ export default function StorePortalView({
     setProdDescription(p.description || '');
     setProdImageUrl(p.image_url || '');
     setProdStock(p.stock === null || p.stock === undefined ? '' : String(p.stock));
+    setProdDeliveryLink(p.delivery_link || '');
+    setProdDeliveryNote(p.delivery_note || '');
+    setProdFormError(null);
     setProdActive(p.is_active !== false);
     setIsProductModalOpen(true);
   };
 
+  const handleCopyText = (text: string, key: string, label = 'Copied to clipboard.') => {
+    if (!text) return;
+    navigator.clipboard
+      ?.writeText(text)
+      .then(() => {
+        setCopiedDeliveryKey(key);
+        showToast(label, 'success');
+        setTimeout(() => setCopiedDeliveryKey((prev) => (prev === key ? null : prev)), 1600);
+      })
+      .catch(() => showToast('Could not copy text.', 'error'));
+  };
+
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    setProdFormError(null);
     const trimmedName = prodName.trim();
     const numericPrice = Number(prodPrice);
 
     if (!trimmedName || isNaN(numericPrice) || numericPrice <= 0) {
-      showToast('Enter a valid product name and price.', 'error');
+      const msg = 'Enter a valid product name and price.';
+      setProdFormError(msg);
+      showToast(msg, 'error');
       return;
     }
 
@@ -388,11 +415,16 @@ export default function StorePortalView({
     if (stockTrimmed !== '') {
       const s = Number(stockTrimmed);
       if (!Number.isInteger(s) || s < 0) {
-        showToast('Stock must be 0 or a positive whole number (leave empty for unlimited).', 'error');
+        const msg = 'Stock must be 0 or a positive whole number (leave empty for unlimited).';
+        setProdFormError(msg);
+        showToast(msg, 'error');
         return;
       }
       parsedStock = s;
     }
+
+    const trimmedDeliveryLink = prodDeliveryLink.trim();
+    const trimmedDeliveryNote = prodDeliveryNote.trim();
 
     setIsSavingProduct(true);
     try {
@@ -402,6 +434,16 @@ export default function StorePortalView({
         description: prodDescription.trim() || undefined,
         image_url: prodImageUrl.trim() || undefined,
         stock: parsedStock,
+        delivery_link: trimmedDeliveryLink
+          ? trimmedDeliveryLink
+          : editingProduct
+            ? null
+            : undefined,
+        delivery_note: trimmedDeliveryNote
+          ? trimmedDeliveryNote
+          : editingProduct
+            ? null
+            : undefined,
         is_active: prodActive,
       };
 
@@ -416,10 +458,16 @@ export default function StorePortalView({
       setIsProductModalOpen(false);
       await loadAll(true);
     } catch (err: any) {
-      notifyApiOrPlanError(err, 'Failed to save product.', showToast, () => {
-        setIsProductModalOpen(false);
-        onViewChange('pricing');
-      });
+      if (err?.status === 400) {
+        const msg = err?.message || 'Invalid product details. Please check the delivery link.';
+        setProdFormError(msg);
+        showToast(msg, 'error');
+      } else {
+        notifyApiOrPlanError(err, 'Failed to save product.', showToast, () => {
+          setIsProductModalOpen(false);
+          onViewChange('pricing');
+        });
+      }
     } finally {
       setIsSavingProduct(false);
     }
@@ -1031,8 +1079,14 @@ export default function StorePortalView({
                               <h3 className="text-sm font-black text-white truncate">
                                 {product.name}
                               </h3>
+                              {product.delivery_link && product.delivery_link.trim() && (
+                                <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-violet-500/15 border border-violet-500/30 text-violet-200">
+                                  <Zap className="w-2.5 h-2.5 text-amber-400" />
+                                  <span>Digital / Instant delivery</span>
+                                </span>
+                              )}
                               {product.description && (
-                                <p className="text-xs text-[#b89fa5] line-clamp-2 mt-0.5">
+                                <p className="text-xs text-[#b89fa5] line-clamp-2 mt-1">
                                   {product.description}
                                 </p>
                               )}
@@ -1466,7 +1520,14 @@ export default function StorePortalView({
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="p-6 space-y-4">
+            <form onSubmit={handleSaveProduct} className="p-6 space-y-4 max-h-[82vh] overflow-y-auto">
+              {prodFormError && (
+                <div className="p-3 rounded-xl bg-rose-500/12 border border-rose-500/35 text-xs font-semibold text-rose-200 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <span>{prodFormError}</span>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#d4c2c7]">
                   Product Name <span className="text-[#ff1e4b]">*</span>
@@ -1545,6 +1606,52 @@ export default function StorePortalView({
                   placeholder="Key details about this product..."
                   className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-[rgba(255,45,85,0.2)] text-white text-xs font-medium focus:border-[#ff1e4b] focus:outline-none resize-none"
                 />
+              </div>
+
+              {/* Digital Delivery Link & Note */}
+              <div className="p-3.5 rounded-xl bg-black/40 border border-violet-500/25 space-y-3">
+                <div className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-violet-200">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Instant Digital Delivery (Optional)</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-[#d4c2c7]">
+                    Delivery link (customer gets it after payment)
+                  </label>
+                  <input
+                    type="url"
+                    value={prodDeliveryLink}
+                    onChange={(e) => {
+                      setProdDeliveryLink(e.target.value);
+                      if (prodFormError) setProdFormError(null);
+                    }}
+                    placeholder="https://drive.google.com/... or https://t.me/+..."
+                    className="w-full px-3.5 py-2 rounded-xl bg-black/60 border border-[rgba(255,45,85,0.2)] text-white text-xs font-mono focus:border-[#ff1e4b] focus:outline-none"
+                  />
+                  <p className="text-[10.5px] text-[#9b7e85] leading-relaxed">
+                    Customers only see this after a successful payment. Use a link that only you control (e.g. &apos;anyone with the link&apos; Drive file / private Telegram channel invite)
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold text-[#d4c2c7]">
+                      Delivery note (optional)
+                    </label>
+                    <span className="text-[10px] font-mono text-[#83686e]">
+                      {prodDeliveryNote.length}/500
+                    </span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    maxLength={500}
+                    value={prodDeliveryNote}
+                    onChange={(e) => setProdDeliveryNote(e.target.value)}
+                    placeholder="Password, license key, or access instructions..."
+                    className="w-full px-3.5 py-2 rounded-xl bg-black/60 border border-[rgba(255,45,85,0.2)] text-white text-xs font-medium focus:border-[#ff1e4b] focus:outline-none resize-none"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-1">
@@ -1730,6 +1837,102 @@ export default function StorePortalView({
                   </span>
                 </div>
               </div>
+
+              {/* Digital Deliveries (paid orders) */}
+              {selectedOrder.status === 'paid' &&
+                selectedOrder.deliveries &&
+                selectedOrder.deliveries.length > 0 && (
+                  <div className="space-y-3 p-4 rounded-xl bg-violet-500/[0.07] border border-violet-500/25">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-wider text-violet-200">
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Delivered Digital Links</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-[#2bf29a]">
+                        Unlocked on payment
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {selectedOrder.deliveries.map((del, idx) => {
+                        const safeLink =
+                          /^https?:\/\//i.test(del.link || '') ? del.link : '';
+                        const linkKey = `link-${idx}`;
+                        const noteKey = `note-${idx}`;
+                        return (
+                          <div
+                            key={`${del.product_id || del.name}-${idx}`}
+                            className="p-3 rounded-xl bg-black/50 border border-white/10 space-y-2"
+                          >
+                            <div className="font-bold text-white text-xs">
+                              {del.name}
+                            </div>
+
+                            {del.link && (
+                              <div className="flex items-center gap-1.5">
+                                <div className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-black/60 border border-white/10 font-mono text-[11px] text-[#e5d2d6] truncate select-all flex items-center gap-1.5">
+                                  <Link2 className="w-3 h-3 text-violet-300 shrink-0" />
+                                  <span className="truncate">{del.link}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleCopyText(del.link, linkKey, 'Delivery link copied.')
+                                  }
+                                  className="h-7 px-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-[11px] font-bold text-white flex items-center gap-1 cursor-pointer shrink-0"
+                                >
+                                  {copiedDeliveryKey === linkKey ? (
+                                    <Check className="w-3 h-3 text-[#2bf29a]" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                  <span>
+                                    {copiedDeliveryKey === linkKey ? 'Copied' : 'Copy'}
+                                  </span>
+                                </button>
+                                {safeLink && (
+                                  <a
+                                    href={safeLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="h-7 w-7 rounded-lg bg-white/10 hover:bg-white/15 text-white grid place-items-center shrink-0"
+                                    title="Open delivery link"
+                                  >
+                                    <ExternalLink className="w-3 h-3 text-[#5b8dff]" />
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
+                            {del.note && (
+                              <div className="p-2 rounded-lg bg-white/[0.04] border border-white/10 flex items-start justify-between gap-2">
+                                <p className="text-[11px] text-[#d4c2c7] whitespace-pre-line select-all flex-1">
+                                  {del.note}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleCopyText(del.note || '', noteKey, 'Delivery note copied.')
+                                  }
+                                  className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/15 text-[10px] font-bold text-white flex items-center gap-1 cursor-pointer shrink-0"
+                                >
+                                  {copiedDeliveryKey === noteKey ? (
+                                    <Check className="w-2.5 h-2.5 text-[#2bf29a]" />
+                                  ) : (
+                                    <Copy className="w-2.5 h-2.5" />
+                                  )}
+                                  <span>
+                                    {copiedDeliveryKey === noteKey ? 'Copied' : 'Copy'}
+                                  </span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
               {/* Fulfilment update for paid orders */}
               {selectedOrder.status === 'paid' && (

@@ -138,8 +138,17 @@ export interface StoreProduct {
   price: number;
   image_url?: string | null;
   stock: number | null;
+  delivery_link?: string | null;
+  delivery_note?: string | null;
   is_active: boolean;
   created_at?: string;
+}
+
+export interface StoreDeliveryItem {
+  product_id?: string;
+  name: string;
+  link: string;
+  note?: string | null;
 }
 
 export interface StoreOrderItem {
@@ -157,6 +166,7 @@ export interface StoreOrder {
   status: StoreOrderStatus;
   fulfilment: StoreFulfilmentStatus;
   items: StoreOrderItem[];
+  deliveries?: StoreDeliveryItem[] | null;
   total: number;
   customer_name: string;
   customer_phone: string;
@@ -184,6 +194,7 @@ export interface PublicStoreProduct {
   image_url?: string | null;
   in_stock: boolean;
   stock: number | null;
+  is_digital?: boolean;
 }
 
 export interface StoreCustomization {
@@ -266,6 +277,7 @@ export interface PublicStoreOrderStatus {
   status: StoreOrderStatus | string;
   fulfilment: StoreFulfilmentStatus | string;
   items: StoreOrderItem[];
+  deliveries?: StoreDeliveryItem[] | null;
   total: number;
   payment_url?: string | null;
   customer_name?: string | null;
