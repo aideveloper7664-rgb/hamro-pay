@@ -6,6 +6,27 @@ export const logout = async () => {
   clearHamroStorage();
 };
 
+export interface SendEmailOtpResponse {
+  expires_in: number;
+  resend_after: number;
+}
+
+export interface VerifyEmailOtpResponse {
+  token: string;
+  merchant: any;
+  is_new_user?: boolean;
+}
+
+export const sendEmailOtp = async (email: string): Promise<SendEmailOtpResponse> =>
+  publicApiCall('/auth/otp/send', 'POST', { email });
+
+export const verifyEmailOtp = async (payload: {
+  email: string;
+  code: string;
+  name?: string;
+}): Promise<VerifyEmailOtpResponse> =>
+  publicApiCall('/auth/otp/verify', 'POST', payload);
+
 export const sendOTP = async (email: string) =>
   publicApiCall('/auth/send-otp', 'POST', { email });
 
