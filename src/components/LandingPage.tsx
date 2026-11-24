@@ -913,7 +913,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
           <nav className="hp-nav">
             <a href="#home" className="brand">
               <img
-                src="https://i.ibb.co/bMG1zcF8/image.png"
+                src="/logo-icon.png"
                 alt="HamroPay Logo"
                 className="brand-logo"
               />
@@ -1014,7 +1014,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
                 <div className="dash-top">
                   <div className="mini-brand">
                     <img
-                      src="https://i.ibb.co/bMG1zcF8/image.png"
+                      src="/logo-icon.png"
                       alt="Logo"
                       style={{ width: '20px', height: '20px', objectFit: 'contain' }}
                     />
@@ -1208,7 +1208,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
             <div className="cta">
               <div className="cta-brand">
                 <img
-                  src="https://i.ibb.co/bMG1zcF8/image.png"
+                  src="/logo-icon.png"
                   alt="HamroPay"
                   className="brand-logo"
                   style={{ width: '50px', height: '50px' }}
@@ -1235,7 +1235,7 @@ export default function LandingPage({ onOpenAuth }: LandingPageProps) {
         <div className="container footer-grid">
           <div className="brand">
             <img
-              src="https://i.ibb.co/bMG1zcF8/image.png"
+              src="/logo-icon.png"
               alt="HamroPay"
               className="brand-logo"
               style={{ width: '34px', height: '34px' }}
