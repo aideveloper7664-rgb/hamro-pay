@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DeveloperOrderPay } from './DeveloperOrderPay';
+import {
+  PayAnimStyles, VerifyingLoader, AnimatedAmount, QrScanFrame, TrustRow,
+  InvalidUtrModal, ConfirmCancelModal, CancellingScreen, ResultPanel,
+} from '../../components/pay/PayAnimations';
 import { BrandingObject, DEFAULT_BRANDING } from '../../services/customize.service';
 import { copyTextWithFallback } from '../../utils/clipboard';
 import { 
@@ -101,7 +105,7 @@ const PaymentCountdownTimer: React.FC<PaymentCountdownTimerProps> = React.memo((
           </div>
         </div>
       </div>
-      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${isWarning ? 'hpa-hurry ' : ''}${
         isExpired ? 'hp-badge-bad' : isWarning ? 'hp-badge-warn' : 'hp-badge-ok'
       }`}>
         {isExpired ? 'Expired' : isWarning ? 'Hurry' : 'Active'}
@@ -181,8 +185,11 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   const [isCancelled, setIsCancelled] = useState<boolean>(false);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
   const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [invalidUtrMsg, setInvalidUtrMsg] = useState<string | null>(null);
+  const utrInputRef = useRef<HTMLInputElement | null>(null);
 
-  const isTerminal = isSuccess || isExpired || isCancelled || errorKind !== null || Boolean(failedState);
+  const isTerminal = isSuccess || isExpired || isCancelled || isCancelling || errorKind !== null || Boolean(failedState);
 
   const isTerminalRef = useRef(isTerminal);
   isTerminalRef.current = isTerminal;
@@ -726,6 +733,8 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
   // Cancel Payment Flow
   const handleCancelPayment = async () => {
     setShowCancelModal(false);
+    setIsCancelling(true);
+    const minDisplay = new Promise<void>((resolve) => setTimeout(resolve, 2600));
     if (sessionId) {
       try {
         await fetch(`${API_URL}/api/payment-link/session/${encodeURIComponent(sessionId)}/cancel`, {
@@ -734,7 +743,9 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       } catch {}
     }
     try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
+    await minDisplay;
     setSessionUpiUri('');
+    setIsCancelling(false);
     setIsCancelled(true);
   };
 
@@ -805,14 +816,14 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     if (!trimmedUtr) {
       triggerShake();
       setVerifyError('Please enter your UTR number');
-      showToast('Please enter UTR', 'error');
+      setInvalidUtrMsg('Please enter a valid UTR number.');
       return;
     }
 
     if (trimmedUtr.length < 6 || trimmedUtr.length > 30) {
       triggerShake();
       setVerifyError('UTR must be between 6 and 30 characters');
-      showToast('Invalid UTR length', 'error');
+      setInvalidUtrMsg('UTR must be between 6 and 30 characters.');
       return;
     }
 
@@ -877,7 +888,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         triggerShake();
         const msg = resData?.message || resData?.error || 'Verification failed. Please check your UTR.';
         setVerifyError(msg);
-        showToast(msg, 'error');
+        setInvalidUtrMsg(msg);
       }
     } catch {
       triggerShake();
@@ -887,6 +898,11 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  const handleInvalidRetry = () => {
+    setInvalidUtrMsg(null);
+    setTimeout(() => utrInputRef.current?.focus(), 50);
   };
 
   const isUtrValid = utr.trim().length >= 6 && /^[A-Za-z0-9]{6,30}$/.test(utr.trim());
@@ -946,19 +962,22 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
     >
       <div className={cardWrapperClass}>
 
-        {/* 1. CANCELLED SCREEN */}
-        {isCancelled ? (
-          <div className="hp-card w-full p-6 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full mx-auto flex items-center justify-center hp-badge-warn">
-              <X className="w-7 h-7 stroke-[2.5]" />
-            </div>
-            <div>
-              <h2 className="text-lg font-black tracking-tight">Payment Cancelled</h2>
-              <p className="text-xs hp-muted mt-1 leading-relaxed">
-                Payment cancelled. If money was debited from your account, please contact the merchant with your bank UTR.
-              </p>
-            </div>
-            <div className="flex gap-2 justify-center pt-2">
+        {/* 0. CANCELLING ANIMATION */}
+        {isCancelling ? (
+          <CancellingScreen />
+        ) : isCancelled ? (
+          /* 1. CANCELLED SCREEN */
+          <ResultPanel
+            kind="failed"
+            title="Payment Failed"
+            subtitle="Payment cancelled. If money was debited from your account, please contact the merchant with your bank UTR."
+            rows={[
+              ...(sessionId ? [{ label: 'TXN ID', value: sessionId, mono: true, accent: true }] : []),
+              { label: 'Reason', value: 'Cancelled by user' },
+              { label: 'Amount', value: `₹${displayAmount}`, mono: true },
+            ]}
+          >
+            <div className="flex gap-2 justify-center pt-4">
               <button
                 type="button"
                 className="hp-btn px-4 py-2 text-xs font-bold cursor-pointer"
@@ -976,7 +995,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                 </button>
               )}
             </div>
-          </div>
+          </ResultPanel>
         ) : failedState !== null ? (
           /* 2. PAYMENT FAILED / INCOMPLETE SCREEN */
           <div className="hp-card w-full p-6 text-center space-y-4">
@@ -1015,70 +1034,42 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
           </div>
         ) : isSuccess ? (
           /* 3. SUCCESS SCREEN */
-          <div className="hp-card w-full p-6 text-center space-y-4">
-            <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center hp-badge-ok">
-              <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
-            </div>
-            <div>
-              <h2 className="text-xl font-black tracking-tight">Payment Verified!</h2>
-              <div className="text-xs hp-muted mt-1">Your payment has been successfully confirmed.</div>
-            </div>
-
+          <ResultPanel
+            kind="success"
+            title="Payment Verified!"
+            subtitle="Your payment has been successfully confirmed."
+            rows={[
+              { label: 'Amount Paid', value: `₹${displayAmount}`, mono: true },
+              { label: 'UTR Reference', value: utr || orderResult?.utr || '—', mono: true },
+              ...(orderResult?.order_id ? [{ label: 'Order ID', value: String(orderResult.order_id), mono: true }] : []),
+              { label: 'Merchant', value: merchantName },
+              { label: 'Title', value: title },
+            ]}
+          >
             {isTestMode && (
-              <div className="p-2 rounded-xl text-xs font-bold hp-badge-warn">
+              <div className="p-2 mt-3 rounded-xl text-xs font-bold hp-badge-warn">
                 Test payment successful (no real money moved)
               </div>
             )}
-
-            <div className="hp-panel w-full p-3.5 space-y-2 text-left rounded-xl">
-              <div className="flex items-center justify-between text-xs gap-2">
-                <span className="hp-muted font-medium">Amount Paid</span>
-                <span className="font-black font-mono" style={{ color: 'var(--hp-ok)' }}>₹{displayAmount}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs gap-2">
-                <span className="hp-muted font-medium">UTR Reference</span>
-                <span className="font-mono font-bold truncate">{utr || orderResult?.utr || '—'}</span>
-              </div>
-              {orderResult?.order_id && (
-                <div className="flex items-center justify-between text-xs gap-2">
-                  <span className="hp-muted font-medium">Order ID</span>
-                  <span className="font-mono font-bold truncate">{orderResult.order_id}</span>
+            <div className="mt-4">
+              {isEmbeddedQuery ? (
+                <div className="hp-panel p-2.5 rounded-xl text-xs font-semibold hp-muted">
+                  Payment confirmed. Returning to merchant page...
                 </div>
+              ) : (
+                <button
+                  type="button"
+                  className="hp-btn hpa-press w-full py-2.5 text-xs font-black cursor-pointer"
+                  onClick={handleGoHome}
+                >
+                  Done
+                </button>
               )}
-              <div className="flex items-center justify-between text-xs gap-2">
-                <span className="hp-muted font-medium">Merchant</span>
-                <span className="font-bold truncate max-w-[180px]">{merchantName}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs gap-2">
-                <span className="hp-muted font-medium">Title</span>
-                <span className="font-semibold truncate max-w-[180px]">{title}</span>
-              </div>
             </div>
-
-            {isEmbeddedQuery ? (
-              <div className="hp-panel p-2.5 rounded-xl text-xs font-semibold hp-muted">
-                Payment confirmed. Returning to merchant page...
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="hp-btn w-full py-2.5 text-xs font-black cursor-pointer"
-                onClick={handleGoHome}
-              >
-                Done
-              </button>
-            )}
-          </div>
+          </ResultPanel>
         ) : isLoading ? (
-          /* 4. LOADING SKELETON */
-          <div className="hp-card w-full p-6 text-center space-y-3 animate-pulse">
-            <div className="w-12 h-12 rounded-full mx-auto bg-white/10" />
-            <div className="w-32 h-4 rounded-md mx-auto bg-white/10" />
-            <div className="w-48 h-3 rounded-md mx-auto bg-white/10" />
-            <div className="w-full h-14 rounded-xl bg-white/10 mt-4" />
-            <div className="w-40 h-40 rounded-xl mx-auto bg-white/10 my-4" />
-            <div className="w-full h-11 rounded-xl bg-white/10" />
-          </div>
+          /* 4. LOADING */
+          <VerifyingLoader />
         ) : errorKind !== null ? (
           /* 5. ERROR SCREEN */
           <div className="hp-card w-full p-6 text-center space-y-4">
@@ -1126,7 +1117,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
           </div>
         ) : (
           /* 6. ACTIVE CHECKOUT CARD */
-          <div className="w-full space-y-2.5">
+          <div className="w-full space-y-2.5 hpa-sheet">
             {/* TIMER */}
             <PaymentCountdownTimer
               expiresAt={expiresAt}
@@ -1147,7 +1138,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
             )}
 
             {/* MAIN CARD */}
-            <div className="hp-card w-full p-5 flex flex-col items-center text-center relative overflow-hidden">
+            <div className="hp-card hpa-stagger w-full p-5 flex flex-col items-center text-center relative overflow-hidden">
               
               {/* Header Brand */}
               <div className="flex flex-col items-center mb-3">
@@ -1182,7 +1173,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   Amount to Pay
                 </span>
                 <div className="text-2xl font-black font-mono tracking-tight">
-                  ₹{displayAmount}
+                  <AnimatedAmount value={displayAmount} />
                 </div>
                 {hasUniqueAmount && (
                   <div className="text-[11px] font-bold mt-1.5 p-1 rounded-lg hp-badge-warn">
@@ -1197,14 +1188,16 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   
                   {/* QR Box (always pure white inside for scan reliability) */}
                   <div className="flex flex-col items-center">
-                    <div className="hp-qr-box">
-                      <img
-                        src={qrImageSrc}
-                        alt="UPI Payment QR Code"
-                        className="w-40 h-40 object-contain"
-                        crossOrigin="anonymous"
-                      />
-                    </div>
+                    <QrScanFrame>
+                      <div className="hp-qr-box">
+                        <img
+                          src={qrImageSrc}
+                          alt="UPI Payment QR Code"
+                          className="w-40 h-40 object-contain"
+                          crossOrigin="anonymous"
+                        />
+                      </div>
+                    </QrScanFrame>
                     <button
                       type="button"
                       onClick={handleDownloadQr}
@@ -1288,7 +1281,8 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                     placeholder={isTestMode ? '000000000000' : 'e.g. 623851978381'}
                     maxLength={30}
                     disabled={isExpired || isVerifying}
-                    className={`hp-input w-full px-3 py-2 text-xs font-mono ${isShaking ? 'animate-bounce' : ''}`}
+                    ref={utrInputRef}
+                    className={`hp-input w-full px-3 py-2 text-xs font-mono ${isShaking ? 'hpa-shake' : ''}`}
                   />
                   {isTestMode && (
                     <button
@@ -1318,7 +1312,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   type="button"
                   onClick={handleVerify}
                   disabled={isExpired || isVerifying || !isUtrValid}
-                  className="hp-btn w-full py-2 px-3 text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                  className="hp-btn hpa-press w-full py-2 px-3 text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isVerifying ? (
                     <>
@@ -1333,6 +1327,8 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   )}
                 </button>
               </div>
+
+              <TrustRow />
 
               {/* Cancel Action */}
               {!isExpired && (
@@ -1364,38 +1360,16 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
       </div>
 
+      <PayAnimStyles />
+
       {/* CANCEL PAYMENT CONFIRMATION MODAL */}
       {showCancelModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(0,0,0,0.8)] backdrop-blur-xs"
-          onClick={() => setShowCancelModal(false)}
-        >
-          <div
-            className="hp-card w-full max-w-sm p-6 shadow-2xl space-y-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="text-base font-black">Cancel this payment?</div>
-            <p className="text-xs hp-muted leading-relaxed">
-              If you have already sent money, keep your bank UTR and contact the merchant.
-            </p>
-            <div className="flex gap-2 justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(false)}
-                className="hp-btn-ghost px-4 py-2 text-xs font-bold cursor-pointer"
-              >
-                Keep paying
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelPayment}
-                className="hp-btn px-4 py-2 text-xs font-black cursor-pointer"
-              >
-                Yes, cancel
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmCancelModal onNo={() => setShowCancelModal(false)} onYes={handleCancelPayment} />
+      )}
+
+      {/* INVALID UTR MODAL */}
+      {invalidUtrMsg !== null && (
+        <InvalidUtrModal message={invalidUtrMsg} onRetry={handleInvalidRetry} />
       )}
 
       {/* TOAST OVERLAY */}
