@@ -22,7 +22,7 @@ import { ShowToastFn } from '../services/plans.service';
 import { DEFAULT_BRANDING } from '../services/customize.service';
 import {
   PayAnimStyles, AnimatedAmount, QrScanFrame, TrustRow,
-  InvalidUtrModal, ConfirmCancelModal, CancellingScreen, ResultPanel,
+  InvalidUtrModal, ConfirmCancelModal, ProcessingSheet, ResultPanel,
 } from './pay/PayAnimations';
 
 interface BillingCheckoutModalProps {
@@ -189,8 +189,10 @@ export default function BillingCheckoutModal({
 
     setIsVerifying(true);
     setVerifyError(null);
+    const minWait = new Promise<void>((resolve) => setTimeout(resolve, 2300));
     try {
       const updated = await verifyBillingOrder(order.order_id, cleaned);
+      await minWait;
       const merged: BillingOrder = { ...order, ...updated };
       setOrder(merged);
 
@@ -203,6 +205,7 @@ export default function BillingCheckoutModal({
         showToast?.('Payment matched! Activating your order...', 'info');
       }
     } catch (err: any) {
+      await minWait;
       const msg = formatBillingError(err, 'Verification failed. Please verify the UTR and exact amount paid.');
       setVerifyError(msg);
       setInvalidUtrMsg(msg);
@@ -276,14 +279,16 @@ export default function BillingCheckoutModal({
           <ResultPanel
             bare
             kind="success"
-            title="Payment Confirmed!"
+            title="Payment Successful"
+            merchant={order.kind === 'plan' ? `${order.plan_name || 'Plan'} Plan` : 'Hamro Credits'}
+            amount={`₹${payAmountStr}`}
+            chipText="Paid"
             subtitle={
               order.kind === 'plan'
                 ? `Your ${order.plan_name || ''} plan is now active.`
                 : `${(order.credits ?? order.base_amount).toLocaleString('en-IN')} Hamro Credits added to your wallet.`
             }
             rows={[
-              { label: 'Amount Paid', value: `₹${payAmountStr}`, mono: true },
               { label: 'Order ID', value: order.order_id, mono: true },
               ...(order.utr ? [{ label: 'UTR Reference', value: order.utr, mono: true }] : []),
             ]}
@@ -301,6 +306,9 @@ export default function BillingCheckoutModal({
           <ResultPanel
             bare
             kind="failed"
+            merchant={order.kind === 'plan' ? `${order.plan_name || 'Plan'} Plan` : 'Hamro Credits'}
+            amount={`₹${payAmountStr}`}
+            chipText={order.status === 'cancelled' ? 'Cancelled by user' : order.status === 'failed' ? 'Failed' : 'Expired'}
             title={order.status === 'expired' || effectiveExpired && order.status === 'pending' ? 'Payment Window Expired' : 'Payment Failed'}
             subtitle={
               order.message ||
@@ -316,7 +324,6 @@ export default function BillingCheckoutModal({
                 label: 'Reason',
                 value: order.status === 'cancelled' ? 'Cancelled by user' : order.status === 'failed' ? 'Payment not confirmed' : 'Window expired',
               },
-              { label: 'Amount', value: `₹${payAmountStr}`, mono: true },
             ]}
           >
             <div className="mt-4">
@@ -344,8 +351,6 @@ export default function BillingCheckoutModal({
               </div>
             </div>
           </ResultPanel>
-        ) : isCancelling ? (
-          <CancellingScreen bare />
         ) : (
           /* 3. ACTIVE PENDING QR PAYMENT SCREEN */
           <div className="space-y-3.5 hpa-stagger">
@@ -491,6 +496,8 @@ export default function BillingCheckoutModal({
         )}
       </div>
 
+      {isVerifying && <ProcessingSheet mode="verify" />}
+      {isCancelling && <ProcessingSheet mode="cancel" />}
       {showConfirmCancel && (
         <ConfirmCancelModal onNo={() => setShowConfirmCancel(false)} onYes={handleCancel} />
       )}

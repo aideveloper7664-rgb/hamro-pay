@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DeveloperOrderPay } from './DeveloperOrderPay';
 import {
   PayAnimStyles, VerifyingLoader, AnimatedAmount, QrScanFrame, TrustRow,
-  InvalidUtrModal, ConfirmCancelModal, CancellingScreen, ResultPanel,
+  InvalidUtrModal, ConfirmCancelModal, ProcessingSheet, ResultPanel, RedirectCountdown,
 } from '../../components/pay/PayAnimations';
 import { BrandingObject, DEFAULT_BRANDING } from '../../services/customize.service';
 import { copyTextWithFallback } from '../../utils/clipboard';
@@ -829,6 +829,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
 
     setIsVerifying(true);
     setVerifyError(null);
+    const minWait = new Promise<void>((resolve) => setTimeout(resolve, 2300));
 
     try {
       const verifyUrl = `${API_URL}/api/payment-link/${encodeURIComponent(id)}/verify`;
@@ -848,6 +849,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       } catch {
         resData = {};
       }
+      await minWait;
 
       if (res.status === 410 || resData?.code === 'LINK_EXPIRED') {
         try { sessionStorage.removeItem(`hamropay_session_${id}`); } catch {}
@@ -891,6 +893,7 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
         setInvalidUtrMsg(msg);
       }
     } catch {
+      await minWait;
       triggerShake();
       const msg = 'Network error during verification. Please try again.';
       setVerifyError(msg);
@@ -963,14 +966,15 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       <div className={cardWrapperClass}>
 
         {/* 0. CANCELLING ANIMATION */}
-        {isCancelling ? (
-          <CancellingScreen />
-        ) : isCancelled ? (
+        {isCancelled ? (
           /* 1. CANCELLED SCREEN */
           <ResultPanel
             kind="failed"
             title="Payment Failed"
             subtitle="Payment cancelled. If money was debited from your account, please contact the merchant with your bank UTR."
+            merchant={merchantName}
+            amount={`₹${displayAmount}`}
+            chipText="Cancelled by user"
             rows={[
               ...(sessionId ? [{ label: 'TXN ID', value: sessionId, mono: true, accent: true }] : []),
               { label: 'Reason', value: 'Cancelled by user' },
@@ -1036,13 +1040,14 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
           /* 3. SUCCESS SCREEN */
           <ResultPanel
             kind="success"
-            title="Payment Verified!"
+            title="Payment Successful"
             subtitle="Your payment has been successfully confirmed."
+            merchant={merchantName}
+            amount={`₹${displayAmount}`}
+            chipText="Paid"
             rows={[
-              { label: 'Amount Paid', value: `₹${displayAmount}`, mono: true },
               { label: 'UTR Reference', value: utr || orderResult?.utr || '—', mono: true },
               ...(orderResult?.order_id ? [{ label: 'Order ID', value: String(orderResult.order_id), mono: true }] : []),
-              { label: 'Merchant', value: merchantName },
               { label: 'Title', value: title },
             ]}
           >
@@ -1057,13 +1062,16 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
                   Payment confirmed. Returning to merchant page...
                 </div>
               ) : (
-                <button
-                  type="button"
-                  className="hp-btn hpa-press w-full py-2.5 text-xs font-black cursor-pointer"
-                  onClick={handleGoHome}
-                >
-                  Done
-                </button>
+                <>
+                  <RedirectCountdown seconds={5} onDone={handleGoHome} />
+                  <button
+                    type="button"
+                    className="hp-btn hpa-press w-full py-2.5 mt-3 text-xs font-black cursor-pointer"
+                    onClick={handleGoHome}
+                  >
+                    OK
+                  </button>
+                </>
               )}
             </div>
           </ResultPanel>
@@ -1366,6 +1374,9 @@ const PayPage: React.FC<PayPageProps> = ({ onBackToDashboard }) => {
       {showCancelModal && (
         <ConfirmCancelModal onNo={() => setShowCancelModal(false)} onYes={handleCancelPayment} />
       )}
+
+      {isVerifying && <ProcessingSheet mode="verify" />}
+      {isCancelling && <ProcessingSheet mode="cancel" />}
 
       {/* INVALID UTR MODAL */}
       {invalidUtrMsg !== null && (

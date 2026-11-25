@@ -25,8 +25,11 @@ export const PayAnimStyles: React.FC = () => (
     @keyframes hpa-fill { from { width: 0%; } to { width: 100%; } }
     @keyframes hpa-draw { to { stroke-dashoffset: 0; } }
     @keyframes hpa-confetti { 0% { transform: translate(0,0) rotate(0); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; } }
+    @keyframes hpa-sheetup { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes hpa-tick { 0% { transform: scale(1); } 50% { transform: scale(1.25); } 100% { transform: scale(1); } }
     @keyframes hpa-hurry { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
 
+    .hpa-bsheet { animation: hpa-sheetup .5s cubic-bezier(.22,1,.36,1) both; }
     .hpa-sheet { animation: hpa-sheet-in .45s cubic-bezier(.22,1,.36,1) both; }
     .hpa-stagger > * { animation: hpa-fade-up .45s cubic-bezier(.22,1,.36,1) both; }
     .hpa-stagger > *:nth-child(1) { animation-delay: .04s; }
@@ -196,38 +199,107 @@ export const InvalidUtrModal: React.FC<{ message: string; onRetry: () => void }>
   </ModalShell>
 );
 
-export const ConfirmCancelModal: React.FC<{ onNo: () => void; onYes: () => void }> = ({ onNo, onYes }) => (
-  <ModalShell onClose={onNo}>
+/* ---------- Bottom-sheet shell ---------- */
+const BottomSheet: React.FC<{ onClose?: () => void; children: React.ReactNode }> = ({ onClose, children }) => (
+  <div
+    className="hpa-backdrop fixed inset-0 z-[60] flex items-end justify-center"
+    onClick={onClose}
+    role="dialog"
+    aria-modal="true"
+  >
     <div
-      className="w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center text-white"
-      style={{ background: '#f59e0b' }}
+      className="hpa-bsheet w-full max-w-[440px] rounded-t-[26px] px-5 pt-2 pb-6 text-center"
+      style={{
+        background: 'var(--hp-surface, #12090f)',
+        color: 'var(--hp-text, #fff2f4)',
+        borderTop: '1px solid color-mix(in srgb, var(--hp-accent, #ff1e4b) 35%, transparent)',
+        maxHeight: '92vh',
+        overflowY: 'auto',
+      }}
+      onClick={(e) => e.stopPropagation()}
     >
-      <AlertTriangle className="w-7 h-7 stroke-[2.5]" />
+      <div className="mx-auto mb-3 mt-1 h-1 w-10 rounded-full" style={{ background: 'rgba(255,255,255,.18)' }} />
+      {children}
     </div>
-    <div className="text-lg font-black mb-1">Cancel Payment?</div>
-    <p className="text-sm mb-5" style={{ color: '#6b7280' }}>
-      Are you sure you want to cancel this payment? If you have already sent money, keep your bank UTR.
+  </div>
+);
+
+export const ConfirmCancelModal: React.FC<{ onNo: () => void; onYes: () => void }> = ({ onNo, onYes }) => (
+  <BottomSheet onClose={onNo}>
+    <div
+      className="hpa-pop mx-auto mb-3 flex h-[60px] w-[60px] items-center justify-center rounded-full"
+      style={{ background: 'rgba(251,191,36,.14)', border: '1px solid rgba(251,191,36,.4)', color: '#fbbf24' }}
+    >
+      <AlertTriangle className="w-7 h-7 stroke-[2.4]" />
+    </div>
+    <div className="text-lg font-black">Cancel this payment?</div>
+    <p className="text-xs hp-muted mt-1 leading-relaxed">
+      If you have already sent money, keep your bank UTR and contact the merchant.
     </p>
-    <div className="flex gap-2">
-      <button
-        type="button"
-        onClick={onNo}
-        className="hpa-press flex-1 py-2.5 rounded-lg text-sm font-bold cursor-pointer"
-        style={{ background: '#f3f4f6', color: '#374151' }}
-      >
-        No
+    <div className="flex gap-2.5 mt-5">
+      <button type="button" onClick={onNo} className="hp-btn-ghost hpa-press flex-1 py-3 text-sm font-extrabold cursor-pointer">
+        Keep Paying
       </button>
-      <button
-        type="button"
-        onClick={onYes}
-        className="hpa-press flex-1 py-2.5 rounded-lg text-sm font-bold text-white cursor-pointer"
-        style={{ background: '#3b82f6' }}
-      >
+      <button type="button" onClick={onYes} className="hp-btn hpa-press flex-1 py-3 text-sm font-extrabold cursor-pointer">
         Yes, Cancel
       </button>
     </div>
-  </ModalShell>
+  </BottomSheet>
 );
+
+/* ---------- Processing sheet (verify / cancel) ---------- */
+export const ProcessingSheet: React.FC<{ mode: 'verify' | 'cancel' }> = ({ mode }) => {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const t1 = setTimeout(() => setStep(1), 600);
+    const t2 = setTimeout(() => setStep(2), 1400);
+    const t3 = setTimeout(() => setStep(3), 2100);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+  const steps = [
+    { label: 'Encrypting', Icon: Lock },
+    { label: 'Verifying', Icon: ShieldCheck },
+    { label: 'Confirming', Icon: CheckCircle2 },
+  ];
+  return (
+    <BottomSheet>
+      <div className="relative mx-auto mb-3 mt-1 h-[88px] w-[88px]">
+        <div className="hpa-ring outer" />
+        <div className="hpa-ring inner" />
+        <div className="hpa-ring core" />
+      </div>
+      <div className="text-lg font-black">{mode === 'cancel' ? 'Cancelling Payment' : 'Securing Payment'}</div>
+      <p className="text-xs hp-muted mt-1">
+        {mode === 'cancel' ? 'Processing your cancellation request' : 'Please wait while we verify your transaction'}
+      </p>
+      <div className="mt-6 grid grid-cols-3 gap-2.5">
+        {steps.map(({ label, Icon }, i) => {
+          const active = step > i;
+          return (
+            <div key={label} className="flex flex-col items-center gap-1.5">
+              <Icon
+                className="w-[18px] h-[18px] transition-all duration-500"
+                style={{
+                  color: active ? 'var(--hp-accent, #ff1e4b)' : 'var(--hp-muted, #6f5c62)',
+                  filter: active ? 'drop-shadow(0 0 7px var(--hp-accent, #ff1e4b))' : 'none',
+                  opacity: active ? 1 : 0.55,
+                  animation: active ? 'hpa-tick .4s' : 'none',
+                }}
+              />
+              <span className="text-[10.5px] font-bold hp-muted" style={{ opacity: active ? 1 : 0.55 }}>{label}</span>
+              <div className="h-[3px] w-full overflow-hidden rounded-full" style={{ background: 'color-mix(in srgb, var(--hp-accent, #ff1e4b) 15%, transparent)' }}>
+                <div className="h-full rounded-full" style={{ background: 'var(--hp-accent, #ff1e4b)', width: active ? '100%' : '0%', transition: 'width .8s ease' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-5 text-[11.5px] font-bold hp-muted">
+        Finalizing payment <span className="hpa-dots"><span /><span /><span /></span>
+      </div>
+    </BottomSheet>
+  );
+};
 
 /* ---------- Cancelling screen ---------- */
 export const CancellingScreen: React.FC<{ bare?: boolean }> = ({ bare }) => {
@@ -291,7 +363,7 @@ export const CancellingScreen: React.FC<{ bare?: boolean }> = ({ bare }) => {
   );
 };
 
-/* ---------- Result (failed / success) panel ---------- */
+/* ---------- Result (failed / success) receipt panel ---------- */
 interface ResultRow { label: string; value: string; mono?: boolean; accent?: boolean }
 
 const CONFETTI_COLORS = ['#ff1e4b', '#ff7a18', '#22c55e', '#3b82f6', '#fbbf24', '#a855f7'];
@@ -303,72 +375,123 @@ export const ResultPanel: React.FC<{
   rows: ResultRow[];
   children?: React.ReactNode;
   bare?: boolean;
-}> = ({ kind, title, subtitle, rows, children, bare }) => {
-  const color = kind === 'success' ? 'var(--hp-ok, #22c55e)' : 'var(--hp-bad, #ef4444)';
+  merchant?: string;
+  amount?: string;
+  chipText?: string;
+}> = ({ kind, title, subtitle, rows, children, bare, merchant, amount, chipText }) => {
+  const ok = kind === 'success';
+  const color = ok ? '#12c97d' : '#ff4c68';
   const confetti = useRef(
-    Array.from({ length: 16 }, (_, i) => ({
-      dx: `${Math.round((Math.random() - 0.5) * 260)}px`,
-      dy: `${Math.round(40 + Math.random() * 150)}px`,
+    Array.from({ length: 22 }, (_, i) => ({
+      dx: `${Math.round((Math.random() - 0.5) * 300)}px`,
+      dy: `${Math.round(30 + Math.random() * 170)}px`,
       rot: `${Math.round(Math.random() * 540 - 270)}deg`,
       color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
       delay: `${(Math.random() * 0.15).toFixed(2)}s`,
     }))
   ).current;
 
-  return (
-    <div className={`${bare ? 'py-2' : 'hp-card p-6'} w-full text-center relative overflow-hidden hpa-sheet`}>
-      {kind === 'success' && (
-        <div className="hpa-confetti pointer-events-none absolute inset-0" aria-hidden>
-          {confetti.map((c, i) => (
-            <i
-              key={i}
-              style={{ background: c.color, animationDelay: c.delay, ['--dx' as any]: c.dx, ['--dy' as any]: c.dy, ['--rot' as any]: c.rot }}
-            />
-          ))}
-        </div>
-      )}
+  const receiptText = () =>
+    [
+      'HamroPay Receipt',
+      '----------------',
+      merchant ? `Merchant: ${merchant}` : '',
+      amount ? `Amount: ${amount}` : '',
+      `Status: ${ok ? 'Paid' : 'Failed'}`,
+      ...rows.map((r) => `${r.label}: ${r.value}`),
+      `Date: ${new Date().toLocaleString()}`,
+    ].filter(Boolean).join('\n');
 
-      <div className="relative w-16 h-16 mx-auto mb-4">
-        {kind === 'failed' && (
-          <span
-            className="absolute inset-0 rounded-full"
-            style={{ background: color, animation: 'hpa-ripple 1s .35s ease-out 1 both' }}
-          />
+  const [note, setNote] = useState('');
+  const flash = (m: string) => { setNote(m); setTimeout(() => setNote(''), 1600); };
+  const share = async () => {
+    const text = receiptText();
+    try {
+      if ((navigator as any).share) { await (navigator as any).share({ text }); return; }
+      await navigator.clipboard.writeText(text);
+      flash('Receipt copied');
+    } catch { /* ignore */ }
+  };
+  const download = () => {
+    try {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([receiptText()], { type: 'text/plain' }));
+      a.download = 'hamropay-receipt.txt';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      flash('Receipt downloaded');
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className={`${bare ? '' : 'hp-card'} w-full text-center relative overflow-hidden hpa-sheet`}>
+      <div
+        className="relative px-5 pt-6 pb-9 overflow-hidden"
+        style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${color} 24%, transparent), transparent)` }}
+      >
+        {ok && (
+          <div className="hpa-confetti pointer-events-none absolute inset-0" aria-hidden>
+            {confetti.map((c, i) => (
+              <i key={i} style={{ background: c.color, animationDelay: c.delay, ['--dx' as any]: c.dx, ['--dy' as any]: c.dy, ['--rot' as any]: c.rot }} />
+            ))}
+          </div>
         )}
-        <div
-          className="relative w-16 h-16 rounded-full flex items-center justify-center text-white"
-          style={{ background: color, animation: 'hpa-icon-pop .5s cubic-bezier(.22,1,.36,1) both' }}
-        >
-          {kind === 'success' ? (
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <path className="hpa-check-path" d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <X className="w-8 h-8 stroke-[3]" />
-          )}
+        <div className="relative w-[68px] h-[68px] mx-auto mb-3">
+          <span className="absolute inset-0 rounded-full" style={{ background: color, animation: 'hpa-ripple 1.2s .3s ease-out 2 both' }} />
+          <div
+            className="relative w-[68px] h-[68px] rounded-full flex items-center justify-center text-white"
+            style={{ background: color, animation: 'hpa-icon-pop .55s cubic-bezier(.22,1,.36,1) both' }}
+          >
+            {ok ? (
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path className="hpa-check-path" d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <X className="w-8 h-8 stroke-[3]" />
+            )}
+          </div>
         </div>
+        <h2 className="text-xl font-black tracking-tight">{title}</h2>
+        {subtitle && <p className="text-xs hp-muted mt-1 leading-relaxed px-2">{subtitle}</p>}
       </div>
 
-      <h2 className="text-xl font-black tracking-tight">{title}</h2>
-      {subtitle && <p className="text-xs hp-muted mt-1 leading-relaxed">{subtitle}</p>}
-
-      {rows.length > 0 && (
-        <div className="hp-panel w-full p-3.5 mt-4 space-y-2 text-left rounded-xl hpa-stagger">
-          {rows.map((r) => (
-            <div key={r.label} className="flex items-center justify-between text-xs gap-3">
-              <span className="hp-muted font-medium shrink-0">{r.label}</span>
-              <span
-                className={`font-bold truncate max-w-[190px] ${r.mono ? 'font-mono' : ''}`}
-                style={r.accent ? { color: 'var(--hp-accent, #ff1e4b)' } : undefined}
-              >
-                {r.value}
-              </span>
-            </div>
-          ))}
+      <div className="hp-panel relative mx-4 -mt-5 text-left" style={{ borderRadius: 18 }}>
+        {(merchant || amount) && (
+          <div className="relative px-4 pt-4 pb-3.5 text-center" style={{ borderBottom: '2px dashed rgba(255,255,255,.1)' }}>
+            <span className="absolute -bottom-[9px] -left-[9px] h-4 w-4 rounded-full" style={{ background: 'var(--hp-surface, #12090f)' }} />
+            <span className="absolute -bottom-[9px] -right-[9px] h-4 w-4 rounded-full" style={{ background: 'var(--hp-surface, #12090f)' }} />
+            {merchant && <div className="text-xs font-bold hp-muted">{merchant}</div>}
+            {amount && <div className="text-3xl font-black mt-0.5 mb-2">{amount}</div>}
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-extrabold"
+              style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 40%, transparent)` }}
+            >
+              {ok ? '✓ ' : '✕ '}{chipText || (ok ? 'Paid' : 'Failed')}
+            </span>
+          </div>
+        )}
+        {rows.length > 0 && (
+          <div className="px-4 py-3 space-y-1 hpa-stagger">
+            {rows.map((r) => (
+              <div key={r.label} className="flex items-center justify-between gap-3 py-1 text-[11.5px]">
+                <span className="hp-muted font-semibold shrink-0">{r.label}</span>
+                <span
+                  className={`font-bold text-right break-all max-w-[200px] ${r.mono ? 'font-mono' : ''}`}
+                  style={r.accent ? { color: 'var(--hp-accent, #ff1e4b)' } : undefined}
+                >
+                  {r.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 px-4 pb-4 pt-1">
+          <button type="button" onClick={share} className="hp-btn-ghost hpa-press flex-1 py-2 text-[11.5px] font-bold cursor-pointer">Share</button>
+          <button type="button" onClick={download} className="hp-btn-ghost hpa-press flex-1 py-2 text-[11.5px] font-bold cursor-pointer">Download</button>
         </div>
-      )}
+        {note && <div className="pb-3 text-center text-[11px] font-bold" style={{ color: 'var(--hp-ok, #34d399)' }}>{note}</div>}
+      </div>
 
-      {children}
+      <div className="px-4 pb-5">{children}</div>
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   PayAnimStyles, VerifyingLoader, AnimatedAmount, QrScanFrame, TrustRow,
-  ConfirmCancelModal, CancellingScreen, ResultPanel,
+  ConfirmCancelModal, ProcessingSheet, ResultPanel,
 } from '../../components/pay/PayAnimations';
 import { 
   CheckCircle2, AlertCircle, Clock, Copy, Check, 
@@ -529,18 +529,6 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
     );
   }
 
-  // Cancelling animation
-  if (isCancelling) {
-    return (
-      <div className={pageContainerClass} data-mode={branding.mode || 'dark'} style={pageStyle}>
-        <PayAnimStyles />
-        <div className={isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'}>
-          <CancellingScreen />
-        </div>
-      </div>
-    );
-  }
-
   // Render Errors (404, 409, network)
   if (errorKind !== null) {
     return (
@@ -601,13 +589,14 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
         <div className={isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'}>
           <ResultPanel
             kind="success"
-            title="Payment Successful!"
+            title="Payment Successful"
             subtitle="Your payment has been verified successfully."
+            merchant={brandName}
+            amount={`₹${payAmountNum.toFixed(2)}`}
+            chipText="Paid"
             rows={[
               { label: 'Order ID', value: orderId, mono: true },
-              { label: 'Amount', value: `₹${payAmountNum.toFixed(2)}`, mono: true },
               ...(utr ? [{ label: 'UTR Reference', value: utr, mono: true }] : []),
-              { label: 'Merchant', value: brandName },
             ]}
           >
             {isTestMode && (
@@ -687,10 +676,12 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
               isFailedState ? 'We could not confirm your payment. Please contact the merchant with your reference details.' :
               'This payment link has been disabled by the merchant.'
             )}
+            merchant={brandName}
+            amount={`₹${payAmountNum.toFixed(2)}`}
+            chipText={isExpiredState ? 'Expired' : isCancelledState ? 'Cancelled by user' : isFailedState ? 'Failed' : 'Disabled'}
             rows={[
               { label: 'Order ID', value: orderId, mono: true, accent: true },
               { label: 'Reason', value: isExpiredState ? 'Session expired' : isCancelledState ? 'Cancelled by user' : isFailedState ? 'Payment not confirmed' : 'Disabled by merchant' },
-              { label: 'Amount', value: `₹${payAmountNum.toFixed(2)}`, mono: true },
               ...(utr ? [{ label: 'UTR', value: utr, mono: true }] : []),
             ]}
           >
@@ -946,6 +937,7 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
       {showCancelModal && (
         <ConfirmCancelModal onNo={() => setShowCancelModal(false)} onYes={handleCancelOrder} />
       )}
+      {isCancelling && <ProcessingSheet mode="cancel" />}
 
       {/* Toast Notification */}
       {toastShow && (
