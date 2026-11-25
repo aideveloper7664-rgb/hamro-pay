@@ -19,6 +19,11 @@ import {
   formatBillingError,
 } from '../services/billing.service';
 import { ShowToastFn } from '../services/plans.service';
+import { DEFAULT_BRANDING } from '../services/customize.service';
+import {
+  PayAnimStyles, AnimatedAmount, QrScanFrame, TrustRow,
+  InvalidUtrModal, ConfirmCancelModal, CancellingScreen, ResultPanel,
+} from './pay/PayAnimations';
 
 interface BillingCheckoutModalProps {
   order: BillingOrder | null;
@@ -45,6 +50,9 @@ export default function BillingCheckoutModal({
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [isRetrying, setIsRetrying] = useState<boolean>(false);
   const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
+  const [showConfirmCancel, setShowConfirmCancel] = useState<boolean>(false);
+  const [invalidUtrMsg, setInvalidUtrMsg] = useState<string | null>(null);
+  const utrInputRef = useRef<HTMLInputElement | null>(null);
 
   const fulfilledTriggeredRef = useRef<boolean>(false);
   const onFulfilledRef = useRef(onFulfilled);
@@ -175,6 +183,7 @@ export default function BillingCheckoutModal({
     const cleaned = utr.trim();
     if (cleaned.length < 6) {
       setVerifyError('Please enter a valid UTR number (minimum 6 characters).');
+      setInvalidUtrMsg('Please enter a valid UTR number (minimum 6 characters).');
       return;
     }
 
@@ -196,6 +205,7 @@ export default function BillingCheckoutModal({
     } catch (err: any) {
       const msg = formatBillingError(err, 'Verification failed. Please verify the UTR and exact amount paid.');
       setVerifyError(msg);
+      setInvalidUtrMsg(msg);
     } finally {
       setIsVerifying(false);
     }
@@ -203,9 +213,12 @@ export default function BillingCheckoutModal({
 
   const handleCancel = async () => {
     if (isCancelling) return;
+    setShowConfirmCancel(false);
     setIsCancelling(true);
+    const minDisplay = new Promise<void>((resolve) => setTimeout(resolve, 2600));
     try {
       const res = await cancelBillingOrder(order.order_id);
+      await minDisplay;
       setOrder((prev) =>
         prev ? { ...prev, ...(res || {}), status: 'cancelled' } : prev
       );
@@ -232,9 +245,12 @@ export default function BillingCheckoutModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-[#120306] border border-[rgba(255,45,85,0.3)] p-5 sm:p-6 shadow-2xl space-y-4 text-[#fff2f4] my-auto"
+        className="w-full max-w-md rounded-2xl bg-[#120306] border border-[rgba(255,45,85,0.3)] p-5 sm:p-6 shadow-2xl space-y-4 text-[#fff2f4] my-auto hpa-pop"
+        data-mode="dark"
+        style={DEFAULT_BRANDING.vars as React.CSSProperties}
         onClick={(e) => e.stopPropagation()}
       >
+        <PayAnimStyles />
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[rgba(255,45,85,0.16)]">
           <div className="min-w-0">
@@ -257,91 +273,82 @@ export default function BillingCheckoutModal({
 
         {/* 1. SUCCESS SCREEN */}
         {isFinalFulfilled ? (
-          <div className="py-4 text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-[#2bf29a] flex items-center justify-center mx-auto shadow-[0_0_24px_rgba(43,242,154,0.2)]">
-              <CheckCircle2 className="w-9 h-9 stroke-[2.4]" />
-            </div>
-            <div className="space-y-1">
-              <h4 className="text-lg font-black text-white">Payment Confirmed!</h4>
-              <p className="text-xs text-[#d4c2c7]">
-                {order.kind === 'plan'
-                  ? `Your ${order.plan_name || ''} plan is now active.`
-                  : `${(order.credits ?? order.base_amount).toLocaleString('en-IN')} Hamro Credits added to your wallet.`}
-              </p>
-            </div>
-            <div className="p-3.5 rounded-xl bg-black/45 border border-white/10 space-y-1.5 text-xs text-left">
-              <div className="flex justify-between">
-                <span className="text-[#b89fa5]">Amount Paid</span>
-                <span className="font-mono font-black text-[#2bf29a]">₹{payAmountStr}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#b89fa5]">Order ID</span>
-                <span className="font-mono font-bold text-white">{order.order_id}</span>
-              </div>
-              {order.utr && (
-                <div className="flex justify-between">
-                  <span className="text-[#b89fa5]">UTR Reference</span>
-                  <span className="font-mono font-bold text-white">{order.utr}</span>
-                </div>
-              )}
-            </div>
+          <ResultPanel
+            bare
+            kind="success"
+            title="Payment Confirmed!"
+            subtitle={
+              order.kind === 'plan'
+                ? `Your ${order.plan_name || ''} plan is now active.`
+                : `${(order.credits ?? order.base_amount).toLocaleString('en-IN')} Hamro Credits added to your wallet.`
+            }
+            rows={[
+              { label: 'Amount Paid', value: `₹${payAmountStr}`, mono: true },
+              { label: 'Order ID', value: order.order_id, mono: true },
+              ...(order.utr ? [{ label: 'UTR Reference', value: order.utr, mono: true }] : []),
+            ]}
+          >
             <button
               type="button"
               onClick={onClose}
-              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black shadow-lg shadow-rose-600/30 hover:brightness-110 cursor-pointer"
+              className="hpa-press mt-4 w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black shadow-lg shadow-rose-600/30 hover:brightness-110 cursor-pointer"
             >
               Done
             </button>
-          </div>
+          </ResultPanel>
         ) : effectiveExpired || order.status === 'cancelled' || order.status === 'failed' ? (
           /* 2. EXPIRED / CANCELLED / FAILED SCREEN */
-          <div className="py-4 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 flex items-center justify-center mx-auto">
-              <AlertCircle className="w-7 h-7 stroke-[2.3]" />
-            </div>
-            <div className="space-y-1">
-              <h4 className="text-base font-black text-white">
-                {order.status === 'cancelled'
-                  ? 'Payment Cancelled'
-                  : order.status === 'failed'
-                    ? 'Payment Failed'
-                    : 'Payment Window Expired'}
-              </h4>
-              <p className="text-xs text-[#b89fa5] leading-relaxed">
-                {order.message ||
-                  (order.status === 'cancelled'
-                    ? 'This checkout order was cancelled. Retry anytime to generate a new QR.'
-                    : order.status === 'failed'
-                      ? 'We could not confirm this payment. Please retry with a fresh order.'
-                      : 'The 15-minute payment window expired. Generate a fresh QR to complete payment.')}
-              </p>
-            </div>
+          <ResultPanel
+            bare
+            kind="failed"
+            title={order.status === 'expired' || effectiveExpired && order.status === 'pending' ? 'Payment Window Expired' : 'Payment Failed'}
+            subtitle={
+              order.message ||
+              (order.status === 'cancelled'
+                ? 'This checkout order was cancelled. Retry anytime to generate a new QR.'
+                : order.status === 'failed'
+                  ? 'We could not confirm this payment. Please retry with a fresh order.'
+                  : 'The 15-minute payment window expired. Generate a fresh QR to complete payment.')
+            }
+            rows={[
+              { label: 'Order ID', value: order.order_id, mono: true, accent: true },
+              {
+                label: 'Reason',
+                value: order.status === 'cancelled' ? 'Cancelled by user' : order.status === 'failed' ? 'Payment not confirmed' : 'Window expired',
+              },
+              { label: 'Amount', value: `₹${payAmountStr}`, mono: true },
+            ]}
+          >
+            <div className="mt-4">
             <div className="flex gap-2.5 pt-1">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-[#d4c2c7] cursor-pointer"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                disabled={isRetrying}
-                onClick={handleRetryClick}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30 hover:brightness-110 cursor-pointer disabled:opacity-60"
-              >
-                {isRetrying ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-3.5 h-3.5" />
-                )}
-                <span>Retry</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-[#d4c2c7] cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  disabled={isRetrying}
+                  onClick={handleRetryClick}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff1e4b] to-[#d8002f] text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30 hover:brightness-110 cursor-pointer disabled:opacity-60"
+                >
+                  {isRetrying ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                  <span>Retry</span>
+                </button>
+              </div>
             </div>
-          </div>
+          </ResultPanel>
+        ) : isCancelling ? (
+          <CancellingScreen bare />
         ) : (
           /* 3. ACTIVE PENDING QR PAYMENT SCREEN */
-          <div className="space-y-3.5">
+          <div className="space-y-3.5 hpa-stagger">
             {/* Timer + Status */}
             <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-black/45 border border-[rgba(255,45,85,0.18)]">
               <div className="flex items-center gap-2">
@@ -361,7 +368,7 @@ export default function BillingCheckoutModal({
                 Exact Amount to Pay
               </div>
               <div className="text-3xl font-black font-mono text-white tracking-tight">
-                ₹{payAmountStr}
+                <AnimatedAmount value={payAmountStr} />
               </div>
               <p className="text-[11px] font-bold text-amber-200 leading-snug">
                 {order.kind === 'plan'
@@ -373,13 +380,15 @@ export default function BillingCheckoutModal({
             {/* QR Code & UPI ID */}
             <div className="flex flex-col items-center gap-2.5">
               {order.qr_code && (
-                <div className="p-3 rounded-2xl bg-white shadow-lg">
-                  <img
-                    src={order.qr_code}
-                    alt={`Scan to pay ₹${payAmountStr}`}
-                    className="w-44 h-44 object-contain"
-                  />
-                </div>
+                <QrScanFrame>
+                  <div className="p-3 rounded-2xl bg-white shadow-lg">
+                    <img
+                      src={order.qr_code}
+                      alt={`Scan to pay ₹${payAmountStr}`}
+                      className="w-44 h-44 object-contain"
+                    />
+                  </div>
+                </QrScanFrame>
               )}
 
               {order.upi_id && (
@@ -433,6 +442,7 @@ export default function BillingCheckoutModal({
               </label>
               <div className="flex gap-2">
                 <input
+                  ref={utrInputRef}
                   type="text"
                   value={utr}
                   onChange={(e) => {
@@ -464,12 +474,14 @@ export default function BillingCheckoutModal({
               )}
             </form>
 
+            <TrustRow />
+
             {/* Cancel Action */}
             <div className="flex justify-center pt-1">
               <button
                 type="button"
                 disabled={isCancelling}
-                onClick={handleCancel}
+                onClick={() => setShowConfirmCancel(true)}
                 className="text-[11.5px] font-bold text-[#b89fa5] hover:text-[#ff4d6d] transition cursor-pointer disabled:opacity-50"
               >
                 {isCancelling ? 'Cancelling...' : 'Cancel payment'}
@@ -478,6 +490,19 @@ export default function BillingCheckoutModal({
           </div>
         )}
       </div>
+
+      {showConfirmCancel && (
+        <ConfirmCancelModal onNo={() => setShowConfirmCancel(false)} onYes={handleCancel} />
+      )}
+      {invalidUtrMsg !== null && (
+        <InvalidUtrModal
+          message={invalidUtrMsg}
+          onRetry={() => {
+            setInvalidUtrMsg(null);
+            setTimeout(() => utrInputRef.current?.focus(), 50);
+          }}
+        />
+      )}
     </div>
   );
 }

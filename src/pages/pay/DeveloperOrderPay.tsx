@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  PayAnimStyles, VerifyingLoader, AnimatedAmount, QrScanFrame, TrustRow,
+  ConfirmCancelModal, CancellingScreen, ResultPanel,
+} from '../../components/pay/PayAnimations';
 import { 
   CheckCircle2, AlertCircle, Clock, Copy, Check, 
   Download, Smartphone, X, RefreshCw, ShieldCheck
@@ -401,15 +405,17 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
 
   // Cancel order
   const handleCancelOrder = async () => {
+    setShowCancelModal(false);
     setIsCancelling(true);
+    const minDisplay = new Promise<void>((resolve) => setTimeout(resolve, 2600));
     try {
       const res = await fetch(`${API_URL}/api/developer/public-cancel/${encodeURIComponent(orderId)}`, {
         method: 'POST'
       });
+      await minDisplay;
       if (res.ok) {
         setStatus('cancelled');
         isTerminalRef.current = true;
-        setShowCancelModal(false);
         showToast('Order cancelled', 'info');
       } else {
         showToast('Could not cancel order', 'error');
@@ -515,13 +521,21 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
         data-mode={branding.mode || 'dark'}
         style={pageStyle}
       >
-        <div className={`hp-card ${isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'} p-6 text-center space-y-3 animate-pulse`}>
-          <div className="w-12 h-12 rounded-full mx-auto bg-white/10" />
-          <div className="w-32 h-4 rounded-md mx-auto bg-white/10" />
-          <div className="w-48 h-3 rounded-md mx-auto bg-white/10" />
-          <div className="w-full h-14 rounded-xl bg-white/10 mt-4" />
-          <div className="w-40 h-40 rounded-xl mx-auto bg-white/10 my-4" />
-          <div className="w-full h-11 rounded-xl bg-white/10" />
+        <PayAnimStyles />
+        <div className={isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'}>
+          <VerifyingLoader />
+        </div>
+      </div>
+    );
+  }
+
+  // Cancelling animation
+  if (isCancelling) {
+    return (
+      <div className={pageContainerClass} data-mode={branding.mode || 'dark'} style={pageStyle}>
+        <PayAnimStyles />
+        <div className={isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'}>
+          <CancellingScreen />
         </div>
       </div>
     );
@@ -535,6 +549,7 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
         data-mode={branding.mode || 'dark'}
         style={pageStyle}
       >
+        <PayAnimStyles />
         <div className={`hp-card ${isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'} p-6 text-center space-y-4`}>
           <div className="w-14 h-14 rounded-full mx-auto flex items-center justify-center hp-badge-bad">
             <AlertCircle className="w-7 h-7 stroke-[2.5]" />
@@ -582,79 +597,64 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
         data-mode={branding.mode || 'dark'}
         style={pageStyle}
       >
-        <div className={`hp-card ${isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'} p-6 text-center space-y-4`}>
-          <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center hp-badge-ok">
-            <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
-          </div>
-          <div>
-            <h2 className="text-xl font-black tracking-tight">Payment Successful!</h2>
-            <div className="text-xs hp-muted mt-1">Your payment has been verified successfully.</div>
-          </div>
-
-          {isTestMode && (
-            <div className="p-2 rounded-xl text-xs font-bold hp-badge-warn">
-              Test Simulator Payment (No real money moved)
-            </div>
-          )}
-
-          <div className="hp-panel w-full p-3.5 space-y-2 text-left rounded-xl">
-            <div className="flex items-center justify-between text-xs gap-2">
-              <span className="hp-muted font-medium">Order ID</span>
-              <span className="font-mono font-bold truncate">{orderId}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs gap-2">
-              <span className="hp-muted font-medium">Amount</span>
-              <span className="font-black font-mono" style={{ color: 'var(--hp-ok)' }}>₹{payAmountNum.toFixed(2)}</span>
-            </div>
-            {utr && (
-              <div className="flex items-center justify-between text-xs gap-2">
-                <span className="hp-muted font-medium">UTR Reference</span>
-                <span className="font-mono font-bold truncate">{utr}</span>
+        <PayAnimStyles />
+        <div className={isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'}>
+          <ResultPanel
+            kind="success"
+            title="Payment Successful!"
+            subtitle="Your payment has been verified successfully."
+            rows={[
+              { label: 'Order ID', value: orderId, mono: true },
+              { label: 'Amount', value: `₹${payAmountNum.toFixed(2)}`, mono: true },
+              ...(utr ? [{ label: 'UTR Reference', value: utr, mono: true }] : []),
+              { label: 'Merchant', value: brandName },
+            ]}
+          >
+            {isTestMode && (
+              <div className="p-2 mt-3 rounded-xl text-xs font-bold hp-badge-warn">
+                Test Simulator Payment (No real money moved)
               </div>
             )}
-            <div className="flex items-center justify-between text-xs gap-2">
-              <span className="hp-muted font-medium">Merchant</span>
-              <span className="font-bold truncate max-w-[180px]">{brandName}</span>
-            </div>
-          </div>
-
+            <div className="mt-4">
           {!isEmbeddedQuery && redirectCountdown !== null && redirectCountdown > 0 && (
-            <p className="text-xs hp-muted font-medium">
-              Redirecting back to merchant website in {redirectCountdown}s...
-            </p>
-          )}
-
-          <div className="space-y-2 pt-2">
-            {isEmbeddedQuery ? (
-              <div className="hp-panel p-2.5 rounded-xl text-xs font-semibold hp-muted">
-                Payment confirmed. Returning to merchant page...
-              </div>
-            ) : data?.redirect_url ? (
-              <button
-                type="button"
-                onClick={handleManualRedirect}
-                className="hp-btn w-full py-2.5 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <span>Return to Merchant</span>
-              </button>
-            ) : showCloseNotice ? (
-              <button
-                type="button"
-                onClick={handleCloseWindow}
-                className="hp-btn w-full py-2.5 text-xs font-black cursor-pointer"
-              >
-                Close Window
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onBackToDashboard || (() => { window.location.href = '/'; })}
-                className="hp-btn w-full py-2.5 text-xs font-black cursor-pointer"
-              >
-                Done
-              </button>
+              <p className="text-xs hp-muted font-medium">
+                Redirecting back to merchant website in {redirectCountdown}s...
+              </p>
             )}
-          </div>
+
+            <div className="space-y-2 pt-2">
+              {isEmbeddedQuery ? (
+                <div className="hp-panel p-2.5 rounded-xl text-xs font-semibold hp-muted">
+                  Payment confirmed. Returning to merchant page...
+                </div>
+              ) : data?.redirect_url ? (
+                <button
+                  type="button"
+                  onClick={handleManualRedirect}
+                  className="hp-btn w-full py-2.5 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>Return to Merchant</span>
+                </button>
+              ) : showCloseNotice ? (
+                <button
+                  type="button"
+                  onClick={handleCloseWindow}
+                  className="hp-btn w-full py-2.5 text-xs font-black cursor-pointer"
+                >
+                  Close Window
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onBackToDashboard || (() => { window.location.href = '/'; })}
+                  className="hp-btn w-full py-2.5 text-xs font-black cursor-pointer"
+                >
+                  Done
+                </button>
+              )}
+            </div>
+            </div>
+          </ResultPanel>
         </div>
       </div>
     );
@@ -672,47 +672,40 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
         data-mode={branding.mode || 'dark'}
         style={pageStyle}
       >
-        <div className={`hp-card ${isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'} p-6 text-center space-y-4`}>
-          <div className={`w-14 h-14 rounded-full mx-auto flex items-center justify-center ${
-            isExpiredState || isCancelledState ? 'hp-badge-warn' : 'hp-badge-bad'
-          }`}>
-            <AlertCircle className="w-7 h-7 stroke-[2.5]" />
-          </div>
-
-          <div>
-            <h2 className="text-lg font-black tracking-tight">
-              {isExpiredState && 'Payment Session Expired'}
-              {isCancelledState && 'Payment Cancelled'}
-              {isFailedState && 'Payment Failed'}
-              {status === 'disabled' && 'Checkout Disabled'}
-            </h2>
-            <p className="text-xs hp-muted mt-1 leading-relaxed">
-              {statusMessage || (
-                isExpiredState ? 'The time limit for this payment has expired. Please initiate a new order from the merchant website.' :
-                isCancelledState ? 'This order was cancelled. If funds were debited, keep your UTR and contact the merchant.' :
-                isFailedState ? 'We could not confirm your payment. Please contact the merchant with your reference details.' :
-                'This payment link has been disabled by the merchant.'
-              )}
-            </p>
-          </div>
-
-          {utr && (
-            <div className="hp-panel p-2.5 rounded-xl text-xs font-mono font-bold">
-              UTR: {utr}
-            </div>
-          )}
-
-          {!isEmbeddedQuery && onBackToDashboard && (
-            <div className="flex gap-2 justify-center pt-2">
-              <button
-                type="button"
-                className="hp-btn-ghost px-4 py-2 text-xs font-bold cursor-pointer"
-                onClick={onBackToDashboard}
-              >
-                Return Home
-              </button>
-            </div>
-          )}
+        <PayAnimStyles />
+        <div className={isEmbeddedQuery ? 'w-full max-w-[400px] my-auto' : 'w-full max-w-[380px]'}>
+          <ResultPanel
+            kind="failed"
+            title={
+              isExpiredState ? 'Payment Session Expired' :
+              isCancelledState ? 'Payment Failed' :
+              isFailedState ? 'Payment Failed' : 'Checkout Disabled'
+            }
+            subtitle={statusMessage || (
+              isExpiredState ? 'The time limit for this payment has expired. Please initiate a new order from the merchant website.' :
+              isCancelledState ? 'This order was cancelled. If funds were debited, keep your UTR and contact the merchant.' :
+              isFailedState ? 'We could not confirm your payment. Please contact the merchant with your reference details.' :
+              'This payment link has been disabled by the merchant.'
+            )}
+            rows={[
+              { label: 'Order ID', value: orderId, mono: true, accent: true },
+              { label: 'Reason', value: isExpiredState ? 'Session expired' : isCancelledState ? 'Cancelled by user' : isFailedState ? 'Payment not confirmed' : 'Disabled by merchant' },
+              { label: 'Amount', value: `₹${payAmountNum.toFixed(2)}`, mono: true },
+              ...(utr ? [{ label: 'UTR', value: utr, mono: true }] : []),
+            ]}
+          >
+            {!isEmbeddedQuery && onBackToDashboard && (
+              <div className="flex gap-2 justify-center pt-4">
+                <button
+                  type="button"
+                  className="hp-btn-ghost hpa-press px-4 py-2 text-xs font-bold cursor-pointer"
+                  onClick={onBackToDashboard}
+                >
+                  Return Home
+                </button>
+              </div>
+            )}
+          </ResultPanel>
         </div>
       </div>
     );
@@ -725,7 +718,8 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
       data-mode={branding.mode || 'dark'}
       style={pageStyle}
     >
-      <div className={cardWrapperClass}>
+      <PayAnimStyles />
+      <div className={`${cardWrapperClass} hpa-sheet`}>
         
         {/* TIMER */}
         <OrderCountdownTimer
@@ -747,7 +741,7 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
         )}
 
         {/* MAIN CHECKOUT CARD */}
-        <div className="hp-card w-full p-5 flex flex-col items-center text-center relative overflow-hidden">
+        <div className="hp-card hpa-stagger w-full p-5 flex flex-col items-center text-center relative overflow-hidden">
           
           {/* Header Brand */}
           <div className="flex flex-col items-center mb-3">
@@ -780,7 +774,7 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
               Amount to Pay
             </span>
             <div className="text-2xl font-black font-mono tracking-tight">
-              ₹{payAmountNum.toFixed(2)}
+              <AnimatedAmount value={payAmountNum.toFixed(2)} />
             </div>
             {isAmountDifferent && !isTestMode && (
               <div className="text-[11px] font-bold mt-1.5 p-1 rounded-lg hp-badge-warn">
@@ -848,13 +842,15 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
               {/* QR Code (pure white background box for reliable scanning) */}
               {data?.qr_code && (
                 <div className="flex flex-col items-center">
-                  <div className="hp-qr-box">
-                    <img
-                      src={data.qr_code}
-                      alt="Payment QR"
-                      className="w-40 h-40 object-contain"
-                    />
-                  </div>
+                  <QrScanFrame>
+                    <div className="hp-qr-box">
+                      <img
+                        src={data.qr_code}
+                        alt="Payment QR"
+                        className="w-40 h-40 object-contain"
+                      />
+                    </div>
+                  </QrScanFrame>
                   <button
                     type="button"
                     onClick={handleDownloadQr}
@@ -918,6 +914,8 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
             </div>
           )}
 
+          <TrustRow />
+
           {/* Cancel payment button */}
           <button
             type="button"
@@ -946,37 +944,7 @@ export const DeveloperOrderPay: React.FC<DeveloperOrderPayProps> = ({
 
       {/* Cancel Confirmation Modal */}
       {showCancelModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(0,0,0,0.8)] backdrop-blur-xs"
-          onClick={() => setShowCancelModal(false)}
-        >
-          <div
-            className="hp-card w-full max-w-sm p-6 shadow-2xl space-y-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="text-base font-black">Cancel this payment?</div>
-            <p className="text-xs hp-muted leading-relaxed">
-              Are you sure you want to cancel this order? If you have already transferred money via UPI, please contact the merchant.
-            </p>
-            <div className="flex gap-2 justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(false)}
-                className="hp-btn-ghost px-4 py-2 text-xs font-bold cursor-pointer"
-              >
-                Keep paying
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelOrder}
-                disabled={isCancelling}
-                className="hp-btn px-4 py-2 text-xs font-black cursor-pointer"
-              >
-                {isCancelling ? 'Cancelling...' : 'Yes, cancel'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmCancelModal onNo={() => setShowCancelModal(false)} onYes={handleCancelOrder} />
       )}
 
       {/* Toast Notification */}

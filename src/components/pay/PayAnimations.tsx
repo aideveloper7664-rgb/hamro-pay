@@ -230,7 +230,7 @@ export const ConfirmCancelModal: React.FC<{ onNo: () => void; onYes: () => void 
 );
 
 /* ---------- Cancelling screen ---------- */
-export const CancellingScreen: React.FC = () => {
+export const CancellingScreen: React.FC<{ bare?: boolean }> = ({ bare }) => {
   const [step, setStep] = useState(0);
   useEffect(() => {
     const t1 = setTimeout(() => setStep(1), 700);
@@ -246,7 +246,7 @@ export const CancellingScreen: React.FC = () => {
   ];
 
   return (
-    <div className="hp-card w-full p-6 flex flex-col items-center text-center hpa-fade-in">
+    <div className={`${bare ? '' : 'hp-card p-6'} w-full flex flex-col items-center text-center hpa-fade-in`}>
       <div className="relative w-24 h-24 my-3">
         <div className="hpa-ring outer" />
         <div className="hpa-ring inner" />
@@ -302,7 +302,8 @@ export const ResultPanel: React.FC<{
   subtitle?: string;
   rows: ResultRow[];
   children?: React.ReactNode;
-}> = ({ kind, title, subtitle, rows, children }) => {
+  bare?: boolean;
+}> = ({ kind, title, subtitle, rows, children, bare }) => {
   const color = kind === 'success' ? 'var(--hp-ok, #22c55e)' : 'var(--hp-bad, #ef4444)';
   const confetti = useRef(
     Array.from({ length: 16 }, (_, i) => ({
@@ -315,7 +316,7 @@ export const ResultPanel: React.FC<{
   ).current;
 
   return (
-    <div className="hp-card w-full p-6 text-center relative overflow-hidden hpa-sheet">
+    <div className={`${bare ? 'py-2' : 'hp-card p-6'} w-full text-center relative overflow-hidden hpa-sheet`}>
       {kind === 'success' && (
         <div className="hpa-confetti pointer-events-none absolute inset-0" aria-hidden>
           {confetti.map((c, i) => (
